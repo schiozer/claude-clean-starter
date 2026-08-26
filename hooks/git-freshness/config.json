@@ -1,0 +1,5 @@
+{
+  "enabled": true,
+  "fetchCooldownSeconds": 600,
+  "fallbackRef": "origin/main"
+}
