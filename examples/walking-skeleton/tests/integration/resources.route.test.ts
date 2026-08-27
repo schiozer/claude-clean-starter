@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { GET, POST } from '@/app/api/resources/route'
 import { resourceRepository } from '@/infrastructure/composition'
 
@@ -54,7 +54,10 @@ describe('rota /api/resources (flag off)', () => {
     expect(res.status).toBe(404)
   })
   it('POST → 404 quando desligado', async () => {
+    const saveSpy = vi.spyOn(resourceRepository, 'save')
     const res = await POST(postReq({ title: 'Válido' }))
     expect(res.status).toBe(404)
+    expect(saveSpy).not.toHaveBeenCalled()
+    saveSpy.mockRestore()
   })
 })

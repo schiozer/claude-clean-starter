@@ -27,7 +27,7 @@ export function useResources() {
   }, [])
 
   const create = useCallback(
-    async (title: string) => {
+    async (title: string): Promise<boolean> => {
       const res = await fetch('/api/resources', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -36,10 +36,11 @@ export function useResources() {
       const body = await res.json()
       if (!res.ok) {
         setError(body.code === 'VALIDATION_ERROR' ? body.error : 'Erro. Tente novamente.')
-        return
+        return false
       }
       setError(null)
       await load()
+      return true
     },
     [load]
   )

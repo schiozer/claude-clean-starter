@@ -6,6 +6,8 @@ export function requireUser(user: AuthUser | null): AuthUser {
   return user
 }
 
+// Reservado para futuros use-cases de update/delete; a fatia atual (create/list)
+// já impõe o isolamento por owner estruturalmente via findByOwnerId.
 export function assertOwnership(user: AuthUser, ownerId: string): void {
   if (user.id !== ownerId) throw new UnauthorizedError()
 }

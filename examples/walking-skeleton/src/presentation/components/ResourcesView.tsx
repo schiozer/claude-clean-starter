@@ -1,12 +1,13 @@
 'use client'
 import { useState } from 'react'
 import { useResources } from '@/presentation/hooks/useResources'
+import { createResourceSchema } from '@/application/validators/resourceSchemas'
 
 export function ResourcesView() {
   const { resources, error, loading, create } = useResources()
   const [title, setTitle] = useState('')
 
-  const canSubmit = title.trim().length >= 3
+  const canSubmit = createResourceSchema.safeParse({ title }).success
 
   return (
     <main>
@@ -14,7 +15,9 @@ export function ResourcesView() {
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          void create(title).then(() => setTitle(''))
+          void create(title).then((ok) => {
+            if (ok) setTitle('')
+          })
         }}
       >
         <label htmlFor="title">Título</label>
