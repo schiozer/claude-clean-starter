@@ -296,6 +296,58 @@ focadas; sem duplicação; erros tratados; testes cobrem casos principais; sem
 
 ---
 
+## App Nativo (iOS / React Native) — Práticas
+
+> Complementa as práticas acima; as gerais (Clean Code, TS, erros, testes) continuam
+> valendo. Ver os padrões arquiteturais em [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+### Segurança no cliente
+
+- **Segredos**: nunca no app (o bundle é público). API keys só no backend.
+- **Tokens**: `expo-secure-store` (Keychain), nunca `AsyncStorage` ou estado global.
+- **Autorização**: sempre revalidada no servidor; checagens no app são só UX.
+
+### Estilização — tokens semânticos (também no nativo)
+
+Mesma regra da web: defina **tokens semânticos** (cores, tipografia, espaçamento)
+num único tema e consuma via tokens, não valores crus. Em RN, centralize num módulo
+de tema (ou lib de design system). Anime com moderação e respeite "reduzir
+movimento" (`AccessibilityInfo.isReduceMotionEnabled`).
+
+```tsx
+// ✅ tokens semânticos
+<View style={[t.surface, t.p4]}><Text style={t.foreground}>…</Text></View>
+// ❌ valores crus, presos ao componente
+<View style={{ backgroundColor: '#fff', padding: 16 }}>
+```
+
+### Acessibilidade no nativo
+
+- `accessibilityRole` e `accessibilityLabel` em elementos interativos.
+- Alvo de toque mínimo ~44pt; use `hitSlop` quando o alvo for pequeno.
+- Suporte a Dynamic Type (não trave fontes em tamanhos absolutos).
+- Componentes semânticos (`Pressable`/`Button`) em vez de `View` com `onPress`.
+
+### Listas e performance
+
+- `FlatList`/`SectionList` para listas longas (nunca `.map()` em `ScrollView`).
+- `keyExtractor` estável; evite funções/objetos inline no `renderItem`.
+- `React.memo`/`useCallback` onde há re-render caro.
+
+### Navegação
+
+- Rotas tipadas (expo-router / react-navigation typed routes).
+- Deep links para push (abrir a tela certa a partir da notificação).
+
+### Testes no nativo
+
+- **Unit**: domínio e hooks (Vitest + Testing Library).
+- **Integration**: funções do backend (validação + guard + use-case).
+- **E2E**: fluxo no simulador iOS (ex.: **Maestro** ou **Detox**) — substitui o
+  Playwright da web para telas nativas.
+
+---
+
 ## Ferramentas
 
 - **ESLint** (flat config em `eslint.config.mjs`) — `no-explicit-any` como erro.
