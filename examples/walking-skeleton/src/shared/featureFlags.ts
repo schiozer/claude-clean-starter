@@ -1,3 +1,3 @@
-export function isResourcesEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+export function isResourcesEnabled(env: Record<string, string | undefined> = process.env): boolean {
   return env.RESOURCES_ENABLED === 'on'
 }
