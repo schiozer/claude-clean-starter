@@ -9,7 +9,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./tests/setup.ts'],
     // E2E (Playwright) roda em runner próprio (npm run test:e2e).
-    exclude: ['**/node_modules/**', '**/tests/e2e/**'],
+    // examples/** são projetos autocontidos com seu próprio job de CI.
+    exclude: ['**/node_modules/**', '**/tests/e2e/**', 'examples/**'],
   },
   resolve: {
     alias: {

@@ -16,6 +16,10 @@ export default tseslint.config(
       'playwright-report/',
       'test-results/',
       '.superpowers/',
+      // Cada exemplo é um projeto autocontido, com tooling e CI próprios
+      // (job `example`). O tooling da raiz não o varre — evita conflito de
+      // configs/versões e artefatos gerados (ex.: .next/).
+      'examples/**',
       '**/*.config.js',
       '**/*.config.mjs',
       '**/*.config.ts',
