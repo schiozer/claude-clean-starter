@@ -8,28 +8,47 @@ on:
 
 jobs:
   test:
-    name: Test & Lint
+    name: Test & Lint (root)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Este é um template que, por design, NÃO trava stack na raiz. Enquanto não
+      # houver um projeto Node na raiz, não há o que validar aqui — o job então
+      # passa graciosamente (o exemplo tem seu próprio job `example`). Quando a
+      # raiz virar um app real (com package.json/package-lock), os passos rodam.
+      - name: Detect root Node project
+        id: detect
+        run: |
+          if [ -f package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Sem package.json na raiz (template não trava stack) — nada a validar na raiz."
+          fi
+
       - name: Setup Node.js
+        if: steps.detect.outputs.present == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install dependencies
+        if: steps.detect.outputs.present == 'true'
         run: npm ci
 
       - name: Run linter
+        if: steps.detect.outputs.present == 'true'
         run: npm run lint
 
       - name: Run type check
+        if: steps.detect.outputs.present == 'true'
         run: npm run type-check
 
       - name: Run tests
+        if: steps.detect.outputs.present == 'true'
         run: npm test
 
   example:
