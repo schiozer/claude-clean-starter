@@ -52,8 +52,11 @@ Regras que decorrem da decisão:
   [ADR-005 (Trunk-Based Development)](./005-trunk-based-development.md).
 
 **Fora de escopo deste ADR**: a escolha do **host** concreto (Vercel, Fly, etc.)
-é uma decisão separada, a ser registrada em ADR futuro. Este ADR é agnóstico de
-host — fixa apenas a política dos três ambientes.
+é uma decisão separada. Como este repositório é um **template** (não uma app),
+ela **não** é decidida aqui: o ADR vinculante de host/CI nasce no **projeto real**.
+O mapeamento recomendado que materializa `PR → UAT` / `merge → Prod` está no
+[guia de Host & CI](../guides/deploy-ci-guide.md). Este ADR é agnóstico de host —
+fixa apenas a política dos três ambientes.
 
 ## Consequências
 
