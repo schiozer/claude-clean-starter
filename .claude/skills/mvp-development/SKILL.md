@@ -22,7 +22,9 @@ exige testes robustos → use `post-mvp-development`.
 
 ## Decisões Arquiteturais (MVP)
 
-- ✅ **Acesso a dados direto** via hooks (`use*`), com validação na borda.
+- ✅ **Acesso a dados via hooks** (`use*`) que chamam uma **API Route/BFF** — não
+  há SDK de banco no cliente (com Postgres puro, ex.: Neon, todo acesso passa pelo
+  servidor: `hook → /api → DB`). Validação na borda (cliente e servidor).
 - ✅ **Validação com Zod** no ponto de entrada (formulários, rotas).
 - ✅ **Autorização no servidor**, fail-closed — nunca confie apenas no cliente.
 - ✅ **Hooks customizados** (`useState` + `useEffect`) para estado local.

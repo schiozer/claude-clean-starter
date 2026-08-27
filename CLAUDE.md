@@ -185,8 +185,9 @@ Ver [BEST_PRACTICES.md](./BEST_PRACTICES.md) completo.
 ## 🔐 Segurança
 
 - **Autorização no servidor** (fail-closed): nunca confie apenas no cliente.
-  Se usar um mecanismo do banco (ex.: RLS) ou uma camada de serviço com guards,
-  garanta que o padrão é "esqueceu de autorizar → sem acesso".
+  Padrão = **guards na camada de aplicação** (validam o JWT/OIDC do IdP e a regra
+  de acesso antes do repositório); mecanismos do banco (ex.: RLS) são reforço
+  opcional. Sempre "esqueceu de autorizar → sem acesso" (ver ARCHITECTURE.md).
 - **Validação** no frontend E no backend (mesmos schemas Zod).
 - **Secrets**: nunca commitar `.env*`; API keys via `process.env`. Ver `.gitignore`.
 
