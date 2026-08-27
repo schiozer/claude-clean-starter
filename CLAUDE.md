@@ -32,6 +32,11 @@ Para qualquer feature nova, siga o pipeline completo (ver `SKILLS.md`):
 brainstorming → writing-plans → [mvp-development | post-mvp-development] → verification-before-completion
 ```
 
+Toda funcionalidade é **entrevistada (brainstorming) + planejada** e **sempre**
+pergunte ao usuário se ela precisa de **feature toggle** — ver
+[ADR-006](./docs/adr/006-processo-de-feature-e-feature-toggle.md). Nunca assuma
+silenciosamente que não precisa.
+
 Para bug fixes ou pequenas correções, use `superpowers:systematic-debugging` diretamente.
 
 ### 2. **Skills de Implementação**
@@ -84,6 +89,21 @@ crie uma tarefa por item.
 - "Corrija este bug" → **systematic-debugging** primeiro.
 - Escrever testes / código novo → **test-driven-development**.
 - Antes de declarar concluído ou abrir PR → **verification-before-completion**.
+
+### 8. **Toda mudança entra na `main` via PR — SEMPRE** ⚠️
+
+Nunca há push direto na trunk. **Qualquer** mudança (código, docs, ADRs) passa por
+uma feature branch curta e um **Pull Request**. Ver
+[ADR-005](./docs/adr/005-trunk-based-development.md) (trunk-based) e a regra 5
+(conta git correta antes de push/PR/merge).
+
+### 9. **Deploy é dirigido por PR: PR → UAT, merge → Prod**
+
+Abrir/atualizar um PR **dispara o deploy em UAT** (acessível por site/celular);
+o **merge na `main`**, após o UAT aprovado, **dispara o deploy em produção**. Ver
+[ADR-002](./docs/adr/002-estrategia-de-ambientes.md). Ambientes sempre em três
+estágios (Dev local / UAT / Prod) para plataforma, banco (Neon) e auth (Auth0) —
+ver ADRs 002, 003 e 004.
 
 ---
 

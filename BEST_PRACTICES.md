@@ -227,10 +227,17 @@ feat(resources): add create resource use case
 fix(items): correct order_index on reorder
 ```
 
-**Branches** — `tipo/descrição-curta` (`feature/resource-editor`).
+**Branches** — **Trunk-Based Development** (ver [ADR-005](./docs/adr/005-trunk-based-development.md)):
+uma única trunk (`main`), sempre deployável. Feature branches **curtas**
+(`tipo/descrição-curta`, ex.: `feature/resource-editor`) com merge frequente.
+**Sem branches longevas por ambiente** (`develop`/`staging`/`production`); trabalho
+incompleto fica atrás de **feature flags**. A promoção entre ambientes é por commit
+da trunk (ver [ADR-002](./docs/adr/002-estrategia-de-ambientes.md)).
 
-**Pull Requests** — descreva o quê e o porquê, marque o tipo, checklist, screenshots
-se aplicável, e vincule issues (`Closes #123`).
+**Pull Requests** — **toda mudança entra na `main` via PR, SEMPRE (sem push
+direto na trunk)** — ver [ADR-005](./docs/adr/005-trunk-based-development.md).
+Descreva o quê e o porquê, marque o tipo, checklist, screenshots se aplicável, e
+vincule issues (`Closes #123`).
 
 ---
 
