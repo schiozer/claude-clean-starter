@@ -39,8 +39,10 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
    hospedagem) e registre as decisões como **ADRs** (`docs/adr/`).
 4. `npm install` para o tooling; use `npm run lint`, `npm run type-check`,
    `npm test`, `npm run format`.
-5. Ao adicionar o app (ex.: Next.js), inclua as deps de runtime e estenda os
-   configs (eslint/tsconfig) para o framework.
+5. Ao adicionar o app — **web** (ex.: Next.js) ou **nativo iOS** (Expo/React
+   Native) — inclua as deps de runtime e estenda os configs (eslint/tsconfig)
+   para o framework. Os padrões de app nativo estão em `ARCHITECTURE.md`
+   (seção *"Padrões para App Nativo"*) e `BEST_PRACTICES.md`.
 
 ## O pipeline
 

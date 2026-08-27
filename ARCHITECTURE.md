@@ -221,6 +221,132 @@ funções serverless ou um serviço dedicado. Mantenha-a fina: valide entrada
 
 ---
 
+## Padrões para App Nativo (iOS / React Native + Expo)
+
+> Esta seção **complementa** (não substitui) os padrões web acima. Os exemplos web
+> assumem um monólito onde UI e backend convivem (ex.: Next.js). Num **app nativo**
+> o dispositivo é apenas um **cliente**: o backend vira um deployable separado.
+
+### O que muda em relação à web
+
+Na web (ex.: Next.js), presentation e backend (API routes, use-cases, repositories)
+podem morar no mesmo processo. No nativo isso **se divide em dois deployables**:
+
+- **App (dispositivo)** — presentation + application-cliente (hooks, api-client) +
+  domínio/validadores **compartilhados** (types + Zod). **Nunca** acessa o banco
+  direto e **nunca** guarda segredos.
+- **Backend (servidor)** — use-cases, repositories, guards de autorização e acesso
+  ao banco. Único lugar com segredos e credenciais.
+
+### Regra de ouro do nativo
+
+O bundle do app é **público** (qualquer um extrai). Portanto:
+
+- Zero segredos/API keys no app; só no backend (`process.env`).
+- Toda autorização é **no servidor** (fail-closed); o cliente só melhora UX.
+- Tokens de sessão em **armazenamento seguro** (Keychain via `expo-secure-store`),
+  nunca em `AsyncStorage`.
+
+### Estrutura recomendada (monorepo)
+
+```
+.
+├── apps/
+│   ├── mobile/            # Expo (React Native) — iOS
+│   │   ├── app/           # rotas (expo-router)
+│   │   ├── components/    # ui/, shared/, por feature
+│   │   ├── hooks/         # encapsulam api-client + estado (loading/error/data)
+│   │   └── lib/           # api-client, secure storage, push
+│   └── api/               # backend (serverless / Node) — use-cases + repositories
+├── packages/
+│   └── shared/            # domain/ + validators (Zod) — reusado por mobile e api
+```
+
+> O `packages/shared` é o coração reaproveitável: entidades, types e schemas Zod
+> ficam ali e são importados tanto pela UI (validação na borda) quanto pelo backend
+> (validação + regra de negócio). Isso concretiza o "domínio reutilizável" citado
+> em *Considerações de Evolução*.
+
+### Fluxo de dados
+
+```
+Tela (RN) → hook → api-client (fetch + JWT)
+      → função serverless: valida Zod → guard (authz) → use-case → repository → DB
+      → resposta (DTO) → hook → tela
+```
+
+### Diagrama de camadas (nativo)
+
+```
+┌───────────────────── Dispositivo (cliente) ─────────────────────┐
+│  Presentation: screens, components, navegação (expo-router)      │
+│  Application-cliente: hooks, api-client, cache de server-state   │
+│  Shared: domain types + validators (Zod)  ← também no servidor   │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │ HTTPS + JWT
+┌──────────────────────────────▼──────────────────────────────────┐
+│  Backend (deployable separado)                                   │
+│  Presentation-BFF: valida payload (Zod), traduz erros            │
+│  Application: use-cases, authz guards (fail-closed)              │
+│  Infrastructure: repositories (I*Repository) → banco             │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Autenticação (padrão)
+
+1. App faz login via provedor (Universal Login) → recebe **JWT**.
+2. JWT guardado em `expo-secure-store` (Keychain).
+3. `api-client` anexa `Authorization: Bearer <jwt>` em toda requisição.
+4. Backend **valida o JWT** e o guard resolve `userId`/tenant → aplica fail-closed.
+
+> O provedor de auth é uma decisão de projeto (ADR). Isole-o atrás de
+> `IAuthProvider` para poder trocá-lo.
+
+### Notificações push e jobs agendados
+
+Recursos proativos (lembretes, resumos) seguem o padrão:
+
+- **Registro**: o app pede permissão e registra o push token no backend.
+- **Agendador** (cron no backend) roda a lógica de negócio → decide o que enviar.
+- **Envio**: backend dispara push (via serviço de push → APNs no iOS).
+
+A lógica de "quando/como notificar" é **regra de negócio** → vive em use-cases no
+backend, testável, nunca no dispositivo.
+
+### Estado no cliente
+
+- **Server-state** (dados do backend): uma lib de cache/sincronização (ex.: React
+  Query) — introduza quando houver mais de uma tela consumindo os mesmos dados.
+- **UI-state** (efêmero, de tela): `useState`/`useReducer`; um store global
+  (ex.: Zustand/Context) só quando o estado for realmente compartilhado.
+- **MVP**: comece com hooks + fetch; adicione as libs quando a dor aparecer (YAGNI).
+
+### Offline & resiliência
+
+Rede móvel falha. Trate erro de rede como **erro técnico** (tom "tente novamente"),
+mostre estados de loading/erro em toda tela e adote cache otimista só quando o
+requisito aparecer.
+
+### Exemplo concreto de stack (recomendado)
+
+Assim como o template usa **Next.js** como exemplo do lado web, este é um conjunto
+concreto que instancia bem os padrões nativos acima — cada escolha vira um ADR e
+fica isolada atrás de interfaces (`I*Repository`, `IAuthProvider`):
+
+| Camada | Escolha de exemplo | Papel |
+|---|---|---|
+| App | **Expo** (React Native), iOS; expo-router | Presentation + application-cliente |
+| Banco | **Neon** (Postgres serverless) | Relacional, exponível via MCP |
+| Backend | **Vercel** (funções serverless) + **Vercel Cron** | BFF + jobs agendados |
+| Auth | **Auth0** (Universal Login, JWT) | Identidade atrás de `IAuthProvider` |
+| Authz | **Guards na aplicação** (fail-closed) | Multi-tenant sem depender de RLS |
+| Push | **Expo Notifications** → APNs | Notificações proativas |
+
+> É um **ponto de partida**, não uma obrigação. Troque qualquer peça pela sua e
+> registre o porquê num ADR.
+
+---
+
 ## Padrões e Convenções
 
 - **Dependency Injection** via construtor.
