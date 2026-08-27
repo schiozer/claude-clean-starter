@@ -202,14 +202,21 @@ export async function POST(req: Request) {
 
 ## Autorização
 
-Escolha um mecanismo e aplique-o de forma **fail-closed** (esqueceu de autorizar
-→ sem acesso):
+Aplique a autorização de forma **fail-closed** (esqueceu de autorizar → sem
+acesso). A ordem de preferência é:
 
-- **No banco** (ex.: Row Level Security), ou
-- **Em uma camada de serviço com guards** (`src/application/authz/`), chamados
-  por todos os use-cases antes de tocar repositórios.
+- **Padrão — guards na camada de aplicação** (`src/application/authz/`), chamados
+  por **todos** os use-cases antes de tocar repositórios. A identidade vem do IdP
+  (JWT/OIDC validado no BFF); a regra de acesso vive no código, testável e
+  versionada. É o que combina com um Postgres "puro" (ex.: Neon) atrás de
+  `I*Repository` e um IdP externo (ex.: Auth0) atrás de `IAuthProvider`.
+- **Reforço opcional — no banco** (ex.: Row Level Security). Útil como segunda
+  linha de defesa, mas depende de integração nativa DB↔IdP (padrão em BaaS como o
+  Supabase); em Postgres genérico exige propagar a identidade manualmente. Não a
+  use como **única** camada quando a regra é rica — ela é difícil de testar.
 
-Documente a escolha em um ADR. Nunca dependa apenas de checagens no cliente.
+Documente a escolha concreta em um ADR (ver `docs/adr/`). Nunca dependa apenas de
+checagens no cliente.
 
 ---
 
