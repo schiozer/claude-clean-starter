@@ -29,7 +29,18 @@ export default tseslint.config(
     rules: {
       // BEST_PRACTICES: sem `any`. Prefira `unknown` + validação (Zod).
       '@typescript-eslint/no-explicit-any': 'error',
-      'no-console': 'warn',
+      // `console` proibido no app; o sink central é `src/shared/logError.ts`
+      // (única linha com `eslint-disable-next-line no-console`). Regra como
+      // ERRO — warning não trava CI e regride com o tempo (ver ADR-009).
+      'no-console': 'error',
+    },
+  },
+  {
+    // `any` é idiomático em mocks de teste; console é a saída pretendida de CLIs.
+    files: ['tests/**', 'scripts/**'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      'no-console': 'off',
     },
   }
 )

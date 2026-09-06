@@ -274,6 +274,20 @@ focadas; sem duplicação; erros tratados; testes cobrem casos principais; sem
 - HTML semântico (`<button>`, não `<div onClick>`).
 - `label` associado a `input` (`htmlFor`/`id`).
 - `alt` descritivo em imagens.
+- **Botão só-ícone sempre tem nome acessível.** Um `<button>` cujo conteúdo é apenas
+  um ícone (SVG, sem texto visível) é anunciado como "botão" pelo leitor de tela —
+  inútil. Dê um `aria-label` (ou `title`) que descreva a **ação**. Se o significado
+  muda com o estado (toggle), o rótulo é **dinâmico**. Botões com texto visível não
+  precisam de `aria-label` — o texto já é o nome acessível.
+
+```tsx
+// ✅ nome acessível descreve a ação
+<button onClick={onClose} aria-label="Fechar"><X /></button>
+<button aria-label={open ? 'Recolher' : 'Expandir'}>{open ? <ChevronDown /> : <ChevronRight />}</button>
+
+// ❌ leitor de tela anuncia só "botão"
+<button onClick={onClose}><X /></button>
+```
 
 ---
 

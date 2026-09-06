@@ -18,7 +18,7 @@ export async function GET(req: Request): Promise<Response> {
     const resources = await new ListResourcesUseCase(resourceRepository).execute(user.id)
     return Response.json(resources, { status: 200 })
   } catch (error) {
-    return handleApiError(error)
+    return handleApiError(error, 'api/resources:GET')
   }
 }
 
@@ -30,6 +30,6 @@ export async function POST(req: Request): Promise<Response> {
     const resource = await new CreateResourceUseCase(resourceRepository).execute(dto, user.id)
     return Response.json(resource, { status: 201 })
   } catch (error) {
-    return handleApiError(error)
+    return handleApiError(error, 'api/resources:POST')
   }
 }
