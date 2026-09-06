@@ -1,17 +1,24 @@
 # Guia de Testes
 
-**Última Atualização**: 2026-07-20  
-**Versão**: 1.0.0
+**Última Atualização**: 2026-09-06
+**Versão**: 2.0.0
 
 ---
 
 ## Visão Geral
 
-Este guia apresenta estratégias e ferramentas de teste para este projeto:
+Este guia é **auto-contido**: todo padrão citado tem um teste equivalente em
+`examples/walking-skeleton/tests/`. As ferramentas do starter:
 
-- **Vitest**: testes unitários e de integração
-- **Playwright**: testes end-to-end (pós-MVP)
-- **Testing Library**: testes de componentes React
+- **Vitest** — testes unitários e de integração.
+- **happy-dom** — DOM leve para componentes/hooks (mais rápido que jsdom).
+- **Testing Library** — testes de componentes React (quando houver UI a testar).
+- **Playwright** — E2E, opcional/pós-MVP.
+
+A arquitetura em camadas (domain → application → infrastructure → presentation,
+ADR-001) é o que torna o teste barato: a lógica não depende de framework nem de
+banco, então a maior parte é teste unitário de função pura + use-case com repositório
+mockado pela **interface**.
 
 ---
 
@@ -19,954 +26,301 @@ Este guia apresenta estratégias e ferramentas de teste para este projeto:
 
 ```
         /\
-       /  \
-      / E2E\      ← Poucos, lentos, alta confiança
-     /______\
-    /        \
-   /  Integ.  \   ← Médio, velocidade média
-  /____________\
- /              \
-/   Unit Tests   \ ← Muitos, rápidos, baixa confiança individual
+       /E2E\      ← poucos, lentos, alta confiança (Playwright, opcional)
+      /------\
+     / Integ. \   ← rotas de API (Request → Response), médio volume
+    /----------\
+   / Unit Tests \ ← muitos, rápidos: entidades, use-cases, validators, utils
+  /--------------\
 ```
 
-**MVP**: foco em testes unitários + validações críticas  
-**Pós-MVP**: adicionar integração e E2E
+O starter já traz as duas camadas de baixo prontas; E2E entra quando a UI estabiliza.
 
 ---
 
 ## Setup
 
-### Instalação
-
-```bash
-npm install --save-dev vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom
-```
-
-### Configuração Vitest
+O skeleton já vem configurado. A config é mínima e **não** usa jsdom nem chaves de
+banco de teste:
 
 ```typescript
 // vitest.config.ts
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
-import path from 'path'
+import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
   plugins: [react()],
   test: {
+    environment: 'happy-dom',
     globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./tests/setup.ts'],
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      exclude: [
-        'node_modules/',
-        'tests/',
-        '**/*.config.ts',
-        '**/*.d.ts'
-      ]
-    }
   },
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src')
-    }
-  }
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
 })
 ```
 
-### Setup File
-
-```typescript
-// tests/setup.ts
-import '@testing-library/jest-dom'
-import { expect, afterEach } from 'vitest'
-import { cleanup } from '@testing-library/react'
-
-// Cleanup após cada teste
-afterEach(() => {
-  cleanup()
-})
-
-// Mock de variáveis de ambiente
-process.env.DATABASE_URL = 'http://localhost:54321'
-process.env.DATABASE_ANON_KEY = 'test-key'
-```
+> **Variáveis de ambiente em teste.** Não semeie chaves de banco globalmente. Quando
+> um teste depende de um flag/segredo, defina-o **no próprio teste** (`beforeEach`) e
+> limpe no `afterEach` — ver o teste de rota abaixo. Isso mantém os testes isolados e
+> evita drift com o contrato real de env.
 
 ---
 
 ## Testes Unitários
 
-### O que Testar
+**TESTE:** lógica de negócio (entidades, use-cases), funções puras, validações Zod,
+edge cases (`null`/`undefined`/vazio), guards.
 
-**TESTE**:
-- ✅ Lógica de negócio (cálculos, validações)
-- ✅ Funções puras (input → output)
-- ✅ Edge cases (null, undefined, empty)
-- ✅ Validações Zod
-
-**NÃO TESTE** (MVP):
-- ❌ Componentes puramente visuais
-- ❌ Código trivial (getters/setters)
-- ❌ Dependências externas (SDK do banco)
-
-### Estrutura de Diretórios
-
-```
-tests/
-  ├── setup.ts
-  ├── unit/
-  │   ├── validators/
-  │   │   ├── programSchemas.test.ts
-  │   │   └── lessonSchemas.test.ts
-  │   ├── utils/
-  │   │   ├── calculateProgress.test.ts
-  │   │   └── formatDate.test.ts
-  │   └── hooks/
-  │       └── usePrograms.test.ts
-  ├── integration/
-  │   └── api/
-  │       └── programs.test.ts
-  └── e2e/
-      └── provider-dashboard.spec.ts
-```
+**NÃO TESTE (ainda):** componentes puramente visuais, getters/setters triviais, e o
+SDK do banco em si (mocke a **interface** do repositório, não o driver).
 
 ### Padrão AAA (Arrange, Act, Assert)
 
 ```typescript
-// tests/unit/utils/calculateProgress.test.ts
+// tests/unit/Resource.test.ts (padrão)
 import { describe, it, expect } from 'vitest'
-import { calculateProgress } from '@/shared/utils/calculateProgress'
+import { Resource } from '@/domain/entities/Resource'
 
-describe('calculateProgress', () => {
-  it('should calculate progress percentage correctly', () => {
-    // Arrange (preparar)
-    const completed = 3
-    const total = 10
-
-    // Act (executar)
-    const result = calculateProgress(completed, total)
-
-    // Assert (verificar)
-    expect(result).toBe(30)
-  })
-
-  it('should return 0 when total is 0', () => {
-    // Arrange
-    const completed = 0
-    const total = 0
-
-    // Act
-    const result = calculateProgress(completed, total)
-
-    // Assert
-    expect(result).toBe(0)
-  })
-
-  it('should return 100 when all completed', () => {
-    // Arrange
-    const completed = 10
-    const total = 10
-
-    // Act
-    const result = calculateProgress(completed, total)
-
-    // Assert
-    expect(result).toBe(100)
+describe('Resource', () => {
+  it('rejeita título com menos de 3 caracteres', () => {
+    // Arrange + Act + Assert
+    expect(() => Resource.create({ title: 'ab' }, 'owner-1')).toThrow()
   })
 })
 ```
 
-### Testar Validações Zod
+### Validações Zod
 
 ```typescript
-// tests/unit/validators/programSchemas.test.ts
+// tests/unit/resourceSchemas.test.ts (padrão)
 import { describe, it, expect } from 'vitest'
-import { createProgramSchema } from '@/shared/validators/programSchemas'
+import { createResourceSchema } from '@/application/validators/resourceSchemas'
 
-describe('createProgramSchema', () => {
-  it('should validate valid program', () => {
-    const valid = {
-      title: 'Programa de Força',
-      description: 'Programa focado em hipertrofia',
-      duration_weeks: 12,
-      is_free: false,
-      price_brl: 99.90,
-      release_mode: 'total'
-    }
-
-    expect(() => createProgramSchema.parse(valid)).not.toThrow()
+describe('createResourceSchema', () => {
+  it('aceita título válido', () => {
+    expect(() => createResourceSchema.parse({ title: 'Válido' })).not.toThrow()
   })
 
-  it('should reject program with short title', () => {
-    const invalid = {
-      title: 'AB', // menos de 3 caracteres
-      is_free: true,
-      release_mode: 'total'
-    }
-
-    expect(() => createProgramSchema.parse(invalid)).toThrow()
-  })
-
-  it('should reject paid program without price', () => {
-    const invalid = {
-      title: 'Programa Teste',
-      is_free: false,
-      price_brl: null, // pago mas sem preço
-      release_mode: 'total'
-    }
-
-    expect(() => createProgramSchema.parse(invalid)).toThrow('Programa pago deve ter preço válido')
-  })
-
-  it('should allow free program without price', () => {
-    const valid = {
-      title: 'Programa Gratuito',
-      is_free: true,
-      price_brl: null,
-      release_mode: 'total'
-    }
-
-    expect(() => createProgramSchema.parse(valid)).not.toThrow()
+  it('rejeita título curto', () => {
+    expect(() => createResourceSchema.parse({ title: 'ab' })).toThrow()
   })
 })
 ```
 
-### Testar Utilitários
+### Use-cases: mocke o repositório pela **interface**
+
+Este é o padrão central do starter. O use-case recebe um `IResourceRepository` por
+injeção; no teste, você fornece um mock que implementa a interface — nenhum banco
+envolvido. Assim o teste é rápido, determinístico e independe da infraestrutura.
 
 ```typescript
-// tests/unit/utils/formatDate.test.ts
-import { describe, it, expect } from 'vitest'
-import { formatDate } from '@/shared/utils/formatDate'
-
-describe('formatDate', () => {
-  it('should format date to pt-BR', () => {
-    const date = new Date('2026-01-15T10:30:00')
-    const result = formatDate(date)
-    
-    expect(result).toBe('15/01/2026')
-  })
-
-  it('should handle invalid date', () => {
-    const result = formatDate(new Date('invalid'))
-    
-    expect(result).toBe('Data inválida')
-  })
-
-  it('should format with time when option is true', () => {
-    const date = new Date('2026-01-15T10:30:00')
-    const result = formatDate(date, { includeTime: true })
-    
-    expect(result).toBe('15/01/2026 às 10:30')
-  })
-})
-```
-
----
-
-## Testes de Hooks
-
-### Mock do cliente de banco
-
-```typescript
-// tests/mocks/db.ts
-import { vi } from 'vitest'
-
-export const createMockDbClient = () => ({
-  from: vi.fn(() => ({
-    select: vi.fn().mockReturnThis(),
-    insert: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
-    delete: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    order: vi.fn().mockReturnThis()
-  })),
-  auth: {
-    getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
-    signIn: vi.fn(),
-    signOut: vi.fn()
-  }
-})
-```
-
-### Testar Hook
-
-```typescript
-// tests/unit/hooks/usePrograms.test.ts
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
-import { usePrograms } from '@/presentation/hooks/usePrograms'
-import { createClient } from '@/lib/db/client'
-
-// Mock do banco
-vi.mock('@/lib/db/client', () => ({
-  createClient: vi.fn()
-}))
-
-describe('usePrograms', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('should fetch programs on mount', async () => {
-    const mockData = [
-      { id: '1', title: 'Programa 1' },
-      { id: '2', title: 'Programa 2' }
-    ]
-
-    const mockDb = {
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: mockData, error: null })
-      }))
-    }
-
-    vi.mocked(createClient).mockReturnValue(mockDb as any)
-
-    const { result } = renderHook(() => usePrograms())
-
-    expect(result.current.loading).toBe(true)
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false)
-    })
-
-    expect(result.current.programs).toEqual(mockData)
-  })
-
-  it('should create program successfully', async () => {
-    const newProgram = { id: '3', title: 'Novo Programa' }
-
-    const mockDb = {
-      from: vi.fn(() => ({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: newProgram, error: null })
-      }))
-    }
-
-    vi.mocked(createClient).mockReturnValue(mockDb as any)
-
-    const { result } = renderHook(() => usePrograms())
-
-    await waitFor(async () => {
-      const created = await result.current.createProgram({
-        title: 'Novo Programa',
-        is_free: true,
-        release_mode: 'total'
-      })
-
-      expect(created).toEqual(newProgram)
-    })
-  })
-
-  it('should handle errors when creating program', async () => {
-    const mockError = { message: 'Database error' }
-
-    const mockDb = {
-      from: vi.fn(() => ({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: mockError })
-      }))
-    }
-
-    vi.mocked(createClient).mockReturnValue(mockDb as any)
-
-    const { result } = renderHook(() => usePrograms())
-
-    await waitFor(async () => {
-      await expect(
-        result.current.createProgram({ title: 'Test', is_free: true, release_mode: 'total' })
-      ).rejects.toThrow()
-    })
-  })
-})
-```
-
----
-
-## Testes de Componentes React
-
-### Componente Simples
-
-```typescript
-// tests/unit/components/ProgramCard.test.tsx
+// tests/unit/CreateResourceUseCase.test.ts
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { ProgramCard } from '@/presentation/components/dashboard/ProgramCard'
+import { CreateResourceUseCase } from '@/application/use-cases/CreateResourceUseCase'
+import type { IResourceRepository } from '@/domain/interfaces/IResourceRepository'
 
-describe('ProgramCard', () => {
-  const mockProgram = {
-    id: '1',
-    title: 'Programa de Força',
-    description: 'Programa focado em hipertrofia',
-    is_free: false,
-    price_brl: 99.90,
-    published: true
-  }
-
-  it('should render program title', () => {
-    render(<ProgramCard program={mockProgram} />)
-    
-    expect(screen.getByText('Programa de Força')).toBeInTheDocument()
-  })
-
-  it('should show price when not free', () => {
-    render(<ProgramCard program={mockProgram} />)
-    
-    expect(screen.getByText(/R\$ 99,90/i)).toBeInTheDocument()
-  })
-
-  it('should show "Grátis" badge when free', () => {
-    const freeProgram = { ...mockProgram, is_free: true }
-    render(<ProgramCard program={freeProgram} />)
-    
-    expect(screen.getByText('Grátis')).toBeInTheDocument()
-  })
-
-  it('should call onEdit when edit button clicked', async () => {
-    const onEdit = vi.fn()
-    const user = userEvent.setup()
-    
-    render(<ProgramCard program={mockProgram} onEdit={onEdit} />)
-    
-    const editButton = screen.getByRole('button', { name: /editar/i })
-    await user.click(editButton)
-    
-    expect(onEdit).toHaveBeenCalledWith(mockProgram.id)
-  })
-
-  it('should show published badge when published', () => {
-    render(<ProgramCard program={mockProgram} />)
-    
-    expect(screen.getByText('Publicado')).toBeInTheDocument()
-  })
-
-  it('should show draft badge when not published', () => {
-    const draftProgram = { ...mockProgram, published: false }
-    render(<ProgramCard program={draftProgram} />)
-    
-    expect(screen.getByText('Rascunho')).toBeInTheDocument()
-  })
-})
-```
-
-### Componente com Formulário
-
-```typescript
-// tests/unit/components/ProgramFormModal.test.tsx
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { ProgramFormModal } from '@/presentation/components/dashboard/ProgramFormModal'
-
-describe('ProgramFormModal', () => {
-  it('should submit form with valid data', async () => {
-    const onSubmit = vi.fn()
-    const user = userEvent.setup()
-    
-    render(<ProgramFormModal isOpen onClose={() => {}} onSubmit={onSubmit} />)
-    
-    // Preencher campos
-    await user.type(screen.getByLabelText(/título/i), 'Programa Teste')
-    await user.type(screen.getByLabelText(/descrição/i), 'Descrição do programa')
-    await user.click(screen.getByLabelText(/gratuito/i))
-    
-    // Submeter
-    await user.click(screen.getByRole('button', { name: /salvar/i }))
-    
-    await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith({
-        title: 'Programa Teste',
-        description: 'Descrição do programa',
-        is_free: true,
-        price_brl: null,
-        release_mode: 'total'
-      })
-    })
-  })
-
-  it('should show validation error for short title', async () => {
-    const user = userEvent.setup()
-    
-    render(<ProgramFormModal isOpen onClose={() => {}} onSubmit={() => {}} />)
-    
-    await user.type(screen.getByLabelText(/título/i), 'AB') // menos de 3 caracteres
-    await user.click(screen.getByRole('button', { name: /salvar/i }))
-    
-    await waitFor(() => {
-      expect(screen.getByText(/título deve ter pelo menos 3 caracteres/i)).toBeInTheDocument()
-    })
-  })
-
-  it('should require price when not free', async () => {
-    const user = userEvent.setup()
-    
-    render(<ProgramFormModal isOpen onClose={() => {}} onSubmit={() => {}} />)
-    
-    await user.type(screen.getByLabelText(/título/i), 'Programa Pago')
-    await user.click(screen.getByLabelText(/pago/i))
-    // NÃO preencher preço
-    
-    await user.click(screen.getByRole('button', { name: /salvar/i }))
-    
-    await waitFor(() => {
-      expect(screen.getByText(/programa pago deve ter preço válido/i)).toBeInTheDocument()
-    })
-  })
-})
-```
-
----
-
-## Testes de Integração (Pós-MVP)
-
-### API Route
-
-```typescript
-// tests/integration/api/programs.test.ts
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { createClient } from '@db/db-js'
-
-describe('POST /api/programs', () => {
-  let db: any
-  let authToken: string
-
-  beforeAll(async () => {
-    db = createClient(
-      process.env.DATABASE_URL!,
-      process.env.DATABASE_SERVICE_KEY!
-    )
-    
-    // Login de teste
-    const { data } = await db.auth.signInWithPassword({
-      email: 'test@example.com',
-      password: 'test123'
-    })
-    authToken = data.session.access_token
-  })
-
-  afterAll(async () => {
-    // Cleanup
-    await db.auth.signOut()
-  })
-
-  it('should create program successfully', async () => {
-    const response = await fetch('http://localhost:3000/api/programs', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`
-      },
-      body: JSON.stringify({
-        title: 'Programa Teste',
-        description: 'Descrição teste',
-        is_free: true,
-        release_mode: 'total'
-      })
-    })
-
-    expect(response.status).toBe(201)
-    
-    const data = await response.json()
-    expect(data).toHaveProperty('id')
-    expect(data.title).toBe('Programa Teste')
-  })
-
-  it('should return 400 for invalid data', async () => {
-    const response = await fetch('http://localhost:3000/api/programs', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`
-      },
-      body: JSON.stringify({
-        title: 'AB' // muito curto
-      })
-    })
-
-    expect(response.status).toBe(400)
-    
-    const data = await response.json()
-    expect(data).toHaveProperty('error')
-  })
-
-  it('should return 401 without auth', async () => {
-    const response = await fetch('http://localhost:3000/api/programs', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        title: 'Programa Teste'
-      })
-    })
-
-    expect(response.status).toBe(401)
-  })
-})
-```
-
----
-
-## Testes E2E com Playwright (Pós-MVP)
-
-### Instalação
-
-```bash
-npm install --save-dev @playwright/test
-npx playwright install
-```
-
-### Configuração
-
-```typescript
-// playwright.config.ts
-import { defineConfig, devices } from '@playwright/test'
-
-export default defineConfig({
-  testDir: './tests/e2e',
-  fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
-  use: {
-    baseURL: 'http://localhost:3000',
-    trace: 'on-first-retry',
-  },
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-  ],
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-  },
-})
-```
-
-### Exemplo E2E
-
-```typescript
-// tests/e2e/provider-dashboard.spec.ts
-import { test, expect } from '@playwright/test'
-
-test.describe('Provider Dashboard', () => {
-  test.beforeEach(async ({ page }) => {
-    // Login
-    await page.goto('/login')
-    await page.fill('[name=email]', 'provider@example.com')
-    await page.fill('[name=password]', 'test123')
-    await page.click('button[type=submit]')
-    
-    // Aguardar redirect
-    await page.waitForURL('/dashboard')
-  })
-
-  test('should display programs list', async ({ page }) => {
-    await expect(page.locator('h1')).toContainText('Meus Programas')
-    await expect(page.locator('[data-testid=program-card]')).toBeVisible()
-  })
-
-  test('should create new program', async ({ page }) => {
-    // Abrir modal
-    await page.click('button:has-text("Novo Programa")')
-    
-    // Preencher formulário
-    await page.fill('[name=title]', 'Programa E2E Test')
-    await page.fill('[name=description]', 'Descrição do teste E2E')
-    await page.click('[name=is_free]')
-    
-    // Salvar
-    await page.click('button:has-text("Salvar")')
-    
-    // Verificar toast de sucesso
-    await expect(page.locator('.toast')).toContainText('Programa criado com sucesso')
-    
-    // Verificar na lista
-    await expect(page.locator('text=Programa E2E Test')).toBeVisible()
-  })
-
-  test('should edit program', async ({ page }) => {
-    // Clicar em editar no primeiro programa
-    await page.click('[data-testid=program-card] button:has-text("Editar")').first()
-    
-    // Editar título
-    await page.fill('[name=title]', 'Programa Editado')
-    await page.click('button:has-text("Salvar")')
-    
-    // Verificar atualização
-    await expect(page.locator('.toast')).toContainText('Programa atualizado')
-    await expect(page.locator('text=Programa Editado')).toBeVisible()
-  })
-
-  test('should delete program', async ({ page }) => {
-    // Clicar em excluir
-    await page.click('[data-testid=program-card] button:has-text("Excluir")').first()
-    
-    // Confirmar
-    await page.click('button:has-text("Confirmar")')
-    
-    // Verificar toast
-    await expect(page.locator('.toast')).toContainText('Programa excluído')
-  })
-})
-```
-
----
-
-## Coverage (Cobertura)
-
-### Gerar Relatório
-
-```bash
-npm run test:coverage
-```
-
-### Interpretar
-
-```
-File                | % Stmts | % Branch | % Funcs | % Lines
---------------------|---------|----------|---------|--------
-All files           |   85.21 |    78.45 |   82.10 |   86.33
- validators/        |   95.00 |    90.00 |   92.00 |   95.50
-  programSchemas.ts |   95.00 |    90.00 |   92.00 |   95.50
- utils/             |   88.00 |    85.00 |   80.00 |   89.00
-  calculateProgress |   88.00 |    85.00 |   80.00 |   89.00
-```
-
-**Metas**:
-- MVP: 70% coverage mínimo em lógica crítica
-- Pós-MVP: 80% coverage global
-
----
-
-## Mocking
-
-### Mock de Funções
-
-```typescript
-import { vi } from 'vitest'
-
-const mockFn = vi.fn()
-mockFn.mockReturnValue(42)
-mockFn.mockResolvedValue({ data: [] })
-mockFn.mockRejectedValue(new Error('Failed'))
-
-expect(mockFn).toHaveBeenCalled()
-expect(mockFn).toHaveBeenCalledWith('arg1', 'arg2')
-expect(mockFn).toHaveBeenCalledTimes(2)
-```
-
-### Mock de Módulos
-
-```typescript
-// Mock completo
-vi.mock('@/lib/db/client', () => ({
-  createClient: vi.fn(() => mockDbClient)
-}))
-
-// Mock parcial
-vi.mock('@/shared/utils', async () => {
-  const actual = await vi.importActual('@/shared/utils')
+function mockRepo(): IResourceRepository {
   return {
-    ...actual,
-    specificFunction: vi.fn()
+    findById: vi.fn(),
+    findByOwnerId: vi.fn(),
+    save: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn(),
   }
+}
+
+describe('CreateResourceUseCase', () => {
+  it('cria e salva o resource', async () => {
+    const repo = mockRepo()
+    const result = await new CreateResourceUseCase(repo).execute({ title: 'Novo' }, 'owner-1')
+    expect(result.ownerId).toBe('owner-1')
+    expect(repo.save).toHaveBeenCalledTimes(1)
+  })
+
+  it('propaga erro de domínio para título inválido — e NÃO salva', async () => {
+    const repo = mockRepo()
+    await expect(new CreateResourceUseCase(repo).execute({ title: 'ab' }, 'owner-1')).rejects.toThrow()
+    expect(repo.save).not.toHaveBeenCalled()
+  })
 })
 ```
 
-### Mock de Timers
+Repare no segundo teste: além do `throw`, ele afirma `save` **não** foi chamado — a
+regra falha **antes** de tocar a persistência. Testar o "não-efeito" é tão importante
+quanto testar o efeito.
+
+### Guards (autorização fail-closed)
 
 ```typescript
-import { vi, beforeEach, afterEach } from 'vitest'
+// tests/unit/resourceGuards.test.ts (padrão)
+import { describe, it, expect } from 'vitest'
+import { requireUser } from '@/application/authz/resourceGuards'
+import { UnauthorizedError } from '@/shared/errors'
 
-beforeEach(() => {
-  vi.useFakeTimers()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
-
-test('debounce', () => {
-  const fn = vi.fn()
-  const debounced = debounce(fn, 1000)
-  
-  debounced()
-  debounced()
-  debounced()
-  
-  expect(fn).not.toHaveBeenCalled()
-  
-  vi.advanceTimersByTime(1000)
-  
-  expect(fn).toHaveBeenCalledTimes(1)
+describe('requireUser', () => {
+  it('lança UnauthorizedError quando não há usuário', () => {
+    expect(() => requireUser(null)).toThrow(UnauthorizedError)
+  })
 })
 ```
+
+---
+
+## Testes de Integração — Rotas de API
+
+As API Routes do App Router são funções `(Request) => Promise<Response>`. Teste-as
+chamando `GET`/`POST` diretamente com um `Request` nativo — sem servidor de pé, sem
+`fetch` para `localhost`. Cubra o feliz, o erro funcional (400 com `code`) e o gate
+do feature flag (dois estados: ligado/desligado).
+
+```typescript
+// tests/integration/resources.route.test.ts
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { GET, POST } from '@/app/api/resources/route'
+import { resourceRepository } from '@/infrastructure/composition'
+
+const postReq = (body: unknown) =>
+  new Request('http://localhost/api/resources', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+const getReq = () => new Request('http://localhost/api/resources')
+
+describe('rota /api/resources (flag on)', () => {
+  beforeEach(() => {
+    process.env.RESOURCES_ENABLED = 'on'
+    resourceRepository.clear()
+  })
+  afterEach(() => {
+    delete process.env.RESOURCES_ENABLED
+  })
+
+  it('POST com título válido → 201', async () => {
+    const res = await POST(postReq({ title: 'Válido' }))
+    expect(res.status).toBe(201)
+    expect((await res.json()).ownerId).toBe('dev-user')
+  })
+
+  it('POST com título inválido → 400 VALIDATION_ERROR', async () => {
+    const res = await POST(postReq({ title: 'ab' }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('VALIDATION_ERROR')
+  })
+})
+
+describe('rota /api/resources (flag off)', () => {
+  beforeEach(() => {
+    process.env.RESOURCES_ENABLED = 'off'
+    resourceRepository.clear()
+  })
+
+  it('POST → 404 quando desligado e NÃO persiste', async () => {
+    const saveSpy = vi.spyOn(resourceRepository, 'save')
+    const res = await POST(postReq({ title: 'Válido' }))
+    expect(res.status).toBe(404)
+    expect(saveSpy).not.toHaveBeenCalled()
+    saveSpy.mockRestore()
+  })
+})
+```
+
+Dois cuidados que este teste ilustra: **(1)** afirmar `code` no corpo (não só o
+status) trava o contrato funcional/técnico; **(2)** com o flag off, verificar que a
+persistência **não** foi tocada — o gate corta antes de qualquer efeito.
+
+---
+
+## Ao adotar um banco real (Neon/Drizzle)
+
+O skeleton usa `InMemoryResourceRepository` — trocá-lo por um adapter real
+(`NeonResourceRepository`, ADR-001/003) **não muda um único teste de use-case**: eles
+mockam a interface. Só o teste do adapter concreto muda. Duas armadilhas conhecidas ao
+testar com o driver HTTP do Neon:
+
+1. **O driver embrulha o código de erro do Postgres.** Um `unique_violation` (`23505`)
+   não aparece em `err.code`, e sim no encadeamento `err.cause`. Centralize a detecção
+   num helper (`isUniqueViolation`) e, no teste, **mocke o formato aninhado** (o erro
+   com a `cause`), não um `code` de topo.
+2. **`server-only` quebra fora do Next.** Módulos marcados `import 'server-only'`
+   lançam em Vitest; mocke-os (`vi.mock('server-only', () => ({}))`) no topo do teste,
+   ou isole o adapter para não arrastar essa importação.
+
+Mantenha, além disso, um **teste anti-drift de ambiente**: ele lê o `.env.local.example`
+e falha se as variáveis divergirem do contrato esperado — barato e pega segredo
+renomeado/esquecido antes de virar bug silencioso em produção.
+
+---
+
+## Mocking — Referência
+
+```typescript
+import { vi } from 'vitest'
+
+const fn = vi.fn()
+fn.mockReturnValue(42)
+fn.mockResolvedValue({ ok: true })
+fn.mockRejectedValue(new Error('falhou'))
+
+expect(fn).toHaveBeenCalled()
+expect(fn).toHaveBeenCalledWith('arg')
+expect(fn).toHaveBeenCalledTimes(1)
+
+// Mock de módulo
+vi.mock('@/infrastructure/composition', () => ({ resourceRepository: mockRepo() }))
+
+// Spy que restaura depois (evita vazar mock entre testes)
+const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+// ...
+spy.mockRestore()
+```
+
+`any` é liberado em `tests/**` (a config ESLint desliga `no-explicit-any` ali) — é
+idiomático em mocks. No app, continua proibido.
 
 ---
 
 ## Boas Práticas
 
-### 1. Testes Independentes
-
-```typescript
-// ❌ RUIM: testes dependentes
-let sharedState: any
-
-test('test 1', () => {
-  sharedState = { value: 1 }
-})
-
-test('test 2', () => {
-  expect(sharedState.value).toBe(1) // depende do test 1
-})
-
-// ✅ BOM: testes independentes
-test('test 1', () => {
-  const state = { value: 1 }
-  expect(state.value).toBe(1)
-})
-
-test('test 2', () => {
-  const state = { value: 1 }
-  expect(state.value).toBe(1)
-})
-```
-
-### 2. Testes Descritivos
-
-```typescript
-// ❌ RUIM: vago
-it('works', () => {})
-
-// ✅ BOM: descreve comportamento
-it('should return 0 when total is 0', () => {})
-it('should throw ValidationError when title is empty', () => {})
-```
-
-### 3. Um Conceito por Teste
-
-```typescript
-// ❌ RUIM: testa muita coisa
-it('should work', () => {
-  expect(createProgram()).toBeDefined()
-  expect(updateProgram()).toBeTruthy()
-  expect(deleteProgram()).toBeNull()
-})
-
-// ✅ BOM: um conceito por teste
-it('should create program', () => {
-  expect(createProgram()).toBeDefined()
-})
-
-it('should update program', () => {
-  expect(updateProgram()).toBeTruthy()
-})
-
-it('should delete program', () => {
-  expect(deleteProgram()).toBeNull()
-})
-```
-
-### 4. Setup/Teardown
-
-```typescript
-import { beforeEach, afterEach } from 'vitest'
-
-describe('ProgramService', () => {
-  let service: ProgramService
-  let mockRepo: any
-
-  beforeEach(() => {
-    mockRepo = createMockRepository()
-    service = new ProgramService(mockRepo)
-  })
-
-  afterEach(() => {
-    vi.clearAllMocks()
-  })
-
-  // testes...
-})
-```
+- **Testes independentes** — nada de estado compartilhado entre `it`s; use
+  `beforeEach` para reconstruir o mundo (e `resourceRepository.clear()` quando usar o
+  repositório em memória).
+- **Nomes descritivos** — "rejeita título curto", não "test1".
+- **Um conceito por teste** — um `it`, uma afirmação de comportamento.
+- **Restaure spies/timers** — `afterEach(() => vi.restoreAllMocks())`.
+- **Teste o não-efeito** — quando uma regra deve impedir uma ação, afirme que o efeito
+  **não** aconteceu (`save`/`fetch` não chamado), não só que houve erro.
 
 ---
 
-## Scripts NPM
+## Coverage
 
-```json
-// package.json
-{
-  "scripts": {
-    "test": "vitest",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
-  }
-}
+```bash
+npm run test -- --coverage
 ```
+
+Metas de referência: **≥ 70%** em lógica crítica (entidades, use-cases, guards,
+fronteira de erro) no início; **≥ 80%** global à medida que o produto amadurece.
+Coverage é sinal, não meta cega — priorize os caminhos de decisão (branches), não
+linhas triviais.
 
 ---
 
-## CI/CD (GitHub Actions)
+## E2E com Playwright (opcional / pós-MVP)
 
-```yaml
-# .github/workflows/test.yml
-name: Tests
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-          
-      - name: Install dependencies
-        run: npm ci
-        
-      - name: Run tests
-        run: npm run test:coverage
-        
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage/coverage-final.json
-```
-
----
-
-## Recursos
-
-- **Vitest**: https://vitest.dev/
-- **Testing Library**: https://testing-library.com/
-- **Playwright**: https://playwright.dev/
-- **Kent C. Dodds - Testing JavaScript**: https://testingjavascript.com/
+Quando a UI estabilizar, adicione E2E para os fluxos ponta a ponta (login → ação →
+verificação). Configure `webServer` apontando para `npm run dev`, rode headless no CI
+com `retries` e `trace: 'on-first-retry'`. Mantenha poucos e focados nos caminhos de
+maior valor — E2E é caro e frágil por natureza.
 
 ---
 
 ## Ver Também
 
-- [BEST_PRACTICES.md](../../BEST_PRACTICES.md) - Boas práticas gerais
-- [docs/guides/zod-guide.md](./zod-guide.md) - Validação com Zod
-- [docs/guides/error-handling-guide.md](./error-handling-guide.md) - Error handling
+- [ADR-001](../adr/001-neon-auth0.md) — arquitetura que torna o teste barato (camadas + interfaces)
+- [ADR-009](../adr/009-erros-funcional-vs-tecnico.md) — taxonomia de erro (o que os testes de fronteira afirmam)
+- [BEST_PRACTICES.md](../../BEST_PRACTICES.md) — padrões gerais
+- [docs/guides/error-handling-guide.md](./error-handling-guide.md) — tratamento de erros
+- [docs/guides/zod-guide.md](./zod-guide.md) — validação com Zod
+</content>

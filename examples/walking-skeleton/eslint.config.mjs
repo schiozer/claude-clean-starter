@@ -17,6 +17,19 @@ const eslintConfig = [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+      // `any` proibido no app (defesa contra dados sem forma; prefira `unknown` + Zod).
+      '@typescript-eslint/no-explicit-any': 'error',
+      // `console` proibido no app; o único sink autorizado é src/shared/logError.ts
+      // (com `eslint-disable-next-line` inline na linha do console).
+      'no-console': 'error',
+    },
+  },
+  {
+    // `any` é idiomático em mocks; console é a saída pretendida de scripts/CLIs.
+    files: ['tests/**', 'scripts/**'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      'no-console': 'off',
     },
   },
 ]

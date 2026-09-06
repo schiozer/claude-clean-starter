@@ -1,799 +1,267 @@
 # Guia de Tratamento de Erros
 
-**Última Atualização**: 2026-07-20  
-**Versão**: 1.0.0
+**Última Atualização**: 2026-09-06
+**Versão**: 2.0.0
 
 ---
 
 ## Visão Geral
 
-Este guia estabelece padrões para tratamento de erros neste projeto, garantindo:
+Este guia estabelece o padrão de erros do starter. Ele é **auto-contido**: todo
+código citado existe em `examples/walking-skeleton/src/shared/`. Os pilares são:
 
-- **Mensagens user-friendly** para usuários finais
-- **Logging completo** para debug e monitoramento
-- **Hierarquia de erros** consistente
-- **Recuperação** quando possível
+- **Hierarquia enxuta** (`AppError` + subclasses) — `errors.ts`.
+- **Uma fronteira única** que converte erro em resposta HTTP — `handleApiError`.
+- **Um sink central de log** — `logError` (o único ponto autorizado a chamar
+  `console`).
+- **Taxonomia funcional vs. técnico** — decide o que loga e como a UI reage.
 
----
-
-## Princípios
-
-### 1. Fail Fast
-
-Detecte e reporte erros o mais cedo possível:
-```typescript
-// ✅ BOM: valida antes de processar
-function createProgram(dto: CreateProgramDTO) {
-  if (!dto.title) throw new ValidationError('Título obrigatório', 'title')
-  // processar
-}
-
-// ❌ RUIM: deixa erro acontecer depois
-function createProgram(dto: CreateProgramDTO) {
-  // ... 50 linhas
-  await save({ title: dto.title }) // erro se dto.title === undefined
-}
-```
-
-### 2. Mensagens para Usuário vs Desenvolvedor
-
-**Usuário**: mensagem amigável, sem detalhes técnicos  
-**Desenvolvedor**: log completo com stack trace
-
-```typescript
-// Usuário vê:
-"Erro ao salvar programa. Tente novamente."
-
-// Log (desenvolvedor):
-{
-  error: 'AppError: Failed to save program',
-  code: 'SAVE_ERROR',
-  stack: '...',
-  context: { programId: 'abc-123', providerId: 'xyz' },
-  timestamp: '2026-07-20T10:30:00Z'
-}
-```
-
-### 3. Nunca Engolir Erros
-
-```typescript
-// ❌ RUIM: erro ignorado
-try {
-  await dangerousOperation()
-} catch (error) {
-  // nada
-}
-
-// ✅ BOM: logado e tratado
-try {
-  await dangerousOperation()
-} catch (error) {
-  logger.error('Operation failed', { error })
-  throw new AppError('Erro na operação', 'OPERATION_ERROR')
-}
-```
+A decisão de fundo (por que erro funcional não vira log/500) está no
+[ADR-009](../adr/009-erros-funcional-vs-tecnico.md).
 
 ---
 
 ## Hierarquia de Erros
 
-### Estrutura Base
+`src/shared/errors.ts` — deliberadamente pequena. Sem `isOperational`, sem campo
+`context`, sem uma classe por status. Cada erro carrega **mensagem** (técnica, para
+o log), **`code`** (contrato com o front) e **`statusCode`** (HTTP).
 
 ```typescript
-// src/shared/errors/AppError.ts
+// src/shared/errors.ts
 export class AppError extends Error {
   constructor(
     message: string,
-    public code: string,
-    public statusCode: number = 400,
-    public isOperational: boolean = true,
-    public context?: Record<string, any>
+    public readonly code: string,
+    public readonly statusCode: number = 400
   ) {
     super(message)
     this.name = this.constructor.name
-    Error.captureStackTrace(this, this.constructor)
-  }
-
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      code: this.code,
-      statusCode: this.statusCode,
-      context: this.context
-    }
   }
 }
-```
 
-**Campos**:
-- `message`: mensagem técnica (para logs)
-- `code`: código único do erro (ex: `VALIDATION_ERROR`)
-- `statusCode`: HTTP status code (400, 404, 500, etc.)
-- `isOperational`: `true` se é erro esperado (validação, not found), `false` se é bug
-- `context`: dados adicionais para debug
+export class DomainError extends AppError {
+  constructor(message: string) {
+    super(message, 'VALIDATION_ERROR', 400)
+  }
+}
 
-### Erros Específicos
-
-#### ValidationError
-
-```typescript
-// src/shared/errors/ValidationError.ts
 export class ValidationError extends AppError {
-  constructor(
-    message: string,
-    public field?: string,
-    public value?: any
-  ) {
-    super(message, 'VALIDATION_ERROR', 400, true, { field, value })
+  constructor(message: string) {
+    super(message, 'VALIDATION_ERROR', 400)
   }
 }
-```
 
-**Uso**:
-```typescript
-if (!dto.title || dto.title.length < 3) {
-  throw new ValidationError(
-    'Título deve ter pelo menos 3 caracteres',
-    'title',
-    dto.title
-  )
-}
-```
-
-#### NotFoundError
-
-```typescript
-// src/shared/errors/NotFoundError.ts
 export class NotFoundError extends AppError {
-  constructor(resource: string, identifier?: string) {
-    super(
-      `${resource} não encontrado`,
-      'NOT_FOUND',
-      404,
-      true,
-      { resource, identifier }
-    )
+  constructor(resource: string) {
+    super(`${resource} não encontrado`, 'NOT_FOUND', 404)
   }
 }
-```
 
-**Uso**:
-```typescript
-const program = await programRepository.findById(id)
-if (!program) {
-  throw new NotFoundError('Programa', id)
-}
-```
-
-#### UnauthorizedError
-
-```typescript
-// src/shared/errors/UnauthorizedError.ts
 export class UnauthorizedError extends AppError {
-  constructor(message: string = 'Não autorizado', action?: string) {
-    super(message, 'UNAUTHORIZED', 401, true, { action })
+  constructor(message = 'Não autorizado') {
+    super(message, 'UNAUTHORIZED', 401)
   }
 }
 ```
 
-**Uso**:
-```typescript
-if (program.provider_id !== userId) {
-  throw new UnauthorizedError('Você não pode editar este programa', 'edit_program')
-}
-```
-
-#### ForbiddenError
+**Como estender.** Precisa de um novo caso de negócio? Crie uma subclasse que fixe
+`code` e `statusCode` — nunca espalhe strings de código pelo app. Exemplo de um
+`ForbiddenError` (403, funcional):
 
 ```typescript
-// src/shared/errors/ForbiddenError.ts
 export class ForbiddenError extends AppError {
-  constructor(message: string = 'Acesso negado', resource?: string) {
-    super(message, 'FORBIDDEN', 403, true, { resource })
+  constructor(message = 'Acesso negado') {
+    super(message, 'FORBIDDEN', 403)
   }
 }
 ```
 
-**Uso**:
-```typescript
-if (!user.isPremium) {
-  throw new ForbiddenError('Apenas usuários premium podem criar programas pagos', 'paid_programs')
-}
-```
-
-#### NetworkError
-
-```typescript
-// src/shared/errors/NetworkError.ts
-export class NetworkError extends AppError {
-  constructor(
-    message: string = 'Erro de conexão',
-    public url?: string,
-    public method?: string
-  ) {
-    super(message, 'NETWORK_ERROR', 503, true, { url, method })
-  }
-}
-```
-
-**Uso**:
-```typescript
-try {
-  const response = await fetch(url)
-} catch (error) {
-  throw new NetworkError('Falha ao conectar', url, 'GET')
-}
-```
-
-#### DatabaseError
-
-```typescript
-// src/shared/errors/DatabaseError.ts
-export class DatabaseError extends AppError {
-  constructor(
-    message: string,
-    public operation: string,
-    public table?: string
-  ) {
-    super(message, 'DATABASE_ERROR', 500, false, { operation, table })
-  }
-}
-```
-
-**Uso**:
-```typescript
-const { error } = await db.from('programs').insert(data)
-if (error) {
-  throw new DatabaseError(
-    error.message,
-    'insert',
-    'programs'
-  )
-}
-```
+**Onde lançar.** As regras vivem na entidade (`Resource.validate()` lança
+`DomainError`) e no use-case/guard (`requireUser` lança `UnauthorizedError`). A UI e
+a rota **não** replicam essas checagens — elas confiam na fronteira.
 
 ---
 
-## Mensagens User-Friendly
+## A Fronteira: `handleApiError`
 
-### Mapeamento
-
-```typescript
-// src/shared/errors/errorMessages.ts
-export const ERROR_MESSAGES: Record<string, string> = {
-  // Validação
-  VALIDATION_ERROR: 'Dados inválidos. Verifique os campos e tente novamente.',
-  
-  // Not Found
-  NOT_FOUND: 'O item solicitado não foi encontrado.',
-  
-  // Autorização
-  UNAUTHORIZED: 'Você não tem permissão para realizar esta ação.',
-  FORBIDDEN: 'Acesso negado.',
-  
-  // Rede
-  NETWORK_ERROR: 'Erro de conexão. Verifique sua internet e tente novamente.',
-  
-  // Database
-  DATABASE_ERROR: 'Erro ao acessar dados. Tente novamente.',
-  SAVE_ERROR: 'Erro ao salvar. Tente novamente.',
-  DELETE_ERROR: 'Erro ao excluir. Tente novamente.',
-  UPDATE_ERROR: 'Erro ao atualizar. Tente novamente.',
-  
-  // Arquivos
-  FILE_TOO_LARGE: 'Arquivo muito grande. Tamanho máximo: 5MB.',
-  FILE_INVALID_TYPE: 'Tipo de arquivo inválido.',
-  
-  // Genérico
-  UNKNOWN_ERROR: 'Erro inesperado. Entre em contato com o suporte.',
-}
-
-export function getUserFriendlyMessage(error: AppError | string): string {
-  const code = typeof error === 'string' ? error : error.code
-  return ERROR_MESSAGES[code] || ERROR_MESSAGES.UNKNOWN_ERROR
-}
-```
-
-### Mensagens Contextualizadas
+Toda API Route termina o `catch` chamando **uma** função. Ela é a única que sabe
+traduzir erro em `Response`, e é a única que decide o que vai para o log.
 
 ```typescript
-export function getContextualMessage(error: AppError): string {
-  const baseMessage = getUserFriendlyMessage(error)
-  
-  // Adicionar contexto específico
-  if (error instanceof NotFoundError) {
-    return `${error.context.resource} não encontrado.`
+// src/shared/handleApiError.ts
+import { ZodError } from 'zod'
+import { AppError } from './errors'
+import { logError } from './logError'
+
+export function handleApiError(error: unknown, context = 'api'): Response {
+  if (error instanceof ZodError) {
+    const message = error.issues[0]?.message ?? 'Dados inválidos'
+    return Response.json({ error: message, code: 'VALIDATION_ERROR' }, { status: 400 })
   }
-  
-  if (error instanceof ValidationError && error.field) {
-    return `Campo "${error.field}": ${baseMessage}`
-  }
-  
-  return baseMessage
-}
-```
-
----
-
-## Logging
-
-### Logger Simples (MVP)
-
-```typescript
-// src/shared/logger/index.ts
-type LogLevel = 'debug' | 'info' | 'warn' | 'error'
-
-interface LogEntry {
-  level: LogLevel
-  message: string
-  timestamp: string
-  context?: Record<string, any>
-  error?: Error
-}
-
-class Logger {
-  private shouldLog(level: LogLevel): boolean {
-    if (process.env.NODE_ENV === 'production') {
-      return level === 'error' || level === 'warn'
-    }
-    return true // dev: log tudo
-  }
-
-  private log(level: LogLevel, message: string, context?: Record<string, any>, error?: Error) {
-    if (!this.shouldLog(level)) return
-
-    const entry: LogEntry = {
-      level,
-      message,
-      timestamp: new Date().toISOString(),
-      context,
-      error: error ? {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      } as any : undefined
-    }
-
-    console[level === 'debug' ? 'log' : level](JSON.stringify(entry, null, 2))
-  }
-
-  debug(message: string, context?: Record<string, any>) {
-    this.log('debug', message, context)
-  }
-
-  info(message: string, context?: Record<string, any>) {
-    this.log('info', message, context)
-  }
-
-  warn(message: string, context?: Record<string, any>) {
-    this.log('warn', message, context)
-  }
-
-  error(message: string, context?: Record<string, any>, error?: Error) {
-    this.log('error', message, context, error)
-  }
-}
-
-export const logger = new Logger()
-```
-
-**Uso**:
-```typescript
-logger.info('Program created', { programId: program.id, providerId })
-logger.error('Failed to save program', { dto }, error)
-```
-
-### Log Estruturado
-
-```typescript
-// ✅ BOM: contexto estruturado
-logger.error('Database query failed', {
-  table: 'programs',
-  operation: 'insert',
-  userId: user.id,
-  data: dto
-}, error)
-
-// ❌ RUIM: mensagem não-estruturada
-logger.error(`Error inserting into programs for user ${user.id}`)
-```
-
----
-
-## Error Handler Global
-
-### Frontend (React)
-
-```typescript
-// src/shared/errors/ErrorHandler.tsx
-import { AppError } from './AppError'
-import { getUserFriendlyMessage } from './errorMessages'
-import { logger } from '@/shared/logger'
-import { toast } from 'sonner'
-
-export function handleError(error: unknown, context?: Record<string, any>) {
-  logger.error('Error occurred', context, error as Error)
-
   if (error instanceof AppError) {
-    const message = getUserFriendlyMessage(error)
-    toast.error(message)
-    return
+    // Erro de domínio (funcional) é esperado — não é bug, não vai para o sink.
+    return Response.json({ error: error.message, code: error.code }, { status: error.statusCode })
   }
-
-  // Erro desconhecido
-  toast.error(ERROR_MESSAGES.UNKNOWN_ERROR)
-}
-
-// Error Boundary
-import { Component, ReactNode } from 'react'
-
-interface Props {
-  children: ReactNode
-}
-
-interface State {
-  hasError: boolean
-}
-
-export class ErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props)
-    this.state = { hasError: false }
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true }
-  }
-
-  componentDidCatch(error: Error, errorInfo: any) {
-    logger.error('React Error Boundary caught error', { errorInfo }, error)
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="error-fallback">
-          <h2>Algo deu errado</h2>
-          <button onClick={() => window.location.reload()}>
-            Recarregar página
-          </button>
-        </div>
-      )
-    }
-
-    return this.props.children
-  }
-}
-```
-
-**Uso em App**:
-```typescript
-// src/app/layout.tsx
-import { ErrorBoundary } from '@/shared/errors/ErrorHandler'
-
-export default function RootLayout({ children }) {
-  return (
-    <ErrorBoundary>
-      {children}
-    </ErrorBoundary>
-  )
-}
-```
-
-### Backend (API Routes)
-
-```typescript
-// src/shared/errors/apiErrorHandler.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { AppError } from './AppError'
-import { getUserFriendlyMessage } from './errorMessages'
-import { logger } from '@/shared/logger'
-
-export function handleAPIError(error: unknown, context?: Record<string, any>): NextResponse {
-  logger.error('API Error', context, error as Error)
-
-  if (error instanceof AppError) {
-    return NextResponse.json(
-      {
-        error: getUserFriendlyMessage(error),
-        code: error.code
-      },
-      { status: error.statusCode }
-    )
-  }
-
-  // Erro desconhecido
-  return NextResponse.json(
-    {
-      error: ERROR_MESSAGES.UNKNOWN_ERROR,
-      code: 'UNKNOWN_ERROR'
-    },
+  // Só o inesperado (técnico → 500) passa pelo sink central de log.
+  logError(context, error)
+  return Response.json(
+    { error: 'Erro interno. Tente novamente.', code: 'INTERNAL_ERROR' },
     { status: 500 }
   )
 }
 ```
 
-**Uso em Route Handler**:
-```typescript
-// src/app/api/programs/route.ts
-import { handleAPIError } from '@/shared/errors/apiErrorHandler'
+Note o ponto-chave: **`ZodError` e `AppError` NÃO logam**. São resultados esperados
+de entrada inválida ou regra de negócio — ruído se fossem para o log. Só o ramo
+inesperado (o 500 genuíno) chama `logError`. Isso mantém o log limpo o bastante para
+que cada linha nele seja um bug de verdade.
 
-export async function POST(req: NextRequest) {
+**Uso na rota** — sempre com um `context` que identifique a origem
+(`'<área>:<método>'`), para que o log diga de onde veio:
+
+```typescript
+// src/app/api/resources/route.ts
+export async function POST(req: Request): Promise<Response> {
   try {
-    const body = await req.json()
-    const validated = createProgramSchema.parse(body)
-    const program = await createProgram(validated)
-    
-    return NextResponse.json(program, { status: 201 })
+    ensureEnabled()
+    const user = requireUser(await authProvider.getUser(req))
+    const dto = createResourceSchema.parse(await req.json())
+    const resource = await new CreateResourceUseCase(resourceRepository).execute(dto, user.id)
+    return Response.json(resource, { status: 201 })
   } catch (error) {
-    return handleAPIError(error, { endpoint: '/api/programs', method: 'POST' })
+    return handleApiError(error, 'api/resources:POST')
   }
 }
 ```
 
 ---
 
-## Tratamento por Contexto
+## O Sink Central: `logError`
 
-### Hooks Customizados
+`console.*` é **proibido** no app pela regra ESLint `no-console: 'error'` (ver
+[ADR-009](../adr/009-erros-funcional-vs-tecnico.md)). A única exceção autorizada é a
+linha dentro de `logError` — o funil por onde todo erro engolido passa. Assim há um
+ponto único para, no futuro, plugar Sentry/observabilidade sem caçar `console.error`
+espalhados.
 
 ```typescript
-// src/presentation/hooks/usePrograms.ts
-import { handleError } from '@/shared/errors/ErrorHandler'
+// src/shared/logError.ts
+import { AppError } from './errors'
 
-export function usePrograms() {
-  const [programs, setPrograms] = useState<Program[]>([])
-  const [loading, setLoading] = useState(false)
-
-  async function createProgram(dto: CreateProgramDTO) {
-    setLoading(true)
-    try {
-      const validated = createProgramSchema.parse(dto)
-      
-      const { data, error } = await db
-        .from('programs')
-        .insert(validated)
-        .select()
-        .single()
-      
-      if (error) {
-        throw new DatabaseError(error.message, 'insert', 'programs')
-      }
-      
-      setPrograms(prev => [data, ...prev])
-      toast.success('Programa criado com sucesso')
-      return data
-    } catch (error) {
-      handleError(error, { operation: 'createProgram', dto })
-      throw error
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return { programs, loading, createProgram }
+export function logError(context: string, error: unknown, extra?: Record<string, unknown>): void {
+  const err = error instanceof Error ? error : new Error(String(error))
+  // eslint-disable-next-line no-console -- sink central de log; ver ADR-009
+  console.error(`[${context}]`, {
+    name: err.name,
+    message: err.message,
+    code: err instanceof AppError ? err.code : undefined,
+    ...extra,
+  })
+  // TODO: encaminhar para Sentry/observabilidade aqui.
 }
 ```
 
-### Validação Zod
-
-```typescript
-import { z } from 'zod'
-import { ValidationError } from '@/shared/errors/ValidationError'
-
-function validateWithZod<T>(schema: z.ZodSchema<T>, data: unknown): T {
-  try {
-    return schema.parse(data)
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      const firstError = error.errors[0]
-      throw new ValidationError(
-        firstError.message,
-        firstError.path.join('.'),
-        data
-      )
-    }
-    throw error
-  }
-}
-
-// Uso
-const validated = validateWithZod(createProgramSchema, formData)
-```
-
-### Queries ao banco de dados
-
-```typescript
-async function fetchProgram(id: string): Promise<Program> {
-  const { data, error } = await db
-    .from('programs')
-    .select('*')
-    .eq('id', id)
-    .single()
-  
-  if (error) {
-    if (error.code === 'PGRST116') { // not found
-      throw new NotFoundError('Programa', id)
-    }
-    throw new DatabaseError(error.message, 'select', 'programs')
-  }
-  
-  if (!data) {
-    throw new NotFoundError('Programa', id)
-  }
-  
-  return data
-}
-```
+Assinatura: `logError(context, error, extra?)`. O `context` é uma string curta que
+identifica a origem; `extra` carrega dados de diagnóstico estruturados.
 
 ---
 
-## Retry Logic
+## Funcional vs. Técnico
 
-### Retry com Backoff Exponencial
+Nem todo erro é bug. Distinguir **regra de negócio** de **falha técnica** define o
+que loga e como a UI reage. A distinção usa o **`code`** que a API já devolve.
+
+- **Funcional** — regra de negócio esperada (título curto, não autorizado, não
+  encontrado). O usuário fez algo válido e o sistema tem motivo legítimo para
+  recusar. Mensagem **acionável**, tom acolhedor (aviso), nunca alarme vermelho.
+  Não vai para o log. Códigos: `VALIDATION_ERROR`, `NOT_FOUND`, `FORBIDDEN`,
+  `UNAUTHORIZED` (estenda a lista conforme o domínio).
+- **Técnico** — algo quebrou (500, rede, timeout). Não é culpa do usuário. Tom de
+  alerta, mensagem genérica de "tente novamente". Vai para o `logError`.
+
+No front, o hook lê o `code` para escolher a mensagem — funcional mostra o texto da
+API, técnico mostra o genérico:
 
 ```typescript
-// src/shared/utils/retry.ts
-interface RetryOptions {
-  maxAttempts?: number
-  initialDelay?: number
-  maxDelay?: number
-  backoffMultiplier?: number
-  shouldRetry?: (error: Error) => boolean
-}
-
-export async function retry<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions = {}
-): Promise<T> {
-  const {
-    maxAttempts = 3,
-    initialDelay = 1000,
-    maxDelay = 10000,
-    backoffMultiplier = 2,
-    shouldRetry = () => true
-  } = options
-
-  let attempt = 1
-  let delay = initialDelay
-
-  while (true) {
-    try {
-      return await fn()
-    } catch (error) {
-      if (attempt >= maxAttempts || !shouldRetry(error as Error)) {
-        throw error
-      }
-
-      logger.warn(`Retry attempt ${attempt}/${maxAttempts}`, {
-        delay,
-        error: (error as Error).message
-      })
-
-      await new Promise(resolve => setTimeout(resolve, delay))
-      
-      delay = Math.min(delay * backoffMultiplier, maxDelay)
-      attempt++
-    }
-  }
+// src/presentation/hooks/useResources.ts (trecho)
+const body = await res.json()
+if (!res.ok) {
+  setError(body.code === 'VALIDATION_ERROR' ? body.error : 'Erro. Tente novamente.')
+  return false
 }
 ```
 
-**Uso**:
-```typescript
-const program = await retry(
-  () => fetchProgram(id),
-  {
-    maxAttempts: 3,
-    shouldRetry: (error) => error instanceof NetworkError
-  }
-)
-```
+**Melhor que notificar é prevenir.** Quando dá para checar a regra no cliente,
+desabilite a ação com uma dica em vez de deixar o erro acontecer. Ver a seção
+*Notificações* em [BEST_PRACTICES.md](../../BEST_PRACTICES.md).
 
 ---
 
-## Erros Assíncronos
+## Regras de Ouro
 
-### Promise.all com Tratamento
+### Nunca engula erro silenciosamente
 
 ```typescript
-// ❌ RUIM: um erro cancela tudo
-const results = await Promise.all([
-  fetchPrograms(),
-  fetchLessons(),
-  fetchExercises()
-])
+// ❌ RUIM: erro some
+try { await risky() } catch { /* nada */ }
 
-// ✅ BOM: trata erros individuais
-const results = await Promise.allSettled([
-  fetchPrograms(),
-  fetchLessons(),
-  fetchExercises()
-])
-
-const programs = results[0].status === 'fulfilled' ? results[0].value : []
-const lessons = results[1].status === 'fulfilled' ? results[1].value : []
-const exercises = results[2].status === 'fulfilled' ? results[2].value : []
-
-// Log erros
-results.forEach((result, index) => {
-  if (result.status === 'rejected') {
-    logger.error(`Operation ${index} failed`, {}, result.reason)
-  }
-})
+// ✅ BOM: técnico → sink; funcional → deixe subir para a fronteira
+try {
+  await risky()
+} catch (err) {
+  logError('modulo:operacao', err)
+  throw err
+}
 ```
+
+### Valide na fronteira com Zod
+
+O `parse` lança `ZodError`, que `handleApiError` já mapeia para 400. Não reimplemente
+validação manual dentro do handler — deixe o schema falar.
+
+```typescript
+const dto = createResourceSchema.parse(await req.json())
+```
+
+### Um `code` por caso, definido na classe
+
+O front decide o visual pelo `code`. Se o mesmo caso de negócio nasce com códigos
+diferentes em lugares diferentes, o front não consegue classificá-lo. Fixe o `code`
+na subclasse de `AppError` e reutilize.
 
 ---
 
-## Testing Error Handling
+## Testando o Tratamento de Erro
 
-### Testar Erros Esperados
+Teste a fronteira diretamente: erro funcional **não loga**; erro técnico **loga com
+contexto**.
 
 ```typescript
-// tests/unit/services/ProgramService.test.ts
-import { describe, it, expect, vi } from 'vitest'
-import { NotFoundError } from '@/shared/errors/NotFoundError'
+// tests/unit/handleApiError.test.ts
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { handleApiError } from '@/shared/handleApiError'
+import { ValidationError } from '@/shared/errors'
 
-describe('ProgramService', () => {
-  it('should throw NotFoundError when program not found', async () => {
-    const mockRepository = {
-      findById: vi.fn().mockResolvedValue(null)
-    }
-    const service = new ProgramService(mockRepository)
+afterEach(() => vi.restoreAllMocks())
 
-    await expect(
-      service.getProgram('non-existent-id')
-    ).rejects.toThrow(NotFoundError)
-
-    expect(mockRepository.findById).toHaveBeenCalledWith('non-existent-id')
+describe('handleApiError', () => {
+  it('mapeia AppError para status + code (funcional — não loga)', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = handleApiError(new ValidationError('Título inválido'))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'Título inválido', code: 'VALIDATION_ERROR' })
+    expect(spy).not.toHaveBeenCalled()
   })
 
-  it('should handle database errors gracefully', async () => {
-    const mockRepository = {
-      save: vi.fn().mockRejectedValue(new Error('DB connection failed'))
-    }
-    const service = new ProgramService(mockRepository)
-
-    await expect(
-      service.createProgram({ title: 'Test' })
-    ).rejects.toThrow(DatabaseError)
+  it('mapeia erro desconhecido para 500 e loga no sink (técnico)', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = handleApiError(new Error('boom'), 'api/resources:POST')
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'Erro interno. Tente novamente.', code: 'INTERNAL_ERROR' })
+    expect(spy).toHaveBeenCalledWith('[api/resources:POST]', expect.objectContaining({ message: 'boom' }))
   })
 })
-```
-
----
-
-## Monitoramento (Pós-MVP)
-
-### Integração com Sentry
-
-```typescript
-// src/shared/monitoring/sentry.ts
-import * as Sentry from '@sentry/nextjs'
-
-Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-  environment: process.env.NODE_ENV,
-  tracesSampleRate: 0.1,
-  
-  beforeSend(event, hint) {
-    const error = hint.originalException
-    
-    // Não enviar erros operacionais
-    if (error instanceof AppError && error.isOperational) {
-      return null
-    }
-    
-    return event
-  }
-})
-
-export function captureError(error: Error, context?: Record<string, any>) {
-  Sentry.captureException(error, {
-    extra: context
-  })
-}
 ```
 
 ---
@@ -802,29 +270,21 @@ export function captureError(error: Error, context?: Record<string, any>) {
 
 Antes de commitar código com tratamento de erro:
 
-- [ ] Erros personalizados herdam de `AppError`
-- [ ] Mensagens user-friendly definidas em `errorMessages.ts`
-- [ ] Erros logados com contexto suficiente
-- [ ] Try/catch em todas operações assíncronas
-- [ ] Validação Zod lança `ValidationError`
-- [ ] Queries ao banco tratam `error` e `null`
-- [ ] Frontend mostra toast com mensagem amigável
-- [ ] Backend retorna status code apropriado
-- [ ] Erros testados (unit tests)
-- [ ] Sem `console.log` de erro (usar logger)
-
----
-
-## Recursos
-
-- **Clean Code** - Robert C. Martin (Capítulo sobre Error Handling)
-- **You Don't Know JS** - Kyle Simpson (Error Handling)
-- **Resilient Web Design** - Jeremy Keith
+- [ ] Erros de domínio herdam de `AppError` com `code` e `statusCode` fixos
+- [ ] Toda API Route termina o `catch` em `handleApiError(error, '<contexto>')`
+- [ ] Validação de entrada é Zod na fronteira (deixa o `ZodError` subir)
+- [ ] Nenhum `console.*` no app — só o sink `logError`
+- [ ] Erro funcional não é logado; erro técnico é logado com contexto
+- [ ] O front escolhe a mensagem pelo `code` (funcional vs. técnico)
+- [ ] Fronteira coberta por teste (funcional não loga; técnico loga)
 
 ---
 
 ## Ver Também
 
-- [BEST_PRACTICES.md](../../BEST_PRACTICES.md) - Boas práticas gerais
-- [docs/guides/zod-guide.md](./zod-guide.md) - Validação com Zod
-- [docs/guides/testing-guide.md](./testing-guide.md) - Testes
+- [ADR-009](../adr/009-erros-funcional-vs-tecnico.md) — a decisão por trás deste guia
+- [BEST_PRACTICES.md](../../BEST_PRACTICES.md) — seção *Notificações* (visual funcional/técnico)
+- [docs/guides/testing-guide.md](./testing-guide.md) — testes
+- [docs/guides/zod-guide.md](./zod-guide.md) — validação com Zod
+</content>
+</invoke>
