@@ -238,7 +238,9 @@ A entrega 2 terá sua própria spec curta de refinamento (se necessário) e seu 
 
 ### 5.2 Autorização
 
-- Fail-closed: sem `actor` ou sem escopo → `UnauthorizedError`/`ForbiddenError`.
+- Fail-closed: sem `actor` → `UnauthorizedError` (401); sem escopo ou sem posse →
+  `ForbiddenError` (403, código `FORBIDDEN`). `ForbiddenError` ainda não existe no
+  skeleton e será criado na entrega 2 (o código `FORBIDDEN` já é funcional pela ADR-009).
 - Tool sem `scope` declarado **não compila** (campo obrigatório no `defineTool`).
 - Tool sem flag ligada não é listada nem executável.
 - Tools de escrita: flag **desligada por padrão**; `readOnlyHint: false` obrigatório.
