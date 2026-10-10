@@ -89,6 +89,35 @@ function ResourceCard({ resource }: Props) {
 
 ---
 
+## Módulos e Service Layer
+
+- **Importe só pelo `index.ts`** de outro módulo (`@/modules/resources`), nunca
+  `@/modules/resources/domain/...` — o ESLint (`no-restricted-imports`) barra.
+- **Service recebe `actor` primeiro** e chama o guard na 1ª linha:
+
+```typescript
+// ✅
+async archive(actor: AuthUser, input: ArchiveResourceInput): Promise<ResourceDTO> {
+  requireScope(actor, 'resources:write')
+  const resource = await this.repo.findById(input.id)
+  if (!resource) throw new NotFoundError('Recurso')
+  assertOwnership(actor, resource.ownerId)
+  // ...
+}
+
+// ❌ ownerId vindo do input (a LLM/cliente escolhe de quem é o dado)
+async archive(input: { id: string; ownerId: string }) { /* ... */ }
+```
+
+- **Bordas finas**: handler REST e tool MCP têm só validação, chamada ao service e
+  tradução de erro. Se aparecer um `if` de regra de negócio numa borda, ele pertence ao
+  service.
+- **Service nunca devolve entidade** — sempre DTO (`toResourceDTO`).
+
+Ver [ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md).
+
+---
+
 ## TypeScript
 
 - **Tipar sempre.** Evitar `any` — use `unknown` + validação (Zod):
@@ -252,6 +281,45 @@ focadas; sem duplicação; erros tratados; testes cobrem casos principais; sem
 
 ---
 
+## Design de tools MCP
+
+Tools são **UX para a LLM**: nome e descrição decidem se ela escolhe a tool certa.
+
+- **Nome** `verbo_substantivo`, snake_case, em inglês, na linguagem do negócio
+  (`list_resources`, `publish_resource`), não da tabela (`get_resource_rows`).
+- **Descrição diz quando usar**, não só o que faz: "Use para responder 'quais são meus
+  recursos'".
+- **Orientada a tarefa**, não CRUD genérico: prefira `publish_resource` a
+  `update_resource({ published: true })`.
+- **Saída pequena e paginada**: `limit` ≤ 50 + `cursor`; só os campos úteis; IDs estáveis.
+- **Escopo obrigatório** (`<ctx>:read|write`) e **anotações honestas**: `readOnlyHint: true`
+  só se não muda nada; `destructiveHint: true` se apaga/sobrescreve.
+- **Escrita nasce com a flag desligada por padrão** (`mcp.<ctx>.write`) e é ligada por
+  ambiente, conscientemente (ADR-006).
+- **Nunca** aceite tenant/owner no input da tool — derive do `actor`.
+- **Erros**: funcional → mensagem acionável para a LLM ("Título deve ter ao menos 3
+  caracteres"); técnico → genérica ("Falha temporária, tente novamente"), sem stack trace.
+
+```typescript
+// ✅
+defineTool({
+  name: 'publish_resource',
+  description: 'Publica um recurso do usuário. Use quando ele pedir para publicar/tornar visível.',
+  input: z.object({ id: z.string().uuid() }),
+  scope: 'resources:write',
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+  flag: 'mcp.resources.write',
+  handler: (actor, input) => services.resource.publish(actor, input),
+})
+
+// ❌ genérica, sem escopo de tarefa, aceita ownerId
+defineTool({ name: 'update', description: 'Atualiza', input: z.any(), /* ... */ })
+```
+
+Ver [ADR-012](./docs/adr/012-mcp-como-borda-agentica.md).
+
+---
+
 ## Performance
 
 - Memoização (`React.memo`, `useCallback`) onde há re-render caro.
@@ -307,6 +375,8 @@ focadas; sem duplicação; erros tratados; testes cobrem casos principais; sem
 - [ ] Sem `console.log`/`debugger` e sem código comentado
 - [ ] Nomes claros; segue convenções
 - [ ] Erros tratados; documentação atualizada (se necessário)
+- [ ] Novo método de service: recebe `actor` e chama guard antes de tocar dados
+- [ ] Nova tool MCP: `scope` + anotações corretas + flag (escrita desligada por padrão)
 
 ---
 
