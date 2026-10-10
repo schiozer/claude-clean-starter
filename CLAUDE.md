@@ -9,7 +9,8 @@
 **Perfil arquitetural**: <mvp-primeiro | completo-direto>
 
 > Preencha ao adotar o template ([ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md)).
-> `mvp-primeiro` = começa enxuto e é promovido por decisão explícita;
+> `mvp-primeiro` = começa enxuto e é promovido por decisão explícita (o campo passa a
+> `mvp-primeiro (promovido — ADR-NNN)`);
 > `completo-direto` = projeto pequeno, **sem fase MVP**. Se estiver vazio ou inválido,
 > o Claudinho **pergunta** antes de implementar.
 
@@ -137,7 +138,8 @@ ver ADRs 002, 003 e 004.
 ├── src/
 │   ├── modules/<contexto>/        # domain/ (completo), application/ (Service), infrastructure/ (completo), interfaces/{http,mcp}
 │   ├── shared/                    # kernel/, auth/, mcp/, errors/
-│   ├── composition.ts             # wiring repos → services
+│   ├── ui/                        # components/, hooks/
+│   ├── composition.ts             # wiring deps → services → bordas
 │   └── app/                       # rotas (Next.js): api/<ctx>, api/mcp
 ├── tests/
 │   ├── unit/

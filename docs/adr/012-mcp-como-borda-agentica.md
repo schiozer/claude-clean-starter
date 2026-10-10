@@ -33,7 +33,7 @@ Restrições: app serverless na Vercel ([ADR-001](./001-neon-auth0.md)), Auth0 p
      scope: 'resources:read',                // obrigatório
      annotations: { readOnlyHint: true },
      flag: 'mcp.resources.read',
-     handler: (actor, input) => services.resource.list(actor, input),
+     handler: (actor, input) => service.list(actor, input),
    })
    ```
 

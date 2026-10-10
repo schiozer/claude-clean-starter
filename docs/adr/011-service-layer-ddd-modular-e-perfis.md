@@ -41,7 +41,9 @@ pequenos não devem ser empurrados para "evoluir depois".
    repositório por aggregate. Domain events são **opcionais** (só com consumidor real).
 
 4. **Regras de fronteira:**
-   1. Fora do módulo importa-se só `modules/<ctx>/index.ts` (ESLint `no-restricted-imports`).
+   1. Fora do módulo importa-se só `modules/<ctx>/index.ts` (ESLint `no-restricted-imports`),
+      que exporta service, schemas, DTOs e as factories das bordas (`make<Ctx>Tools(service)`).
+      Única exceção: `src/composition.ts` (instancia repositórios e monta services e bordas).
    2. Contexto fala com contexto pelo **service**, nunca pelo repositório.
    3. `interfaces/*` não tem regra de negócio nem autorização.
    4. No MVP não há `domain/` nem `infrastructure/`; promover = extrair para dentro do
@@ -50,7 +52,8 @@ pequenos não devem ser empurrados para "evoluir depois".
 5. **Perfis arquiteturais** declarados no `CLAUDE.md` do projeto
    (`**Perfil arquitetural**: mvp-primeiro | completo-direto`):
    - `mvp-primeiro` — começa com service enxuto (skill `mvp-development`) e é promovido
-     ao completo por decisão explícita (troca do campo + ADR do projeto).
+     ao completo por decisão explícita, **por projeto**: ADR do projeto + campo trocado para
+     exatamente `mvp-primeiro (promovido — ADR-NNN)`.
    - `completo-direto` — projeto pequeno/estável **sem fase MVP**: nasce e permanece no
      completo (skill `ddd-service-development`).
    - Ausente ou inválido → o agente pergunta antes de agir (fail-closed).

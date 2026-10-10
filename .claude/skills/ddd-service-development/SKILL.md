@@ -17,7 +17,7 @@ usa DDD tático e as bordas (REST, MCP, Cron) são adaptadores finos. Ver
 Leia `**Perfil arquitetural**` no `CLAUDE.md` do projeto:
 
 - `completo-direto` → use esta skill.
-- `mvp-primeiro` **promovido** (há ADR de promoção) → use esta skill.
+- `mvp-primeiro (promovido — ADR-NNN)` → use esta skill.
 - `mvp-primeiro` não promovido → pare e use `mvp-development`.
 - Ausente ou inválido → **pergunte ao usuário** qual perfil adotar; não assuma.
 
@@ -35,7 +35,8 @@ Leia `**Perfil arquitetural**` no `CLAUDE.md` do projeto:
    - `mcp/tools.ts`: `defineTool` com `scope`, anotações e flag. **Pergunte ao usuário** se
      a capacidade deve ser exposta via MCP e com qual flag (ADR-006); escrita nasce
      **desligada por padrão**.
-6. **Wiring**: registrar repo → service em `src/composition.ts`; exportar no `index.ts`.
+6. **Wiring**: em `src/composition.ts` instanciar repo → service → `make<Ctx>Tools(service)` /
+   `make<Ctx>Handlers(service)`; o `index.ts` exporta service, schemas, DTOs e essas factories.
 
 ## Exemplo
 
@@ -45,7 +46,7 @@ export class Title {
   private constructor(readonly value: string) {}
   static of(raw: string): Title {
     const v = raw.trim()
-    if (v.length < 3 || v.length > 100) throw new DomainError('Título deve ter de 3 a 100 caracteres', 'VALIDATION_ERROR')
+    if (v.length < 3 || v.length > 100) throw new DomainError('Título deve ter de 3 a 100 caracteres')
     return new Title(v)
   }
 }
@@ -67,7 +68,7 @@ export class ResourceService {
 
 ```typescript
 // interfaces/mcp/tools.ts
-export const resourceTools = [
+export const makeResourceTools = (service: ResourceService) => [
   defineTool({
     name: 'create_resource',
     description: 'Cria um recurso com o título informado.',
@@ -75,7 +76,7 @@ export const resourceTools = [
     scope: 'resources:write',
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     flag: 'mcp.resources.write',
-    handler: (actor, input) => services.resource.create(actor, input),
+    handler: (actor, input) => service.create(actor, input),
   }),
 ]
 ```

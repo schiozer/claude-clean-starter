@@ -77,19 +77,25 @@ src/
 │       ├── interfaces/
 │       │   ├── http/                  # handlers REST finos
 │       │   └── mcp/tools.ts           # tools MCP finas
-│       └── index.ts                   # exporta SÓ service, schemas e DTOs
+│       └── index.ts                   # exporta SÓ service, schemas, DTOs e as factories das bordas
 ├── shared/
 │   ├── kernel/                        # Entity, ValueObject, AggregateRoot (só no completo)
 │   ├── auth/                          # AuthUser, IAccessTokenVerifier, guards genéricos
 │   ├── mcp/                           # defineTool, registry, servidor
 │   └── errors/                        # AppError & cia (ADR-009)
-├── composition.ts                     # wiring: repos → services (DI por construtor)
+├── ui/                                # components/ e hooks/ (chamam a API REST)
+├── composition.ts                     # wiring: deps → services → bordas (DI por construtor)
 └── app/                               # Next.js: app/api/<ctx>/route.ts e app/api/mcp/route.ts só delegam
 ```
 
 ### Regras de fronteira
 
 1. Fora do módulo, importa-se **só** `modules/<ctx>/index.ts` (ESLint `no-restricted-imports`).
+   O `index.ts` exporta o service, schemas, DTOs e as **factories das bordas**
+   (`make<Ctx>Tools(service)`, `make<Ctx>Handlers(service)`). **Única exceção:**
+   `src/composition.ts`, que importa `infrastructure/` para instanciar repositórios, monta os
+   services e as bordas. `app/` importa só de `composition.ts`. Bordas recebem o service por
+   parâmetro (nunca importam `composition.ts`), o que evita dependência circular.
 2. Um contexto fala com outro **pelo service** do outro, nunca pelo repositório.
 3. `interfaces/*` não contém regra de negócio nem autorização: valida, chama o service, traduz.
 4. No perfil MVP, `domain/` e `infrastructure/` não existem; o service acessa dados direto.
@@ -148,7 +154,7 @@ export class Resource extends AggregateRoot {
   static rehydrate(row: ResourceRow): Resource { /* banco → domínio */ }
 
   publish(): void {
-    if (this._published) throw new DomainError('Recurso já publicado', 'ALREADY_PUBLISHED')
+    if (this._published) throw new DomainError('Recurso já publicado')
     this._published = true
   }
 }
@@ -170,15 +176,21 @@ export class Resource extends AggregateRoot {
 **REST (BFF)** — `modules/<ctx>/interfaces/http/`, montado em `app/api/<ctx>/route.ts`:
 
 ```typescript
-export async function POST(req: Request) {
-  try {
-    const actor = await resolveActor(req)               // sessão → AuthUser (ou 401)
-    const input = createResourceSchema.parse(await req.json())
-    return json(await services.resource.create(actor, input), 201)
-  } catch (error) {
-    return handleAPIError(error)
-  }
-}
+// src/modules/resources/interfaces/http/handlers.ts
+export const makeResourceHandlers = (service: ResourceService) => ({
+  async POST(req: Request) {
+    try {
+      const actor = await resolveActor(req)               // sessão → AuthUser (ou 401)
+      const input = createResourceSchema.parse(await req.json())
+      return json(await service.create(actor, input), 201)
+    } catch (error) {
+      return handleAPIError(error)
+    }
+  },
+})
+
+// src/app/api/resources/route.ts — só delega
+export const { POST } = resourceHandlers                // montado em src/composition.ts
 ```
 
 **MCP** — ver a seção "Borda agêntica (MCP)" abaixo.
@@ -194,7 +206,7 @@ passo de conexão em [docs/guides/mcp-guide.md](./docs/guides/mcp-guide.md).
 
 ```typescript
 // src/modules/resources/interfaces/mcp/tools.ts
-export const resourceTools = [
+export const makeResourceTools = (service: ResourceService) => [
   defineTool({
     name: 'list_resources',
     description: 'Lista os recursos do usuário. Use para responder "quais são meus recursos".',
@@ -202,7 +214,7 @@ export const resourceTools = [
     scope: 'resources:read',
     annotations: { readOnlyHint: true },
     flag: 'mcp.resources.read',
-    handler: (actor, input) => services.resource.list(actor, input),
+    handler: (actor, input) => service.list(actor, input),
   }),
   defineTool({
     name: 'create_resource',
@@ -211,7 +223,7 @@ export const resourceTools = [
     scope: 'resources:write',
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     flag: 'mcp.resources.write', // escrita: desligada por padrão
-    handler: (actor, input) => services.resource.create(actor, input),
+    handler: (actor, input) => service.create(actor, input),
   }),
 ]
 ```
@@ -313,7 +325,7 @@ O bundle do app é **público** (qualquer um extrai). Portanto:
 
 ```
 Tela (RN) → hook → api-client (fetch + JWT)
-      → função serverless: valida Zod → guard (authz) → use-case → repository → DB
+      → função serverless: valida Zod → <Ctx>Service (guard → regra) → repository → DB
       → resposta (DTO) → hook → tela
 ```
 

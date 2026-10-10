@@ -17,6 +17,12 @@ Cliente MCP (ChatGPT) ──HTTPS──► https://<ambiente>/api/mcp
 Cada ambiente tem seu endpoint e seu tenant Auth0 (ADR-004): conecte o ChatGPT ao **UAT**
 para testar e ao **Prod** só depois do merge.
 
+> **UAT precisa de URL estável.** Previews por PR mudam de URL, e o `aud` do token é a URL
+> exata do MCP. Use um alias/domínio fixo para o UAT (ex.: `<projeto>-uat.vercel.app`,
+> apontado para o preview do PR em teste) e configure audience e `MCP_RESOURCE_URL` com ele.
+> Se os previews têm *Deployment Protection*, libere `/api/mcp` e `/.well-known/*` nesse
+> alias (bypass ou domínio próprio) — senão o ChatGPT é barrado antes de chegar ao MCP.
+
 ## 1. Configurar o Auth0 (por ambiente)
 
 1. **API (resource server)**: Applications → APIs → *Create API*.
@@ -30,9 +36,13 @@ para testar e ao **Prod** só depois do merge.
    sozinho.
 3. **Conexões**: a conexão de login (ex.: Username-Password ou Google) precisa estar
    disponível para apps registrados dinamicamente (conexão de domínio/"domain level").
-4. **Indicador de recurso**: a spec do MCP pede o parâmetro `resource` (RFC 8707). Confira
-   se o tenant aceita `resource` ou se exige `audience`; ajuste o metadado em
-   `/.well-known/oauth-protected-resource` conforme.
+4. **Indicador de recurso**: clientes MCP enviam `resource` (RFC 8707), mas o Auth0
+   historicamente espera `audience`. Se ele ignorar `resource`, emite token sem a sua API
+   no `aud` e o MCP responde 401 em loop. Ajuste **no Auth0**: habilite no tenant a opção
+   que trata `resource` como `audience` (perfil de compatibilidade do *Resource Parameter*;
+   confira o nome atual na doc) ou, como contorno, defina a *Default Audience* do tenant
+   como a URL do MCP (afeta todos os clientes do tenant). O campo `resource` em
+   `/.well-known/oauth-protected-resource` continua **sempre** igual a `MCP_RESOURCE_URL`.
 5. Variáveis do app (por ambiente, nunca commitadas):
    `AUTH0_ISSUER_BASE_URL`, `MCP_RESOURCE_URL` (= audience).
 

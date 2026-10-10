@@ -233,15 +233,15 @@ Ver [docs/guides/testing-guide.md](./docs/guides/testing-guide.md).
 Estrutura: `tests/{unit,integration,e2e}`. Nomes descrevem comportamento.
 Padrão **AAA** (Arrange, Act, Assert):
 ```typescript
-it('should create resource successfully', async () => {
-  const dto = { title: 'Test' }
-  const mockRepository = createMockRepository()
-  const useCase = new CreateResourceUseCase(mockRepository)
+it('should create resource for the actor', async () => {
+  const repo = new InMemoryResourceRepository()
+  const service = new ResourceService(repo, fixedClock)
+  const actor = makeActor({ scopes: ['resources:write'] })
 
-  const result = await useCase.execute(dto, 'owner-id')
+  const result = await service.create(actor, { title: 'Test' })
 
   expect(result.title).toBe('Test')
-  expect(mockRepository.save).toHaveBeenCalledTimes(1)
+  expect(await repo.findByOwner(actor.tenantId, actor.id, { limit: 10 })).toHaveLength(1)
 })
 ```
 
@@ -309,7 +309,7 @@ defineTool({
   scope: 'resources:write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
   flag: 'mcp.resources.write',
-  handler: (actor, input) => services.resource.publish(actor, input),
+  handler: (actor, input) => service.publish(actor, input),
 })
 
 // ❌ genérica, sem escopo de tarefa, aceita ownerId
@@ -426,7 +426,7 @@ movimento" (`AccessibilityInfo.isReduceMotionEnabled`).
 ### Testes no nativo
 
 - **Unit**: domínio e hooks (Vitest + Testing Library).
-- **Integration**: funções do backend (validação + guard + use-case).
+- **Integration**: funções do backend (validação + service com guard + repositório).
 - **E2E**: fluxo no simulador iOS (ex.: **Maestro** ou **Detox**) — substitui o
   Playwright da web para telas nativas.
 

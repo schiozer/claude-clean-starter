@@ -50,7 +50,7 @@ export class ResourceService {
 
 ```typescript
 // src/modules/resources/interfaces/mcp/tools.ts
-export const resourceTools = [
+export const makeResourceTools = (service: ResourceService) => [
   defineTool({
     name: 'list_resources',
     description: 'Lista os recursos do usuário. Use para responder "quais são meus recursos".',
@@ -58,13 +58,13 @@ export const resourceTools = [
     scope: 'resources:read',
     annotations: { readOnlyHint: true },
     flag: 'mcp.resources.read',
-    handler: (actor, input) => services.resource.list(actor, input),
+    handler: (actor, input) => service.list(actor, input),
   }),
 ]
 ```
 
 ```typescript
-// src/presentation/hooks/useResources.ts
+// src/ui/hooks/useResources.ts
 export function useResources() {
   const [resources, setResources] = useState<ResourceDTO[]>([])
   const [loading, setLoading] = useState(true)
@@ -102,9 +102,11 @@ export function useResources() {
 Quando surgir regra que cruza entidades, invariantes ricas ou necessidade de trocar
 infraestrutura, **proponha** a promoção ao usuário (nunca promova sozinho). Se aceita:
 
-1. Registrar ADR do projeto ("promoção do módulo/projeto ao perfil completo").
-2. Trocar o `CLAUDE.md` para indicar que o projeto foi promovido.
-3. Por módulo: extrair VOs/aggregate para `domain/`, criar `I<Agg>Repository` e o
+1. Registrar ADR do projeto ("promoção do projeto ao perfil completo"). A promoção é
+   **por projeto**, não por módulo.
+2. Trocar o campo no `CLAUDE.md` para exatamente
+   `**Perfil arquitetural**: mvp-primeiro (promovido — ADR-NNN)`.
+3. Migrar módulo a módulo (já sob `ddd-service-development`): extrair VOs/aggregate para `domain/`, criar `I<Agg>Repository` e o
    repositório em `infrastructure/`, injetar no service. **Não** alterar `interfaces/` nem
    a assinatura pública do service — os testes de REST/MCP devem passar sem mudança.
 4. Seguir daí com `ddd-service-development`.
