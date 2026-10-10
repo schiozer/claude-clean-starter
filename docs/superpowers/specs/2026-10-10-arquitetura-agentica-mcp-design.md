@@ -1,7 +1,7 @@
 # Spec: Arquitetura agêntica — Service Layer + DDD modular + borda MCP
 
 **Data**: 2026-10-10
-**Status**: Rascunho
+**Status**: Aprovada
 **Autor(es)**: Fabio Schiozer, Claudinho
 
 > Produzida pela skill `superpowers:brainstorming`. É o **contrato** para o plano
@@ -288,13 +288,13 @@ fora de histórico, e revisão do usuário.
 ## 8. Critérios de Aceitação
 
 **Entrega 1**
-- [ ] ADR-011 e ADR-012 criadas a partir do template, com Contexto/Decisão/Consequências/Alternativas.
-- [ ] `ARCHITECTURE.md` descreve módulos, Service Layer, DDD tático e borda MCP, com diagrama.
-- [ ] `BEST_PRACTICES.md` tem "Design de tools MCP" e regras de fronteira entre módulos.
-- [ ] `CLAUDE.md` tem `Perfil arquitetural` e a regra 2 reescrita por perfil.
-- [ ] `ddd-service-development` existe; `post-mvp-development` removida; nenhuma referência órfã.
-- [ ] `mvp-development` usa `modules/` + service enxuto + MCP e recusa em `completo-direto`.
-- [ ] `docs/guides/mcp-guide.md` explica conexão do ChatGPT, setup do Auth0 e PAT.
+- [x] ADR-011 e ADR-012 criadas a partir do template, com Contexto/Decisão/Consequências/Alternativas.
+- [x] `ARCHITECTURE.md` descreve módulos, Service Layer, DDD tático e borda MCP, com diagrama.
+- [x] `BEST_PRACTICES.md` tem "Design de tools MCP" e regras de fronteira entre módulos.
+- [x] `CLAUDE.md` tem `Perfil arquitetural` e a regra 2 reescrita por perfil.
+- [x] `ddd-service-development` existe; `post-mvp-development` removida; nenhuma referência órfã.
+- [x] `mvp-development` usa `modules/` + service enxuto + MCP e recusa em `completo-direto`.
+- [x] `docs/guides/mcp-guide.md` explica conexão do ChatGPT, setup do Auth0 e PAT.
 - [ ] Lint/format da raiz passando; entregue via PR (regra 8).
 
 **Entrega 2**
