@@ -18,8 +18,15 @@ clara de responsabilidades entre camadas. A arquitetura busca ser:
 - **Escalável**: fácil adicionar novos casos de uso
 - **Evolutiva**: preparada para trocar infraestrutura (banco, auth, app nativo)
 
-O projeto pode começar **simples (MVP)** e evoluir para a **arquitetura completa
-(Pós-MVP)** conforme a complexidade cresce. Ver `CLAUDE.md` e as skills.
+Todo projeto declara um **perfil arquitetural** no `CLAUDE.md` — `mvp-primeiro`
+(começa enxuto e é promovido) ou `completo-direto` (sem fase MVP) — ver
+[ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md). Em ambos, o sistema é
+**agêntico**: além da UI/REST, expõe um servidor **MCP** que LLMs chamam em nome do
+usuário ([ADR-012](./docs/adr/012-mcp-como-borda-agentica.md)).
+
+> ⚠️ O exemplo em `examples/walking-skeleton/` ainda usa o layout por camada técnica;
+> a migração para `modules/` + MCP é a entrega 2 da spec
+> `docs/superpowers/specs/2026-10-10-arquitetura-agentica-mcp-design.md`.
 
 ---
 
@@ -34,169 +41,195 @@ O projeto pode começar **simples (MVP)** e evoluir para a **arquitetura complet
 - **ISP** — interfaces específicas, não genéricas.
 - **DIP** — dependa de abstrações, não de implementações (injeção de dependência).
 
-### 2. Clean Architecture
+### 2. Clean Architecture com Service Layer como porta única
 
 ```
-┌─────────────────────────────────────────┐
-│         UI Layer (Presentation)         │
-│  Components, Pages, API Routes (BFF)    │
-├─────────────────────────────────────────┤
-│       Application Layer (Use Cases)     │
-│  Orquestração, regra de negócio         │
-├─────────────────────────────────────────┤
-│          Domain Layer                   │
-│  Entities, Interfaces, Types            │
-├─────────────────────────────────────────┤
-│        Infrastructure Layer             │
-│  Repositories, serviços externos        │
-└─────────────────────────────────────────┘
+ ChatGPT / Claude ──MCP──┐
+ Web / Mobile ────REST───┼──►  <Ctx>Service  (casos de uso + guards, DTOs Zod)
+ Cron / Webhooks ────────┘            │
+                                      ▼
+                         Domínio (Aggregates, Value Objects)
+                                      │
+                                      ▼
+                     Repositórios (I*Repository → banco)
 ```
 
-**Regra de Dependência**: camadas externas dependem de internas, nunca o contrário.
+**Regra de Dependência**: bordas (`interfaces/`) dependem da aplicação; aplicação depende
+do domínio; infraestrutura implementa interfaces do domínio. Nunca o contrário.
+
+**Regra da porta única**: toda borda chama o **service**. Nenhuma borda acessa
+repositório, e nenhuma contém regra de negócio ou autorização.
 
 ---
 
-## Estrutura de Diretórios (Pós-MVP)
+## Estrutura de Diretórios (por módulo de contexto)
 
 ```
 src/
-├── domain/                 # Núcleo — sem dependências externas
-│   ├── entities/           # Entidades de negócio (regras + validações básicas)
-│   ├── interfaces/         # Contratos (I*Repository, I*Service, IAuthProvider)
-│   └── types/              # Types/enums compartilhados
-│
-├── application/            # Casos de uso
-│   ├── use-cases/          # Um caso de uso por ação do usuário
-│   ├── services/           # Lógica que cruza múltiplas entidades
-│   ├── authz/              # Guards de autorização (fail-closed)
-│   └── validators/         # Schemas Zod (reusados no front e no back)
-│
-├── infrastructure/         # Implementações concretas das interfaces
-│   ├── repositories/       # Implementam I*Repository (banco de sua escolha)
-│   ├── auth/               # Implementa IAuthProvider (IdP de sua escolha)
-│   └── external/           # APIs externas
-│
-├── presentation/           # UI
-│   ├── app/                # Rotas/páginas
-│   ├── components/         # Componentes (ui/, shared/, por feature)
-│   └── hooks/              # Custom hooks (encapsulam side effects)
-│
-└── shared/                 # Erros, utils, constants
+├── modules/
+│   └── <contexto>/                    # bounded context (ex.: resources)
+│       ├── domain/                    # só no completo: Aggregates, VOs, I*Repository, erros de domínio
+│       ├── application/
+│       │   ├── <Ctx>Service.ts        # API pública do módulo: casos de uso + guards
+│       │   ├── schemas.ts             # Zod de input/output (REST, MCP e UI)
+│       │   └── dto.ts
+│       ├── infrastructure/            # só no completo: repositórios concretos
+│       ├── interfaces/
+│       │   ├── http/                  # handlers REST finos
+│       │   └── mcp/tools.ts           # tools MCP finas
+│       └── index.ts                   # exporta SÓ service, schemas e DTOs
+├── shared/
+│   ├── kernel/                        # Entity, ValueObject, AggregateRoot (só no completo)
+│   ├── auth/                          # AuthUser, IAccessTokenVerifier, guards genéricos
+│   ├── mcp/                           # defineTool, registry, servidor
+│   └── errors/                        # AppError & cia (ADR-009)
+├── composition.ts                     # wiring: repos → services (DI por construtor)
+└── app/                               # Next.js: app/api/<ctx>/route.ts e app/api/mcp/route.ts só delegam
 ```
 
-> No **MVP**, `domain/application/infrastructure` podem não existir ainda: hooks
-> falam direto com o acesso a dados e a validação vive na borda. Introduza as
-> camadas quando a complexidade justificar.
+### Regras de fronteira
+
+1. Fora do módulo, importa-se **só** `modules/<ctx>/index.ts` (ESLint `no-restricted-imports`).
+2. Um contexto fala com outro **pelo service** do outro, nunca pelo repositório.
+3. `interfaces/*` não contém regra de negócio nem autorização: valida, chama o service, traduz.
+4. No perfil MVP, `domain/` e `infrastructure/` não existem; o service acessa dados direto.
+   Promoção = **extrair para dentro** do módulo, sem alterar `interfaces/`.
 
 ---
 
-## Camadas Detalhadas
+## Service Layer
 
-### 1. Domain Layer (Núcleo)
-
-Regras de negócio puras, sem dependências externas.
+O `<Ctx>Service` é a **API pública** do módulo.
 
 ```typescript
-// src/domain/entities/Resource.ts
-export class Resource {
-  constructor(
-    public readonly id: string,
-    public title: string,
-    public ownerId: string,
-    public published: boolean,
-    public createdAt: Date
-  ) {
-    this.validate()
+// src/modules/resources/application/ResourceService.ts
+export class ResourceService {
+  constructor(private repo: IResourceRepository, private clock: Clock) {}
+
+  async list(actor: AuthUser, input: ListResourcesInput): Promise<ResourceDTO[]> {
+    requireScope(actor, 'resources:read')
+    const items = await this.repo.findByOwner(actor.tenantId, actor.id, input)
+    return items.map(toResourceDTO)
   }
 
-  private validate(): void {
-    if (!this.title || this.title.length < 3) {
-      throw new DomainError('Título deve ter pelo menos 3 caracteres')
-    }
+  async create(actor: AuthUser, input: CreateResourceInput): Promise<ResourceDTO> {
+    requireScope(actor, 'resources:write')
+    const resource = Resource.create({ ownerId: actor.id, title: Title.of(input.title) }, this.clock)
+    await this.repo.save(resource)
+    return toResourceDTO(resource)
   }
 }
 ```
 
-```typescript
-// src/domain/interfaces/repositories/IResourceRepository.ts
-export interface IResourceRepository {
-  findById(id: string): Promise<Resource | null>
-  findByOwnerId(ownerId: string): Promise<Resource[]>
-  save(resource: Resource): Promise<void>
-  delete(id: string): Promise<void>
-}
-```
+- Todo método público recebe **`actor: AuthUser` como 1º parâmetro** e chama um guard antes
+  de qualquer acesso a dados. Cron usa um **ator de sistema** explícito com escopos próprios.
+- `AuthUser = { id, tenantId, scopes: string[], via: 'session' | 'oauth' | 'pat' | 'system' }`.
+- Escopos `<ctx>:read` / `<ctx>:write`; a sessão web recebe os escopos do papel do usuário.
+- Entrada e saída por **DTO validado (Zod)**; o service **nunca devolve entidade**.
+- Regras dependentes do objeto (posse — `assertOwnership`) ficam no service.
 
-### 2. Application Layer (Casos de Uso)
-
-Orquestra regra de negócio; **chama os guards de autorização antes** de acessar
-repositórios (fail-closed).
+## DDD tático (perfil completo)
 
 ```typescript
-// src/application/use-cases/resources/CreateResource.ts
-export class CreateResourceUseCase {
-  constructor(private repository: IResourceRepository) {}
+// src/modules/resources/domain/Resource.ts
+export class Resource extends AggregateRoot {
+  private constructor(
+    readonly id: ResourceId,
+    readonly ownerId: string,
+    private _title: Title,
+    private _published: boolean,
+    readonly createdAt: Date
+  ) { super() }
 
-  async execute(dto: CreateResourceDTO, ownerId: string): Promise<Resource> {
-    const resource = new Resource(crypto.randomUUID(), dto.title, ownerId, false, new Date())
-    await this.repository.save(resource)
-    return resource
+  static create(props: { ownerId: string; title: Title }, clock: Clock): Resource {
+    return new Resource(ResourceId.new(), props.ownerId, props.title, false, clock.now())
+  }
+
+  static rehydrate(row: ResourceRow): Resource { /* banco → domínio */ }
+
+  publish(): void {
+    if (this._published) throw new DomainError('Recurso já publicado', 'ALREADY_PUBLISHED')
+    this._published = true
   }
 }
 ```
 
-```typescript
-// src/application/validators/resourceSchemas.ts
-import { z } from 'zod'
+- **Aggregate Root**: `create()`/`rehydrate()`, sem setters públicos, métodos com nome de
+  negócio, protege invariantes.
+- **Value Objects** (`Title`, `ResourceId`): validam na construção, imutáveis.
+- **Repositório por aggregate**: interface em `domain/`, implementação em `infrastructure/`.
+- **Domain events (opcional)**: o aggregate registra, o service publica após o `save`.
+  Adote só com consumidor real.
+- **Ubiquitous language** em métodos e nomes de tools MCP.
 
-export const createResourceSchema = z.object({
-  title: z.string().min(3).max(100),
-})
-export type CreateResourceDTO = z.infer<typeof createResourceSchema>
-```
+> No **perfil MVP** o service tem a **mesma assinatura pública**, mas acessa o banco direto,
+> sem aggregate nem repositório.
 
-### 3. Infrastructure Layer (Acesso a Dados)
+## Bordas (interfaces/)
 
-Implementa as interfaces do domínio. Converte entre entidades de domínio e o
-formato do banco. Trocar de banco = nova implementação da **mesma** interface.
-
-```typescript
-// src/infrastructure/repositories/ResourceRepository.ts
-export class ResourceRepository implements IResourceRepository {
-  async findById(id: string): Promise<Resource | null> {
-    // ... query ao seu banco; mapeie a linha para a entidade de domínio
-  }
-  // ... save/delete/findByOwnerId
-}
-```
-
-**Auth** vive atrás de `IAuthProvider`, isolando o IdP escolhido do resto do app.
-
-### 4. Presentation Layer (UI)
-
-Interface com o usuário, sem lógica de negócio.
-
-- **API Routes (BFF)**: validam payload com Zod, chamam use-cases, traduzem
-  erros técnicos em user-friendly.
-- **Components**: delegam lógica para hooks.
-- **Hooks**: encapsulam chamadas à API e gerenciam loading/error/data.
+**REST (BFF)** — `modules/<ctx>/interfaces/http/`, montado em `app/api/<ctx>/route.ts`:
 
 ```typescript
-// src/presentation/app/api/resources/route.ts (exemplo)
 export async function POST(req: Request) {
   try {
-    const user = await getAuthUser(req)
-    if (!user) return json({ error: 'Não autorizado' }, 401)
-
-    const dto = createResourceSchema.parse(await req.json())
-    const useCase = new CreateResourceUseCase(new ResourceRepository())
-    const resource = await useCase.execute(dto, user.id)
-    return json(resource, 201)
+    const actor = await resolveActor(req)               // sessão → AuthUser (ou 401)
+    const input = createResourceSchema.parse(await req.json())
+    return json(await services.resource.create(actor, input), 201)
   } catch (error) {
     return handleAPIError(error)
   }
 }
 ```
+
+**MCP** — ver a seção "Borda agêntica (MCP)" abaixo.
+
+**UI** — componentes delegam a hooks; hooks chamam a API REST e gerenciam loading/error/data.
+
+---
+
+## Borda agêntica (MCP)
+
+Detalhes e justificativas em [ADR-012](./docs/adr/012-mcp-como-borda-agentica.md); passo a
+passo de conexão em [docs/guides/mcp-guide.md](./docs/guides/mcp-guide.md).
+
+```typescript
+// src/modules/resources/interfaces/mcp/tools.ts
+export const resourceTools = [
+  defineTool({
+    name: 'list_resources',
+    description: 'Lista os recursos do usuário. Use para responder "quais são meus recursos".',
+    input: listResourcesSchema,
+    scope: 'resources:read',
+    annotations: { readOnlyHint: true },
+    flag: 'mcp.resources.read',
+    handler: (actor, input) => services.resource.list(actor, input),
+  }),
+  defineTool({
+    name: 'create_resource',
+    description: 'Cria um recurso com o título informado.',
+    input: createResourceSchema,
+    scope: 'resources:write',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    flag: 'mcp.resources.write', // escrita: desligada por padrão
+    handler: (actor, input) => services.resource.create(actor, input),
+  }),
+]
+```
+
+```
+ChatGPT ──POST /api/mcp (Bearer)──► IAccessTokenVerifier ──► AuthUser
+                                     (Auth0JwtVerifier | PersonalTokenVerifier)
+        ◄── 401 + WWW-Authenticate (sem token) ── /.well-known/oauth-protected-resource → Auth0 do ambiente
+registry: tools com flag ligada E escopo no token ──► handler ──► <Ctx>Service (revalida escopo)
+```
+
+- Servidor único `app/api/mcp/route.ts`: SDK oficial, **Streamable HTTP stateless**.
+- `Auth0JwtVerifier` valida JWKS, `iss`, **`aud` = URL do MCP do ambiente**, `exp`, escopos.
+- `PersonalTokenVerifier`: tokens `pat_…` guardados só como hash SHA-256, com escopos,
+  expiração e revogação.
+- Erros: autenticação → HTTP 401; demais → `isError: true` (funcional = acionável,
+  técnico = genérico).
+- Rate limit por ator (ADR-010) e auditoria das tools de escrita.
 
 ---
 
@@ -205,11 +238,13 @@ export async function POST(req: Request) {
 Aplique a autorização de forma **fail-closed** (esqueceu de autorizar → sem
 acesso). A ordem de preferência é:
 
-- **Padrão — guards na camada de aplicação** (`src/application/authz/`), chamados
-  por **todos** os use-cases antes de tocar repositórios. A identidade vem do IdP
-  (JWT/OIDC validado no BFF); a regra de acesso vive no código, testável e
-  versionada. É o que combina com um Postgres "puro" (ex.: Neon) atrás de
-  `I*Repository` e um IdP externo (ex.: Auth0) atrás de `IAuthProvider`.
+- **Padrão — guards no Application Service** (`requireScope`, `assertOwnership`),
+  chamados por **todo** método público do `<Ctx>Service` antes de tocar dados. A
+  identidade chega como `AuthUser` (sessão web, OAuth/JWT do IdP ou token pessoal),
+  com **escopos** `<ctx>:read|write`; a regra de acesso vive no código, testável e
+  versionada. Como REST, MCP e Cron passam pelo mesmo service, nenhuma borda pula a
+  autorização. Combina com um Postgres "puro" (ex.: Neon) atrás de `I*Repository` e um
+  IdP externo (ex.: Auth0) atrás de `IAccessTokenVerifier`.
 - **Reforço opcional — no banco** (ex.: Row Level Security). Útil como segunda
   linha de defesa, mas depende de integração nativa DB↔IdP (padrão em BaaS como o
   Supabase); em Postgres genérico exige propagar a identidade manualmente. Não a
@@ -224,7 +259,7 @@ checagens no cliente.
 
 Lógica de backend (webhooks, jobs, integrações) pode viver em API Routes,
 funções serverless ou um serviço dedicado. Mantenha-a fina: valide entrada
-(Zod), chame use-cases, trate erros. A escolha da plataforma é um ADR.
+(Zod), chame o service do módulo, trate erros. A escolha da plataforma é um ADR.
 
 ---
 
@@ -236,13 +271,13 @@ funções serverless ou um serviço dedicado. Mantenha-a fina: valide entrada
 
 ### O que muda em relação à web
 
-Na web (ex.: Next.js), presentation e backend (API routes, use-cases, repositories)
+Na web (ex.: Next.js), presentation e backend (API routes, services, repositories)
 podem morar no mesmo processo. No nativo isso **se divide em dois deployables**:
 
 - **App (dispositivo)** — presentation + application-cliente (hooks, api-client) +
   domínio/validadores **compartilhados** (types + Zod). **Nunca** acessa o banco
   direto e **nunca** guarda segredos.
-- **Backend (servidor)** — use-cases, repositories, guards de autorização e acesso
+- **Backend (servidor)** — services, repositórios, guards de autorização e acesso
   ao banco. Único lugar com segredos e credenciais.
 
 ### Regra de ouro do nativo
@@ -264,15 +299,15 @@ O bundle do app é **público** (qualquer um extrai). Portanto:
 │   │   ├── components/    # ui/, shared/, por feature
 │   │   ├── hooks/         # encapsulam api-client + estado (loading/error/data)
 │   │   └── lib/           # api-client, secure storage, push
-│   └── api/               # backend (serverless / Node) — use-cases + repositories
+│   └── api/               # backend (serverless / Node) — src/modules/<ctx>/ (services, repos, http, mcp)
 ├── packages/
-│   └── shared/            # domain/ + validators (Zod) — reusado por mobile e api
+│   └── shared/            # schemas Zod + DTOs dos módulos — reusado por mobile e api
 ```
 
-> O `packages/shared` é o coração reaproveitável: entidades, types e schemas Zod
+> O `packages/shared` é o coração reaproveitável: schemas Zod e DTOs dos módulos
 > ficam ali e são importados tanto pela UI (validação na borda) quanto pelo backend
-> (validação + regra de negócio). Isso concretiza o "domínio reutilizável" citado
-> em *Considerações de Evolução*.
+> (validação nos services). Aggregates e services **não** vão para o app — ficam no
+> backend, atrás das bordas REST/MCP (ver *Considerações de Evolução*).
 
 ### Fluxo de dados
 
@@ -294,7 +329,7 @@ Tela (RN) → hook → api-client (fetch + JWT)
 ┌──────────────────────────────▼──────────────────────────────────┐
 │  Backend (deployable separado)                                   │
 │  Presentation-BFF: valida payload (Zod), traduz erros            │
-│  Application: use-cases, authz guards (fail-closed)              │
+│  Application: services + authz guards (fail-closed)              │
 │  Infrastructure: repositories (I*Repository) → banco             │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -317,7 +352,7 @@ Recursos proativos (lembretes, resumos) seguem o padrão:
 - **Agendador** (cron no backend) roda a lógica de negócio → decide o que enviar.
 - **Envio**: backend dispara push (via serviço de push → APNs no iOS).
 
-A lógica de "quando/como notificar" é **regra de negócio** → vive em use-cases no
+A lógica de "quando/como notificar" é **regra de negócio** → vive em services no
 backend, testável, nunca no dispositivo.
 
 ### Estado no cliente
@@ -364,10 +399,14 @@ fica isolada atrás de interfaces (`I*Repository`, `IAuthProvider`):
 
 ## Considerações de Evolução
 
-- **App nativo**: hooks e domínio são reutilizáveis; `domain/` e `application/`
-  copiam para o mobile.
-- **Troca de backend**: novos repositories implementando as mesmas interfaces;
-  use-cases permanecem intocados.
+- **Promoção MVP → completo** (perfil `mvp-primeiro`): extrair aggregate, VOs e repositório
+  para dentro do módulo; `interfaces/` e assinatura do service não mudam.
+- **App nativo**: schemas Zod e DTOs dos módulos vão para `packages/shared`; services ficam
+  no backend.
+- **Troca de backend/banco**: novos repositórios implementando as mesmas interfaces;
+  services permanecem intocados.
+- **Extrair um módulo** para outro deployable (ou o MCP para `apps/mcp`): o módulo já é
+  coeso e só expõe `index.ts`.
 
 ---
 
