@@ -62,7 +62,21 @@ describe('PersonalTokenVerifier', () => {
     expect((await verifier.verify(token)).id).toBe('ana')
   })
 
+  it('token pré-definido só é aceito como devOnly (nunca fixa um PAT de UAT/Prod)', async () => {
+    const chosen = 'pat_escolhido_escolhido_escolhido_escolhido'
+    await expect(store.issue({ ...owner, token: chosen })).rejects.toThrow('devOnly')
+  })
+
+  it('devOnly segue o env injetado no verificador, não o process.env', async () => {
+    const token = await store.issue({ ...owner, devOnly: true, token: 'pat_dev_local_dev_local_dev_local_0' })
+    process.env.APP_ENV = 'development'
+    await expect(new PersonalTokenVerifier(store, clock, {}).verify(token)).rejects.toThrow(UnauthorizedError)
+    delete process.env.APP_ENV
+    const devVerifier = new PersonalTokenVerifier(store, clock, { APP_ENV: 'development' })
+    expect((await devVerifier.verify(token)).id).toBe('ana')
+  })
+
   it('rejeita token pré-definido sem prefixo pat_ ou curto', async () => {
-    await expect(store.issue({ ...owner, token: 'curto' })).rejects.toThrow()
+    await expect(store.issue({ ...owner, devOnly: true, token: 'curto' })).rejects.toThrow('pat_')
   })
 })
