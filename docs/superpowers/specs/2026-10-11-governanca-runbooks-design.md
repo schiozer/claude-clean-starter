@@ -1,7 +1,7 @@
 # Spec: Governança operacional e runbooks para agentes
 
 **Data**: 2026-10-11
-**Status**: Rascunho
+**Status**: Aprovada
 **Autor(es)**: Fabio Schiozer + Claudinho
 
 > Produzida pela skill `superpowers:brainstorming`. É o **contrato** para o plano e a
