@@ -6,3 +6,4 @@ export {
   type WriteToolAnnotations,
 } from './defineTool'
 export { visibleTools, assertUniqueToolNames } from './registry'
+export { toToolError, toolError } from './toToolError'
