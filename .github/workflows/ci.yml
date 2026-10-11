@@ -32,6 +32,10 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Check runbooks (ADR-013)
+        # Projeto adotado: troque por `npm run check:runbooks -- --strict`.
+        run: npm run check:runbooks
+
   example:
     name: Walking Skeleton (example)
     runs-on: ubuntu-latest

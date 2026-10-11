@@ -42,5 +42,10 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       'no-console': 'off',
     },
+  },
+  {
+    // Scripts `.mjs` rodam no Node (sem tipos do TS para resolver os globais).
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { console: 'readonly', process: 'readonly' } },
   }
 )
