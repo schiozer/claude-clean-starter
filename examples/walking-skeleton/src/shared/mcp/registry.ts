@@ -9,10 +9,14 @@ export function visibleTools<T extends AnyTool>(tools: readonly T[], actor: Auth
   return tools.filter((tool) => isEnabled(tool.flag, env) && hasScope(actor, tool.scope))
 }
 
-export function assertUniqueToolNames(tools: readonly AnyTool[]): void {
+/** Falha no boot se o catálogo for incoerente: nomes únicos e escrita só atrás de flag `.write`. */
+export function assertValidTools(tools: readonly AnyTool[]): void {
   const seen = new Set<string>()
   for (const tool of tools) {
     if (seen.has(tool.name)) throw new Error(`Tool MCP duplicada: ${tool.name}`)
+    if (tool.scope.endsWith(':write') && !tool.flag.endsWith('.write')) {
+      throw new Error(`Tool MCP ${tool.name}: escopo de escrita exige flag .write (desligada por padrão)`)
+    }
     seen.add(tool.name)
   }
 }

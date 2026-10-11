@@ -4,12 +4,15 @@ import type { FlagName } from '@/shared/featureFlags'
 
 export interface ReadToolAnnotations {
   readOnlyHint: true
+  /** false = a tool só toca dados do próprio sistema (não a web aberta). */
+  openWorldHint?: boolean
 }
 
 export interface WriteToolAnnotations {
   readOnlyHint: false
   destructiveHint: boolean
   idempotentHint: boolean
+  openWorldHint?: boolean
 }
 
 /** Flag de escrita exige anotações honestas de escrita; as demais, leitura (ADR-012). */

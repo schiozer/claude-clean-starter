@@ -293,7 +293,8 @@ Tools são **UX para a LLM**: nome e descrição decidem se ela escolhe a tool c
   `update_resource({ published: true })`.
 - **Saída pequena e paginada**: `limit` ≤ 50 + `cursor`; só os campos úteis; IDs estáveis.
 - **Escopo obrigatório** (`<ctx>:read|write`) e **anotações honestas**: `readOnlyHint: true`
-  só se não muda nada; `destructiveHint: true` se apaga/sobrescreve.
+  só se não muda nada; `destructiveHint: true` se apaga/sobrescreve; `openWorldHint: false` quando
+  a tool só toca dados do próprio sistema.
 - **Escrita nasce com a flag desligada por padrão** (`mcp.<ctx>.write`) e é ligada por
   ambiente, conscientemente (ADR-006).
 - **Nunca** aceite tenant/owner no input da tool — derive do `actor`.
