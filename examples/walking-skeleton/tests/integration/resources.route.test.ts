@@ -1,31 +1,31 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { GET, POST } from '@/app/api/resources/route'
-import { resourceRepository } from '@/infrastructure/composition'
+import { resourceRepository } from '@/composition'
 
-function postReq(body: unknown): Request {
-  return new Request('http://localhost/api/resources', {
+const postReq = (body: unknown) =>
+  new Request('http://localhost/api/resources', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   })
-}
-const getReq = () => new Request('http://localhost/api/resources')
 
-describe('rota /api/resources (flag on)', () => {
+afterEach(() => {
+  delete process.env.RESOURCES_ENABLED
+  delete process.env.APP_ENV
+  vi.restoreAllMocks()
+})
+
+describe('rota /api/resources (flag on, Dev local)', () => {
   beforeEach(() => {
     process.env.RESOURCES_ENABLED = 'on'
+    process.env.APP_ENV = 'development'
     resourceRepository.clear()
   })
-  afterEach(() => {
-    delete process.env.RESOURCES_ENABLED
-  })
 
-  it('POST cria com título válido → 201', async () => {
+  it('POST com título válido → 201 e owner = usuário da sessão', async () => {
     const res = await POST(postReq({ title: 'Válido' }))
     expect(res.status).toBe(201)
-    const body = await res.json()
-    expect(body.title).toBe('Válido')
-    expect(body.ownerId).toBe('dev-user')
+    expect((await res.json()).ownerId).toBe('dev-user')
   })
 
   it('POST com título inválido → 400 VALIDATION_ERROR', async () => {
@@ -34,30 +34,57 @@ describe('rota /api/resources (flag on)', () => {
     expect((await res.json()).code).toBe('VALIDATION_ERROR')
   })
 
-  it('GET lista os resources do usuário → 200', async () => {
-    await POST(postReq({ title: 'Item um' }))
-    const res = await GET(getReq())
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body).toHaveLength(1)
+  it('POST ignora ownerId do corpo (owner vem da sessão)', async () => {
+    const res = await POST(postReq({ title: 'Válido', ownerId: 'bia' }))
+    expect((await res.json()).ownerId).toBe('dev-user')
+  })
+
+  it('GET lista o que foi criado', async () => {
+    await POST(postReq({ title: 'Válido' }))
+    const res = await GET(new Request('http://localhost/api/resources'))
+    expect((await res.json()).map((r: { title: string }) => r.title)).toEqual(['Válido'])
+  })
+
+  it('GET respeita ?limit= e rejeita limit > 50', async () => {
+    await POST(postReq({ title: 'Um1' }))
+    await POST(postReq({ title: 'Dois' }))
+    const page = await GET(new Request('http://localhost/api/resources?limit=1'))
+    expect(await page.json()).toHaveLength(1)
+    const bad = await GET(new Request('http://localhost/api/resources?limit=51'))
+    expect(bad.status).toBe(400)
+  })
+})
+
+describe('rota /api/resources (fora do Dev)', () => {
+  beforeEach(() => {
+    process.env.RESOURCES_ENABLED = 'on'
+    resourceRepository.clear()
+  })
+
+  it('sem sessão real → 401 UNAUTHORIZED e NÃO persiste', async () => {
+    const saveSpy = vi.spyOn(resourceRepository, 'save')
+    const res = await POST(postReq({ title: 'Válido' }))
+    expect(res.status).toBe(401)
+    expect((await res.json()).code).toBe('UNAUTHORIZED')
+    expect(saveSpy).not.toHaveBeenCalled()
   })
 })
 
 describe('rota /api/resources (flag off)', () => {
   beforeEach(() => {
     process.env.RESOURCES_ENABLED = 'off'
+    process.env.APP_ENV = 'development'
     resourceRepository.clear()
   })
 
-  it('GET → 404 quando desligado', async () => {
-    const res = await GET(getReq())
-    expect(res.status).toBe(404)
-  })
-  it('POST → 404 quando desligado', async () => {
+  it('POST → 404 quando desligado e NÃO persiste', async () => {
     const saveSpy = vi.spyOn(resourceRepository, 'save')
     const res = await POST(postReq({ title: 'Válido' }))
     expect(res.status).toBe(404)
     expect(saveSpy).not.toHaveBeenCalled()
-    saveSpy.mockRestore()
+  })
+
+  it('GET → 404 quando desligado', async () => {
+    expect((await GET(new Request('http://localhost/api/resources'))).status).toBe(404)
   })
 })
