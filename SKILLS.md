@@ -50,6 +50,11 @@ para tudo que vem depois.
 | `superpowers:verification-before-completion` | Superpowers | Checagens antes de declarar concluído ou abrir PR. |
 | `superpowers:requesting-code-review` | Superpowers | Estrutura o pedido de revisão. |
 
+### Operação — Deploy e Configuração
+| Skill | Origem | Papel |
+|---|---|---|
+| `runbook-execution` | Projeto | Executa um runbook de `docs/runbooks/` (deploy, envs, segredos, flags, migração, MCP, rollback) com as classes de risco R0–R3 e aprovação humana por operação — ver [ADR-013](./docs/adr/013-governanca-operacional-e-runbooks.md). Sem runbook → não executa. |
+
 ### Transversais
 | Skill | Origem | Papel |
 |---|---|---|

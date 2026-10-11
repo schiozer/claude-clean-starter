@@ -19,6 +19,11 @@
 > projeto e remova o que não se aplicar. O que está aqui é a **direção geral**
 > (disciplina de skills, arquitetura, boas práticas), não decisões de um produto
 > específico.
+>
+> **Adoção — operação** ([ADR-013](./docs/adr/013-governanca-operacional-e-runbooks.md)):
+> antes do primeiro deploy fora do Dev, preencha todo `<preencher>` de `docs/runbooks/`,
+> date a `Última verificação` de cada runbook e troque o passo do CI para
+> `npm run check:runbooks -- --strict`.
 
 ---
 
@@ -118,7 +123,21 @@ Abrir/atualizar um PR **dispara o deploy em UAT** (acessível por site/celular);
 o **merge na `main`**, após o UAT aprovado, **dispara o deploy em produção**. Ver
 [ADR-002](./docs/adr/002-estrategia-de-ambientes.md). Ambientes sempre em três
 estágios (Dev local / UAT / Prod) para plataforma, banco (Neon) e auth (Auth0) —
-ver ADRs 002, 003 e 004.
+ver ADRs 002, 003 e 004. Os passos estão nos runbooks
+[`deploy-uat.md`](./docs/runbooks/deploy-uat.md) e
+[`deploy-prod.md`](./docs/runbooks/deploy-prod.md) — o merge é sempre do humano.
+
+### 10. **Operação só via runbook** ⚠️
+
+Operação de deploy/configuração só via runbook de `docs/runbooks/` executado pela skill
+`runbook-execution`, respeitando as classes de risco do
+[ADR-013](./docs/adr/013-governanca-operacional-e-runbooks.md). Sem runbook para a
+operação → não executa; propõe o runbook via PR.
+
+- `[R0]` leitura → livre.
+- `[R1]` mutação reversível fora de Prod → executo e registro.
+- `[R2]` Prod, segredo, destrutivo, escrita MCP → aprovação humana explícita **por operação**.
+- `[R3]` merge na `main`, ler/imprimir segredo, desligar proteções → **nunca**; entrego ao humano.
 
 ---
 
@@ -128,10 +147,11 @@ ver ADRs 002, 003 e 004.
 <projeto>/
 ├── .claude/
 │   ├── commands/                  # Slash-commands do projeto (templates)
-│   └── skills/                    # mvp-development, ddd-service-development
+│   └── skills/                    # mvp-development, ddd-service-development, runbook-execution
 ├── docs/
 │   ├── adr/                       # Architecture Decision Records
 │   ├── guides/                    # Guias técnicos (Zod, Testing, Errors, Deploy/CI, MCP)
+│   ├── runbooks/                  # Procedimentos de operação para agentes (ADR-013)
 │   └── superpowers/
 │       ├── specs/                 # Especificações de features
 │       └── plans/                 # Planos de implementação
@@ -141,6 +161,7 @@ ver ADRs 002, 003 e 004.
 │   ├── ui/                        # components/, hooks/
 │   ├── composition.ts             # wiring deps → services → bordas
 │   └── app/                       # rotas (Next.js): api/<ctx>, api/mcp
+├── scripts/                       # check-runbooks.mjs (formato/catálogo de runbooks)
 ├── tests/
 │   ├── unit/
 │   ├── integration/
@@ -263,6 +284,7 @@ npm run type-check   # TypeScript check
 npm test             # testes
 npm run test:watch   # testes em watch
 npm run format       # Prettier
+npm run check:runbooks  # valida docs/runbooks (-- --strict no projeto adotado)
 ```
 
 ---
