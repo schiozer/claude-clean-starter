@@ -42,14 +42,21 @@ describe('rota /api/resources (flag on, Dev local)', () => {
   it('GET lista o que foi criado', async () => {
     await POST(postReq({ title: 'Válido' }))
     const res = await GET(new Request('http://localhost/api/resources'))
-    expect((await res.json()).map((r: { title: string }) => r.title)).toEqual(['Válido'])
+    const body = await res.json()
+    expect(body.items.map((r: { title: string }) => r.title)).toEqual(['Válido'])
+    expect(body.nextCursor).toBeNull()
   })
 
   it('GET respeita ?limit= e rejeita limit > 50', async () => {
     await POST(postReq({ title: 'Um1' }))
     await POST(postReq({ title: 'Dois' }))
-    const page = await GET(new Request('http://localhost/api/resources?limit=1'))
-    expect(await page.json()).toHaveLength(1)
+    const first = await (await GET(new Request('http://localhost/api/resources?limit=1'))).json()
+    expect(first.items).toHaveLength(1)
+    expect(first.nextCursor).toBe(first.items[0].id)
+    const url = `http://localhost/api/resources?limit=1&cursor=${first.nextCursor}`
+    const second = await (await GET(new Request(url))).json()
+    expect(second.items).toHaveLength(1)
+    expect(second.items[0].id).not.toBe(first.items[0].id)
     const bad = await GET(new Request('http://localhost/api/resources?limit=51'))
     expect(bad.status).toBe(400)
   })

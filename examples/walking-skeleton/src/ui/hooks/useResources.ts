@@ -17,7 +17,8 @@ export function useResources() {
     try {
       const res = await fetch('/api/resources')
       if (!res.ok) throw new Error('Falha ao carregar')
-      setResources(await res.json())
+      const page: { items: ResourceView[] } = await res.json()
+      setResources(page.items)
       setError(null)
     } catch {
       setError('Não foi possível carregar. Tente novamente.')

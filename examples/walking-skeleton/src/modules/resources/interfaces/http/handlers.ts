@@ -2,6 +2,7 @@ import type { ResolveActor } from '@/shared/auth'
 import { ensureEnabled } from '@/shared/featureFlags'
 import { handleApiError } from '@/shared/handleApiError'
 import type { ResourceService } from '../../application/ResourceService'
+import { toResourcePage } from '../../application/dto'
 import { createResourceSchema, listResourcesSchema } from '../../application/schemas'
 
 function listInputFrom(url: string): unknown {
@@ -19,7 +20,7 @@ export const makeResourceHandlers = (service: ResourceService, resolveActor: Res
       ensureEnabled('resources')
       const actor = await resolveActor(req)
       const input = listResourcesSchema.parse(listInputFrom(req.url))
-      return Response.json(await service.list(actor, input))
+      return Response.json(toResourcePage(await service.list(actor, input), input.limit))
     } catch (error) {
       return handleApiError(error, 'api/resources:GET')
     }
