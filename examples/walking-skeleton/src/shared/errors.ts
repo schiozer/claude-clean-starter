@@ -32,3 +32,15 @@ export class UnauthorizedError extends AppError {
     super(message, 'UNAUTHORIZED', 401)
   }
 }
+
+export class ForbiddenError extends AppError {
+  constructor(message = 'Acesso negado') {
+    super(message, 'FORBIDDEN', 403)
+  }
+}
+
+export class RateLimitedError extends AppError {
+  constructor(message = 'Muitas requisições. Aguarde um instante e tente novamente.') {
+    super(message, 'RATE_LIMITED', 429)
+  }
+}
