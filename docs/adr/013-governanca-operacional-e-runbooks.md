@@ -29,6 +29,11 @@ Toda operação de deploy/configuração é executada **a partir de um runbook**
 **não executa**; propõe o runbook via PR. O agente não executa comando fora do runbook numa
 operação R1+ (se o runbook está errado ou incompleto, para, explica e propõe a correção).
 
+**Exceção pré-bootstrap:** enquanto não há infraestrutura (o template, ou um projeto cujo
+`bootstrap-ambientes.md` ainda não foi executado), publicar a feature branch e abrir o PR
+seguem só as regras 5 e 8 do `CLAUDE.md`, sem runbook. Nenhum outro passo de operação é
+executado nesse estado.
+
 ### 2. Classes de risco
 
 Todo passo numerado de Pre-flight, Passos e Rollback leva **exatamente uma** tag:
@@ -56,16 +61,22 @@ ambígua = não. Negada a aprovação, o agente para e registra "interrompido po
 - **Pre-flight de identidade** antes de qualquer R1+: conta `gh` ativa (regra 5 do
   `CLAUDE.md`), team/scope Vercel, projeto e branch Neon, tenant Auth0 — todos do
   ambiente-alvo, conforme os valores declarados no runbook. Divergência → para.
-- **Segredos:** o agente nunca vê nem imprime o valor. O humano o digita (dashboard ou
-  `! vercel env add <NOME> <ambiente>`); o agente verifica só a **presença do nome**. Nunca em
+- **Segredos:** o agente nunca vê nem imprime o valor. O humano o digita no dashboard ou
+  rodando `vercel env add <NOME> <ambiente>` num terminal separado, **fora da sessão do
+  agente** (nunca pelo prefixo `!`, cuja saída cai no contexto); o agente verifica só a
+  **presença do nome**. Nunca em
   commit, log, comentário de PR ou argumento de comando visível.
 - **Rollback obrigatório:** todo runbook tem a seção; ela é executada em falha de passo ou
-  de verificação, com os mesmos gates.
+  de verificação, com os mesmos gates — salvo quando o próprio passo diz o que fazer na
+  falha ("não é caso de rollback", "voltar ao passo N", "não resolveu → passo N"): a
+  instrução do passo prevalece.
 - **Frescor:** metadado `Última verificação` (data ISO). Mais de **90 dias** → aviso +
   elevação (item 2). Quem executa com sucesso um runbook não vencido pode atualizar a data
   via PR.
-- **Placeholders:** runbook com `<preencher` em qualquer lugar **não é executável**; o agente
-  para, pede os dados e propõe o PR que completa o runbook.
+- **Placeholders:** `<preencher: …>` (entrada) em qualquer lugar torna o runbook **não
+  executável**; o agente para, pede os dados e propõe o PR que completa o runbook.
+  `<gerado: …>` (saída de outro runbook) bloqueia igualmente, **exceto** no runbook que o
+  produz (`bootstrap-ambientes.md`), que o grava via PR ao final.
 
 ### 5. Registro
 

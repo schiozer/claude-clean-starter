@@ -134,6 +134,10 @@ Operação de deploy/configuração só via runbook de `docs/runbooks/` executad
 [ADR-013](./docs/adr/013-governanca-operacional-e-runbooks.md). Sem runbook para a
 operação → não executa; propõe o runbook via PR.
 
+**Exceção pré-bootstrap:** enquanto não há infraestrutura (este template, ou um projeto cujo
+`docs/runbooks/bootstrap-ambientes.md` ainda tem `<preencher`/`<gerado`), push da feature
+branch e abertura de PR seguem só as regras 5 e 8 — nenhum outro passo de operação é executado.
+
 - `[R0]` leitura → livre.
 - `[R1]` mutação reversível fora de Prod → executo e registro.
 - `[R2]` Prod, segredo, destrutivo, escrita MCP → aprovação humana explícita **por operação**.

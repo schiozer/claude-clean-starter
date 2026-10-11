@@ -17,13 +17,17 @@ classe mais alta.
 
 ## Checklist (crie uma tarefa por item)
 
+0. **Pré-bootstrap?** Sem infraestrutura ainda (template, ou `bootstrap-ambientes.md` com
+   `<preencher`/`<gerado`): publicar a branch e abrir o PR seguem só as regras 5 e 8 do
+   `CLAUDE.md`, sem runbook. Qualquer outra operação → execute primeiro o bootstrap.
 1. **Localizar o runbook** na tabela de `docs/runbooks/README.md`. Sem runbook para a
    operação → **não executa**; explique e proponha o runbook via PR (a partir do
    `_TEMPLATE.md`).
 2. **Checar se é executável:**
    - `npm run check:runbooks` passa;
    - o arquivo **não** contém `<preencher` (se contém → para, pede os valores ao humano e
-     propõe o PR que os completa);
+     propõe o PR que os completa) nem `<gerado` — exceto o `bootstrap-ambientes.md`, que
+     produz esses valores e os grava via PR ao final;
    - `Última verificação` ≤ 90 dias; se vencido (ou não é data), avise e trate **todo passo
      não-R0 como R2**;
    - o ambiente pedido está em `Ambientes`.
@@ -42,8 +46,10 @@ classe mais alta.
 
    Notas do próprio passo que elevam a classe ("em Prod é R2", "para `MCP_<CTX>_WRITE=on`
    é R2") valem. Depois de **cada** passo, rode o `Verificar:` e compare com o esperado.
-6. **Falhou um passo ou uma verificação** → pare os Passos e execute a seção **Rollback**,
-   com os mesmos gates. Não improvise correção fora do runbook.
+6. **Falhou um passo ou uma verificação** → se o próprio passo diz o que fazer na falha
+   ("não é caso de rollback", "voltar ao passo N", "não resolveu → passo N"), siga-o; senão,
+   pare os Passos e execute a seção **Rollback**, com os mesmos gates. Não improvise
+   correção fora do runbook.
 7. **Verificação final** do runbook e comunicação do resultado ao humano.
 8. **Registro** (se houve passo R1+): comentário no PR (`gh pr comment <n> --body-file`) ou
    issue `ops`, no modelo abaixo. Publicar o registro é R1.
@@ -78,7 +84,9 @@ Nunca inclua valores de segredo, tokens, `DATABASE_URL` ou saída de `vercel env
 ## Segredos
 
 O agente **nunca** vê nem imprime um valor secreto. Peça ao humano que rode
-`! vercel env add <NOME> <ambiente>` e digite o valor; verifique só a **presença do nome**
+`vercel env add <NOME> <ambiente>` **num terminal separado, fora desta sessão** (ou use o
+dashboard) e digite o valor — nunca pelo prefixo `!`, cuja saída cairia no seu contexto.
+Verifique só a **presença do nome**
 (`vercel env ls`). Não leia `.env*`; passe o caminho ao comando que precisa dele.
 
 ## Red Flags
@@ -92,6 +100,6 @@ O agente **nunca** vê nem imprime um valor secreto. Peça ao humano que rode
 | "Merge é só um clique, o PR está verde" | Merge na `main` = deploy em Prod = R3. Entregue ao humano. |
 | "Tem um `<preencher` mas eu deduzo o valor" | Runbook com placeholder não é executável. Peça os dados. |
 | "O runbook tem 4 meses, mas nada mudou" | Vencido → todo passo não-R0 vira R2. |
-| "A verificação falhou, mas deve ser intermitente" | Falha de verificação → Rollback. Não tente de novo às cegas. |
+| "A verificação falhou, mas deve ser intermitente" | Falha de verificação → o que o passo manda, senão Rollback. Não tente de novo às cegas. |
 | "Em UAT tanto faz, vou ligar a escrita MCP" | `MCP_<CTX>_WRITE=on` é R2 em qualquer ambiente. |
 | "Force-push resolve a branch divergente" | Force-push em branch compartilhada é R3. |
