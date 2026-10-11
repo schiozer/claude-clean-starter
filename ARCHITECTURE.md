@@ -94,7 +94,7 @@ src/
 
 1. Fora do módulo, importa-se **só** `modules/<ctx>/index.ts` (ESLint `no-restricted-imports`).
    O `index.ts` exporta o service, schemas, DTOs e as **factories das bordas**
-   (`make<Ctx>Tools(service)`, `make<Ctx>Handlers(service)`). **Única exceção:**
+   (`make<Ctx>Tools(service)`, `make<Ctx>Handlers(service, resolveActor)`). **Única exceção:**
    `src/composition.ts`, que importa `infrastructure/` para instanciar repositórios, monta os
    services e as bordas. `app/` importa só de `composition.ts`. Bordas recebem o service por
    parâmetro (nunca importam `composition.ts`), o que evita dependência circular.
@@ -179,7 +179,7 @@ export class Resource extends AggregateRoot {
 
 ```typescript
 // src/modules/resources/interfaces/http/handlers.ts
-export const makeResourceHandlers = (service: ResourceService) => ({
+export const makeResourceHandlers = (service: ResourceService, resolveActor: ResolveActor) => ({
   async POST(req: Request) {
     try {
       const actor = await resolveActor(req)               // sessão → AuthUser (ou 401)

@@ -36,7 +36,7 @@ Leia `**Perfil arquitetural**` no `CLAUDE.md` do projeto:
      a capacidade deve ser exposta via MCP e com qual flag (ADR-006); escrita nasce
      **desligada por padrão**.
 6. **Wiring**: em `src/composition.ts` instanciar repo → service → `make<Ctx>Tools(service)` /
-   `make<Ctx>Handlers(service)`; o `index.ts` exporta service, schemas, DTOs e essas factories.
+   `make<Ctx>Handlers(service, resolveActor)`; o `index.ts` exporta service, schemas, DTOs e essas factories.
 
 ## Exemplo
 
