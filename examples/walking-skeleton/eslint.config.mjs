@@ -25,6 +25,27 @@ const eslintConfig = [
     },
   },
   {
+    // Fronteira de módulo (ADR-011): fora do módulo importa-se só `@/modules/<ctx>`
+    // ou o subpath `@/modules/<ctx>/schemas` (seguro para 'use client').
+    // composition.ts é a única exceção (instancia infrastructure/).
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/composition.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/modules/*/*', '!@/modules/*/schemas'],
+              message:
+                'Importe só pelo index do módulo (@/modules/<ctx>) ou por @/modules/<ctx>/schemas. Ver ADR-011.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // `any` é idiomático em mocks; console é a saída pretendida de scripts/CLIs.
     files: ['tests/**', 'scripts/**'],
     rules: {
