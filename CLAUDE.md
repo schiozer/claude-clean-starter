@@ -137,7 +137,7 @@ ver ADRs 002, 003 e 004.
 │       └── plans/                 # Planos de implementação
 ├── src/
 │   ├── modules/<contexto>/        # domain/ (completo), application/ (Service), infrastructure/ (completo), interfaces/{http,mcp}
-│   ├── shared/                    # kernel/, auth/, mcp/, errors/
+│   ├── shared/                    # kernel/, auth/, mcp/, errors.ts, handleApiError.ts
 │   ├── ui/                        # components/, hooks/
 │   ├── composition.ts             # wiring deps → services → bordas
 │   └── app/                       # rotas (Next.js): api/<ctx>, api/mcp
@@ -185,7 +185,7 @@ Este template assume um projeto **TypeScript** com **testes em Vitest** e
 - **Frontend**: framework de sua escolha (o template usa React/Next.js nos exemplos)
 - **Validação**: Zod
 - **Banco / Auth / Storage**: defina os provedores do seu projeto e isole-os atrás
-  de interfaces (`I*Repository`, `IAuthProvider`) para poder trocá-los.
+  de interfaces (`I*Repository`, `IAuthProvider`, `IAccessTokenVerifier`) para poder trocá-los.
 - **Testes**: Vitest (unit/integration) + Playwright (E2E)
 
 > Documente a stack concreta e as decisões (banco, auth, hospedagem) em ADRs.
@@ -218,8 +218,9 @@ Ver [BEST_PRACTICES.md](./BEST_PRACTICES.md) completo.
 ## 🔐 Segurança
 
 - **Autorização no servidor** (fail-closed): nunca confie apenas no cliente.
-  Padrão = **guards na camada de aplicação** (validam o JWT/OIDC do IdP e a regra
-  de acesso antes do repositório); mecanismos do banco (ex.: RLS) são reforço
+  A borda valida a identidade (sessão, JWT OAuth ou PAT → `AuthUser`); os **guards no
+  service** (`requireScope`, `assertOwnership`) aplicam a regra de acesso antes de tocar
+  dados; mecanismos do banco (ex.: RLS) são reforço
   opcional. Sempre "esqueceu de autorizar → sem acesso" (ver ARCHITECTURE.md).
 - **Validação** no frontend E no backend (mesmos schemas Zod).
 - **Secrets**: nunca commitar `.env*`; API keys via `process.env`. Ver `.gitignore`.

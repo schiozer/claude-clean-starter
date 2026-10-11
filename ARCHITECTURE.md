@@ -82,7 +82,9 @@ src/
 │   ├── kernel/                        # Entity, ValueObject, AggregateRoot (só no completo)
 │   ├── auth/                          # AuthUser, IAccessTokenVerifier, guards genéricos
 │   ├── mcp/                           # defineTool, registry, servidor
-│   └── errors/                        # AppError & cia (ADR-009)
+│   ├── errors.ts                      # AppError & subclasses (ADR-009)
+│   ├── handleApiError.ts              # fronteira erro → resposta (ADR-009)
+│   └── logError.ts                    # sink central de log (ADR-009)
 ├── ui/                                # components/ e hooks/ (chamam a API REST)
 ├── composition.ts                     # wiring: deps → services → bordas (DI por construtor)
 └── app/                               # Next.js: app/api/<ctx>/route.ts e app/api/mcp/route.ts só delegam
@@ -184,7 +186,7 @@ export const makeResourceHandlers = (service: ResourceService) => ({
       const input = createResourceSchema.parse(await req.json())
       return json(await service.create(actor, input), 201)
     } catch (error) {
-      return handleAPIError(error)
+      return handleApiError(error, 'api/resources:POST')
     }
   },
 })
@@ -236,7 +238,7 @@ registry: tools com flag ligada E escopo no token ──► handler ──► <C
 ```
 
 - Servidor único `app/api/mcp/route.ts`: SDK oficial, **Streamable HTTP stateless**.
-- `Auth0JwtVerifier` valida JWKS, `iss`, **`aud` = URL do MCP do ambiente**, `exp`, escopos.
+- `Auth0JwtVerifier` valida JWKS, `iss`, **`aud` contém a URL do MCP do ambiente** (o `aud` pode vir em array), `exp`, escopos.
 - `PersonalTokenVerifier`: tokens `pat_…` guardados só como hash SHA-256, com escopos,
   expiração e revogação.
 - Erros: autenticação → HTTP 401; demais → `isError: true` (funcional = acionável,
@@ -256,7 +258,11 @@ acesso). A ordem de preferência é:
   com **escopos** `<ctx>:read|write`; a regra de acesso vive no código, testável e
   versionada. Como REST, MCP e Cron passam pelo mesmo service, nenhuma borda pula a
   autorização. Combina com um Postgres "puro" (ex.: Neon) atrás de `I*Repository` e um
-  IdP externo (ex.: Auth0) atrás de `IAccessTokenVerifier`.
+  IdP externo (ex.: Auth0) atrás de `IAuthProvider` + `IAccessTokenVerifier`.
+- **Dois papéis de auth, um só `AuthUser`**: `IAuthProvider` cuida do **login/sessão web**
+  (Universal Login, cookie); `IAccessTokenVerifier` valida **bearer tokens** (JWT OAuth ou
+  PAT) no MCP e na API para clientes nativos. Ambos produzem `AuthUser`; os services só
+  conhecem `AuthUser`.
 - **Reforço opcional — no banco** (ex.: Row Level Security). Útil como segunda
   linha de defesa, mas depende de integração nativa DB↔IdP (padrão em BaaS como o
   Supabase); em Postgres genérico exige propagar a identidade manualmente. Não a

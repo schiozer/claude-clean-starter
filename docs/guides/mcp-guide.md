@@ -17,8 +17,8 @@ Cliente MCP (ChatGPT) ──HTTPS──► https://<ambiente>/api/mcp
 Cada ambiente tem seu endpoint e seu tenant Auth0 (ADR-004): conecte o ChatGPT ao **UAT**
 para testar e ao **Prod** só depois do merge.
 
-> **UAT precisa de URL estável.** Previews por PR mudam de URL, e o `aud` do token é a URL
-> exata do MCP. Use um alias/domínio fixo para o UAT (ex.: `<projeto>-uat.vercel.app`,
+> **UAT precisa de URL estável.** Previews por PR mudam de URL, e o `aud` do token precisa conter
+> a URL exata do MCP. Use um alias/domínio fixo para o UAT (ex.: `<projeto>-uat.vercel.app`,
 > apontado para o preview do PR em teste) e configure audience e `MCP_RESOURCE_URL` com ele.
 > Se os previews têm *Deployment Protection*, libere `/api/mcp` e `/.well-known/*` nesse
 > alias (bypass ou domínio próprio) — senão o ChatGPT é barrado antes de chegar ao MCP.
@@ -27,13 +27,19 @@ para testar e ao **Prod** só depois do merge.
 
 1. **API (resource server)**: Applications → APIs → *Create API*.
    - *Identifier* (audience) = **URL exata do MCP do ambiente**, ex.:
-     `https://<projeto>-uat.vercel.app/api/mcp`. O `Auth0JwtVerifier` rejeita tokens com
-     outro `aud`.
+     `https://<projeto>-uat.vercel.app/api/mcp`. O `Auth0JwtVerifier` rejeita tokens cujo
+     `aud` não contenha essa URL (o Auth0 pode emitir `aud` em array, ex.: API + `userinfo`).
    - *Permissions*: crie os escopos de cada módulo exposto, ex.: `resources:read`,
      `resources:write`.
-2. **Registro dinâmico de cliente**: em Settings → Advanced, habilite o *Dynamic
+2. **Registro dinâmico de cliente**: em *Tenant Settings → Advanced*, habilite o *Dynamic
    Client Registration* (registro OIDC dinâmico). O ChatGPT usa isso para se registrar
-   sozinho.
+   sozinho. **Riscos e cuidados:**
+   - o endpoint de registro fica **público** — qualquer um cria clientes no tenant;
+   - clientes dinâmicos são *third-party*: mantenha a **tela de consentimento** obrigatória
+     e conceda só os escopos da sua API;
+   - só conexões habilitadas em nível de domínio ficam disponíveis para eles (item 3);
+   - monitore e limpe periodicamente os clientes registrados (Applications) e alerte sobre
+     picos de registro; em Prod, avalie desligar o DCR e pré-registrar os clientes.
 3. **Conexões**: a conexão de login (ex.: Username-Password ou Google) precisa estar
    disponível para apps registrados dinamicamente (conexão de domínio/"domain level").
 4. **Indicador de recurso**: clientes MCP enviam `resource` (RFC 8707), mas o Auth0
@@ -99,13 +105,16 @@ Ligue a escrita **por ambiente**, conscientemente — comece pelo UAT.
 - Rode o app (`npm run dev`) e use o **MCP Inspector**
   (`npx @modelcontextprotocol/inspector`) apontando para `http://localhost:3000/api/mcp`.
 - No Dev local, o verificador aceita um PAT de desenvolvimento (definido no seed) — não há
-  OAuth real.
+  OAuth real. **Trava fail-closed:** esse PAT e o seed só existem quando uma variável explícita
+  marca o Dev local (ex.: `APP_ENV=development`; **ausente = não é Dev**);
+  em UAT/Prod o verificador o **recusa** mesmo que alguém o insira no banco, e o seed se
+  recusa a rodar. Nunca reutilize esse valor fora do Dev local.
 
 ## Troubleshooting
 
 | Sintoma | Causa provável |
 |---|---|
-| `401` mesmo após login | `aud` do token ≠ `MCP_RESOURCE_URL` (audience da API errada) |
+| `401` mesmo após login | `aud` do token não contém `MCP_RESOURCE_URL` (audience da API errada) |
 | ChatGPT não consegue se registrar | Registro dinâmico de cliente desabilitado no tenant |
 | Tool não aparece | Flag desligada ou escopo ausente no token |
 | `isError` com "tente novamente" | Erro técnico — veja os logs do ambiente |

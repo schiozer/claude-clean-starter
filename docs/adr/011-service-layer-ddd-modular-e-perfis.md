@@ -2,6 +2,7 @@
 
 **Data**: 2026-10-10
 **Status**: Aceito
+**Substitui parcialmente**: [ADR-001](./001-neon-auth0.md) (organização do código: use-cases/guards → `<Ctx>Service` por módulo)
 
 ## Contexto
 
@@ -27,7 +28,7 @@ pequenos não devem ser empurrados para "evoluir depois".
      infrastructure/  # só no perfil completo: repositórios concretos
      interfaces/      # http/ (REST) e mcp/tools.ts — adaptadores finos
      index.ts         # exporta SÓ service, schemas e DTOs
-   src/shared/        # kernel/, auth/, mcp/, errors/
+   src/shared/        # kernel/, auth/, mcp/, errors.ts, handleApiError.ts
    src/composition.ts # wiring (DI por construtor)
    ```
 

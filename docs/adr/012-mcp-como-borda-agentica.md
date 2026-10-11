@@ -11,7 +11,8 @@ protocolo padrão para isso é o **Model Context Protocol (MCP)**: o sistema exp
 via HTTP e o cliente as descobre e chama. O ChatGPT conecta-se a servidores MCP remotos
 autenticados por **OAuth**.
 
-Restrições: app serverless na Vercel ([ADR-001](./001-neon-auth0.md)), Auth0 por ambiente
+Restrições: app serverless (Vercel como recomendação, ver
+[deploy-ci-guide](../guides/deploy-ci-guide.md)), Neon + Auth0 ([ADR-001](./001-neon-auth0.md)), Auth0 por ambiente
 ([ADR-004](./004-auth-por-ambiente-auth0.md)), toggles por feature
 ([ADR-006](./006-processo-de-feature-e-feature-toggle.md)), erros funcional vs técnico
 ([ADR-009](./009-erros-funcional-vs-tecnico.md)), rate limit em Postgres
@@ -51,7 +52,7 @@ Restrições: app serverless na Vercel ([ADR-001](./001-neon-auth0.md)), Auth0 p
    - Sem token / token inválido → HTTP `401` com
      `WWW-Authenticate: Bearer resource_metadata="<url do metadado>"`.
    - `IAccessTokenVerifier` com dois adaptadores, ambos produzindo `AuthUser`:
-     - `Auth0JwtVerifier` — JWKS, `iss`, **`aud` = URL do MCP do ambiente**, `exp`, escopos.
+     - `Auth0JwtVerifier` — JWKS, `iss`, **`aud` contém a URL do MCP do ambiente** (o `aud` pode vir em array), `exp`, escopos.
      - `PersonalTokenVerifier` — tokens `pat_<random>` guardados **só como hash SHA-256**,
        com escopos, `expiresAt`, `revokedAt`, `lastUsedAt`.
    - Escolha do verificador pelo formato (`pat_` → PAT; senão → JWT).

@@ -45,8 +45,8 @@ type ReleaseMode = 'total' | 'time_based'
 function ResourceCard() {}
 ```
 
-**Arquivos**: Componentes em PascalCase (`ResourceCard.tsx`); lógica/hooks em
-camelCase (`resourceService.ts`, `useResources.ts`).
+**Arquivos**: componentes e classes em PascalCase (`ResourceCard.tsx`, `ResourceService.ts`);
+funções, hooks e módulos sem classe em camelCase (`useResources.ts`, `schemas.ts`, `tools.ts`).
 
 **SCREAMING_SNAKE_CASE** para constantes globais:
 ```typescript
@@ -307,7 +307,7 @@ defineTool({
   description: 'Publica um recurso do usuário. Use quando ele pedir para publicar/tornar visível.',
   input: z.object({ id: z.string().uuid() }),
   scope: 'resources:write',
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false }, // 2ª chamada → 'já publicado'
   flag: 'mcp.resources.write',
   handler: (actor, input) => service.publish(actor, input),
 })

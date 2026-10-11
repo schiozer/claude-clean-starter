@@ -9,7 +9,7 @@ Antes de invocar qualquer skill, o agente deve ter lido `ARCHITECTURE.md` e
 `BEST_PRACTICES.md`. Para trabalho em features, leia também a spec relevante em
 `docs/superpowers/specs/`.
 
-Leia também o **Perfil arquitetural** no `CLAUDE.md` — ele decide entre `mvp-development` e `ddd-service-development` (ver ADR-011).
+Leia também o **Perfil arquitetural** no `CLAUDE.md` — ele decide entre `mvp-development` e `ddd-service-development` (ver [ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md)).
 
 ## Pipeline de Skills
 

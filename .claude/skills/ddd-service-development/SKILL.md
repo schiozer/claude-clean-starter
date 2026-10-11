@@ -31,7 +31,7 @@ Leia `**Perfil arquitetural**` no `CLAUDE.md` do projeto:
    `to<Agg>DTO`, método no `<Ctx>Service` com `actor` primeiro e guard na 1ª linha.
 4. **Infraestrutura** (`infrastructure/`): repositório concreto + mapper linha ↔ aggregate.
 5. **Bordas** (`interfaces/`):
-   - `http/`: handler que resolve o `actor`, valida, chama o service, `handleAPIError`.
+   - `http/`: handler que resolve o `actor`, valida, chama o service, `handleApiError`.
    - `mcp/tools.ts`: `defineTool` com `scope`, anotações e flag. **Pergunte ao usuário** se
      a capacidade deve ser exposta via MCP e com qual flag (ADR-006); escrita nasce
      **desligada por padrão**.
