@@ -31,6 +31,11 @@ para testar e ao **Prod** só depois do merge.
      `aud` não contenha essa URL (o Auth0 pode emitir `aud` em array, ex.: API + `userinfo`).
    - _Permissions_: crie os escopos de cada módulo exposto, ex.: `resources:read`,
      `resources:write`.
+   - _RBAC Settings_: ligue **Enable RBAC** e **Add Permissions in the Access Token**, e
+     atribua as permissões aos usuários via _Roles_. Sem RBAC o Auth0 emite qualquer `scope`
+     que o cliente pedir (inclusive `resources:write`); por isso o `Auth0JwtVerifier` só
+     aceita os escopos que também estão na claim `permissions` — sem essa claim, o token
+     chega **sem escopo** (fail-closed) e nenhuma tool aparece.
 2. **Registro dinâmico de cliente**: em _Tenant Settings → Advanced_, habilite o _Dynamic
    Client Registration_ (registro OIDC dinâmico). O ChatGPT usa isso para se registrar
    sozinho. **Riscos e cuidados:**
@@ -124,4 +129,5 @@ UAT, ligue `MCP_RESOURCES_WRITE=on` só no ambiente de UAT.
 | `401` mesmo após login            | `aud` do token não contém `MCP_RESOURCE_URL` (audience da API errada) |
 | ChatGPT não consegue se registrar | Registro dinâmico de cliente desabilitado no tenant                   |
 | Tool não aparece                  | Flag desligada ou escopo ausente no token                             |
+| Nenhuma tool aparece com OAuth    | RBAC ou _Add Permissions in the Access Token_ desligado na API        |
 | `isError` com "tente novamente"   | Erro técnico — veja os logs do ambiente                               |

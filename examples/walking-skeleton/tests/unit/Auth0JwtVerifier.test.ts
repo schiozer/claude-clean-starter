@@ -20,7 +20,7 @@ beforeAll(async () => {
 })
 
 function sign(claims: Record<string, unknown>, opts: { aud?: string | string[]; iss?: string; exp?: string; key?: Key } = {}) {
-  return new SignJWT({ scope: 'resources:read', ...claims })
+  return new SignJWT({ scope: 'resources:read', permissions: ['resources:read'], ...claims })
     .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
     .setSubject('auth0|ana')
     .setIssuer(opts.iss ?? ISSUER)
@@ -40,6 +40,16 @@ describe('Auth0JwtVerifier', () => {
       scopes: ['resources:read'],
       via: 'oauth',
     })
+  })
+
+  it('escopo pedido mas não concedido pelo RBAC (permissions) → descartado', async () => {
+    const token = await sign({ scope: 'resources:read resources:write', permissions: ['resources:read'] })
+    expect((await verifier().verify(token)).scopes).toEqual(['resources:read'])
+  })
+
+  it('sem a claim permissions (RBAC desligado no Auth0) → nenhum escopo (fail-closed)', async () => {
+    const token = await sign({ scope: 'resources:read resources:write', permissions: undefined })
+    expect((await verifier().verify(token)).scopes).toEqual([])
   })
 
   it('aceita aud em array que contém a URL do MCP', async () => {
