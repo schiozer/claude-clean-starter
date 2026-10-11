@@ -103,15 +103,19 @@ outros passos, outros ambientes ou execuções futuras; silêncio ou resposta am
 - **Pre-flight de identidade** antes de qualquer R1+: conta `gh` ativa (regra 5 do
   CLAUDE.md), team/scope Vercel, projeto e branch Neon, tenant Auth0 — todos do ambiente-alvo,
   conforme os valores declarados no runbook. Divergência → para.
-- **Segredos:** o agente nunca vê nem imprime o valor. O humano o digita (dashboard ou
-  `! vercel env add <NOME> <ambiente>`); o agente verifica só a **presença do nome**. Nunca
+- **Segredos:** o agente nunca vê nem imprime o valor. O humano o digita no dashboard ou
+  rodando `vercel env add <NOME> <ambiente>` num terminal separado, **fora da sessão do
+  agente** (nunca pelo prefixo `!`, cuja saída cai no contexto); o agente verifica só a
+  **presença do nome**. Nunca
   em commit, log, comentário de PR ou argumento de comando visível.
 - **Rollback obrigatório:** todo runbook tem a seção; ela é executada em falha de passo ou de
-  verificação, com os mesmos gates.
+  verificação, com os mesmos gates — salvo quando o próprio passo diz o que fazer na falha
+  (a instrução do passo prevalece).
 - **Frescor:** metadado `Última verificação` (data ISO). Mais de **90 dias** → aviso +
   elevação (5.1). Quem executa com sucesso um runbook não vencido pode atualizar a data via PR.
-- **Placeholders:** runbook com `<preencher` em qualquer lugar **não é executável**; o agente
-  para e pede os dados (e propõe PR completando o runbook).
+- **Placeholders:** `<preencher` em qualquer lugar torna o runbook **não executável**; o agente
+  para e pede os dados (e propõe PR completando o runbook). `<gerado` (saída do bootstrap)
+  bloqueia os demais runbooks, mas não o `bootstrap-ambientes.md`, que o grava via PR.
 - **Desvio:** o agente não executa comando fora do runbook numa operação R1+. Se o runbook
   está errado ou incompleto, para, explica e propõe a correção via PR.
 
