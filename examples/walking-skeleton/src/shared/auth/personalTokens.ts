@@ -9,6 +9,8 @@ export const PAT_PREFIX = 'pat_'
 const DEFAULT_TTL_MS = 90 * 24 * 60 * 60 * 1000
 const MIN_TOKEN_LENGTH = 32
 
+type Env = Record<string, string | undefined>
+
 /** Espelha a tabela `personal_access_tokens` (in-memory no skeleton). */
 export interface PersonalTokenRecord {
   id: string
@@ -43,6 +45,9 @@ export class InMemoryPersonalTokenStore {
   constructor(private readonly clock: Clock = systemClock) {}
 
   async issue(input: IssueTokenInput): Promise<string> {
+    if (input.token !== undefined && !input.devOnly) {
+      throw new Error('Token pessoal pré-definido só é aceito com devOnly: true')
+    }
     const token = input.token ?? `${PAT_PREFIX}${randomBytes(32).toString('base64url')}`
     if (!token.startsWith(PAT_PREFIX) || token.length < MIN_TOKEN_LENGTH) {
       throw new Error(`Token pessoal precisa começar com ${PAT_PREFIX} e ter ${MIN_TOKEN_LENGTH}+ caracteres`)
@@ -88,7 +93,8 @@ export class InMemoryPersonalTokenStore {
 export class PersonalTokenVerifier implements IAccessTokenVerifier {
   constructor(
     private readonly store: InMemoryPersonalTokenStore,
-    private readonly clock: Clock = systemClock
+    private readonly clock: Clock = systemClock,
+    private readonly env: Env = process.env
   ) {}
 
   async verify(token: string): Promise<AuthUser> {
@@ -98,7 +104,7 @@ export class PersonalTokenVerifier implements IAccessTokenVerifier {
       record !== null &&
       record.revokedAt === null &&
       record.expiresAt > now &&
-      (!record.devOnly || isDevEnvironment())
+      (!record.devOnly || isDevEnvironment(this.env))
     if (!record || !isUsable) throw new UnauthorizedError('Token inválido, expirado ou revogado')
     await this.store.touch(record.id, now)
     return { id: record.userId, tenantId: record.tenantId, scopes: record.scopes, via: 'pat' }
