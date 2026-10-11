@@ -11,7 +11,7 @@ import { callTool } from './callTool'
 import { loadMcpConfig, type McpConfig } from './config'
 import type { AnyTool } from './defineTool'
 import type { IRateLimiter } from './rateLimit'
-import { assertUniqueToolNames, visibleTools } from './registry'
+import { assertValidTools, visibleTools } from './registry'
 
 type Env = Record<string, string | undefined>
 
@@ -71,7 +71,7 @@ function buildServer(deps: McpHandlerDeps, actor: AuthUser, env: Env): Server {
 
 /** POST /api/mcp — Streamable HTTP stateless: um Server + transporte por requisição (ADR-012). */
 export function createMcpHandler(deps: McpHandlerDeps) {
-  assertUniqueToolNames(deps.tools)
+  assertValidTools(deps.tools)
   const env = deps.env ?? process.env
 
   return async function handleMcp(req: Request): Promise<Response> {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { defineTool, visibleTools, assertUniqueToolNames } from '@/shared/mcp'
+import { defineTool, visibleTools, assertValidTools } from '@/shared/mcp'
 import { makeActor } from '../helpers/makeActor'
 
 const readTool = defineTool({
@@ -43,9 +43,18 @@ describe('visibleTools', () => {
   })
 })
 
-describe('assertUniqueToolNames', () => {
+describe('assertValidTools', () => {
   it('lança com nomes duplicados', () => {
-    expect(() => assertUniqueToolNames([readTool, readTool])).toThrow('list_things')
+    expect(() => assertValidTools([readTool, readTool])).toThrow('list_things')
+  })
+
+  it('escopo de escrita atrás de flag de leitura → lança (escrita sempre nasce desligada)', () => {
+    const sneaky = { ...readTool, name: 'sneaky_write', scope: 'things:write' }
+    expect(() => assertValidTools([sneaky])).toThrow('sneaky_write')
+  })
+
+  it('catálogo coerente → não lança', () => {
+    expect(() => assertValidTools([readTool, writeTool])).not.toThrow()
   })
 })
 

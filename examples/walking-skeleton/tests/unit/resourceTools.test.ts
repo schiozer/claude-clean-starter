@@ -20,12 +20,12 @@ describe('makeResourceTools', () => {
     expect(byName('list_resources')).toMatchObject({
       scope: 'resources:read',
       flag: 'mcp.resources.read',
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: false },
     })
     expect(byName('create_resource')).toMatchObject({
       scope: 'resources:write',
       flag: 'mcp.resources.write',
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     })
   })
 
