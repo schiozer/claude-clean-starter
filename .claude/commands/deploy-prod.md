@@ -1,22 +1,22 @@
 ---
 name: deploy-prod
-description: Merge do PR na main — dispara o deploy em produção (APENAS após UAT aprovado)
+description: Prepara o merge do PR aprovado no UAT e acompanha o deploy de produção (runbook deploy-prod; o merge é do humano)
 ---
 
-# Deploy para Produção — via merge do PR
+# Deploy para Produção — via merge do PR (feito pelo humano)
 
-> ⚠️ Ajuste os passos ao SEU ambiente (host, branch de produção, URL).
-> ⚠️ Só executar após o UAT ser aprovado pelo usuário.
+> ⚠️ Só após o UAT ser aprovado pelo usuário.
 > 📄 Ambientes (Dev/UAT/Prod): ver [ADR-002](../../docs/adr/002-estrategia-de-ambientes.md).
 > 🔒 Promove-se o mesmo commit da trunk aprovado em UAT; **o merge é o gatilho de
 > produção** (ver [ADR-005](../../docs/adr/005-trunk-based-development.md)).
+> 🛡️ Operação governada pelo [ADR-013](../../docs/adr/013-governanca-operacional-e-runbooks.md).
 
-O deploy em produção é **disparado pelo merge do PR na `main`**. Não há push
-manual para prod.
+Use a skill `runbook-execution` com
+[`docs/runbooks/deploy-prod.md`](../../docs/runbooks/deploy-prod.md).
 
-1. Confirmar com o usuário: "Tem certeza que quer fazer merge e deployar para produção?"
-2. Confirmar que o **UAT do PR foi aprovado** (sem bugs críticos abertos).
-3. Garantir a **conta git correta** para este repositório (ver regra 5 do CLAUDE.md).
-4. Garantir que o PR está verde (type-check, lint, testes) e a branch atualizada com a `main`.
-5. **Fazer merge do PR na `main`** — isso dispara o deploy em **produção**.
-6. Informar que o deploy foi iniciado e sugerir um **smoke test** em produção.
+- O agente **confere** que o PR está verde e atualizado e que o UAT foi aprovado.
+- O **merge na `main` é do humano** (`[R3]`): o agente entrega a instrução e espera a
+  confirmação — **nunca** executa `gh pr merge`.
+- Depois do merge, o agente acompanha o deploy de produção, faz o smoke test e observa os
+  logs.
+- Problema em produção → [`docs/runbooks/rollback.md`](../../docs/runbooks/rollback.md).
