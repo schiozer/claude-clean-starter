@@ -87,6 +87,12 @@ UAT, ligue `MCP_RESOURCES_WRITE=on` só no ambiente de UAT.
    aparecem com a flag de escrita ligada e o escopo concedido; o ChatGPT pede confirmação
    antes de executá-las.
 
+> **No walking skeleton o repositório é in-memory** (por instância serverless, zerado a cada
+> cold start): "só os recursos daquele usuário" é trivialmente verdade com um usuário só.
+> Para provar o isolamento de fato no UAT, use **dois usuários de teste**, crie um recurso com
+> cada um (escrita ligada no UAT) e confira que um não vê o do outro — e repita com o
+> repositório real (Neon, ADR-003). Os testes de integração já cobrem o isolamento por ator.
+
 ## 4. Conectar Claude / Cursor
 
 - **Claude (desktop/web)**: adicione um _custom connector_ com a mesma URL; o fluxo OAuth é

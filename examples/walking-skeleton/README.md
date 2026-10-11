@@ -57,3 +57,6 @@ tools MCP dela (kill switch único).
   funciona com OAuth do Auth0 (`AUTH0_ISSUER_BASE_URL` + `MCP_RESOURCE_URL`).
 - Trocar in-memory por `NeonResourceRepository` / tabela de PATs / rate limit em Postgres
   (mesmas interfaces) quando houver infra real — ver ADRs 003, 008 e 010.
+- Com o store in-memory, os dados vivem por instância e somem no cold start: a checagem do
+  ChatGPT no UAT só prova o isolamento entre usuários com dois usuários de teste (ver
+  `docs/guides/mcp-guide.md` §3).
