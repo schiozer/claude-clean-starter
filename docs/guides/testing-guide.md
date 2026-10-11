@@ -302,7 +302,8 @@ describe('rota /api/resources (flag on)', () => {
   it('GET lista o que foi criado', async () => {
     await POST(postReq({ title: 'Válido' }))
     const res = await GET(new Request('http://localhost/api/resources'))
-    expect((await res.json()).map((r: { title: string }) => r.title)).toEqual(['Válido'])
+    const page = await res.json() // { items, nextCursor } — mesma página do MCP
+    expect(page.items.map((r: { title: string }) => r.title)).toEqual(['Válido'])
   })
 })
 
