@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, type JWTVerifyGetKey } from 'jose'
+import { SignJWT, createLocalJWKSet, errors, exportJWK, generateKeyPair, type JWTVerifyGetKey } from 'jose'
 import { Auth0JwtVerifier } from '@/shared/auth'
 import { UnauthorizedError } from '@/shared/errors'
 
@@ -50,6 +50,19 @@ describe('Auth0JwtVerifier', () => {
   it('sem a claim permissions (RBAC desligado no Auth0) → nenhum escopo (fail-closed)', async () => {
     const token = await sign({ scope: 'resources:read resources:write', permissions: undefined })
     expect((await verifier().verify(token)).scopes).toEqual([])
+  })
+
+  it.each([
+    ['timeout', new errors.JWKSTimeout()],
+    ['JWKS inválido', new errors.JWKSInvalid()],
+  ])('falha ao obter o JWKS (%s) é erro técnico, não token inválido', async (_label, failure) => {
+    const failing: JWTVerifyGetKey = async () => {
+      throw failure
+    }
+    const v = new Auth0JwtVerifier({ issuer: ISSUER, audience: AUDIENCE, jwks: failing })
+    const error = await v.verify(await sign({})).catch((e: unknown) => e)
+    expect(error).not.toBeInstanceOf(UnauthorizedError)
+    expect(error).toBe(failure)
   })
 
   it('aceita aud em array que contém a URL do MCP', async () => {
