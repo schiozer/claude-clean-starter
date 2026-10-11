@@ -21,8 +21,3 @@ export function isEnabled(flag: FlagName, env: Env = process.env): boolean {
 export function ensureEnabled(flag: FlagName, env: Env = process.env): void {
   if (!isEnabled(flag, env)) throw new NotFoundError('Recurso')
 }
-
-/** @deprecated use isEnabled('resources'); removido quando a página migrar. */
-export function isResourcesEnabled(env: Env = process.env): boolean {
-  return isEnabled('resources', env)
-}

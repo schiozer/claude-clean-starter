@@ -1,16 +1,23 @@
 import { describe, it, expect } from 'vitest'
-import { isResourcesEnabled, isEnabled, ensureEnabled } from '@/shared/featureFlags'
+import { isEnabled, ensureEnabled } from '@/shared/featureFlags'
 import { NotFoundError } from '@/shared/errors'
 
-describe('isResourcesEnabled', () => {
+describe('isEnabled("resources")', () => {
   it('true quando RESOURCES_ENABLED=on', () => {
-    expect(isResourcesEnabled({ RESOURCES_ENABLED: 'on' })).toBe(true)
+    expect(isEnabled('resources', { RESOURCES_ENABLED: 'on' })).toBe(true)
   })
   it('false quando off', () => {
-    expect(isResourcesEnabled({ RESOURCES_ENABLED: 'off' })).toBe(false)
+    expect(isEnabled('resources', { RESOURCES_ENABLED: 'off' })).toBe(false)
   })
   it('false quando ausente (fail-closed)', () => {
-    expect(isResourcesEnabled({})).toBe(false)
+    expect(isEnabled('resources', {})).toBe(false)
+  })
+})
+
+describe('API legada', () => {
+  it('isResourcesEnabled foi removida', async () => {
+    const flags: Record<string, unknown> = await import('@/shared/featureFlags')
+    expect(flags.isResourcesEnabled).toBeUndefined()
   })
 })
 
