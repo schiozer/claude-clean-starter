@@ -10,15 +10,15 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 ```
 .
 ├── CLAUDE.md            # Instruções para o agente (regras, pipeline, persona Claudinho)
-├── ARCHITECTURE.md      # Clean Architecture, SOLID, camadas, MVP vs Pós-MVP
+├── ARCHITECTURE.md      # Módulos por contexto, Service Layer, DDD tático, borda MCP
 ├── BEST_PRACTICES.md    # Clean Code, TS, erros (funcional vs técnico), testes, git
 ├── SKILLS.md            # Mapa do pipeline de skills por fase
 ├── .claude/
 │   ├── commands/        # Slash-commands (deploy-*, uat) como templates
-│   └── skills/          # mvp-development, post-mvp-development (gerais)
+│   └── skills/          # mvp-development, ddd-service-development (gerais)
 ├── docs/
 │   ├── adr/             # 000-template.md (Architecture Decision Records)
-│   ├── guides/          # zod, testing, error-handling
+│   ├── guides/          # zod, testing, error-handling, deploy-ci, mcp
 │   └── superpowers/
 │       ├── specs/        # _TEMPLATE.md
 │       └── plans/        # _TEMPLATE.md
@@ -37,9 +37,10 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 2. **Instale as skills**: `/plugin install superpowers@claude-plugins-official`.
 3. **Preencha a stack concreta** em `CLAUDE.md` e `ARCHITECTURE.md` (banco, auth,
    hospedagem) e registre as decisões como **ADRs** (`docs/adr/`).
-4. `npm install` para o tooling; use `npm run lint`, `npm run type-check`,
+4. **Declare o perfil arquitetural** no topo do `CLAUDE.md` (`mvp-primeiro` ou `completo-direto`).
+5. `npm install` para o tooling; use `npm run lint`, `npm run type-check`,
    `npm test`, `npm run format`.
-5. Ao adicionar o app — **web** (ex.: Next.js) ou **nativo iOS** (Expo/React
+6. Ao adicionar o app — **web** (ex.: Next.js) ou **nativo iOS** (Expo/React
    Native) — inclua as deps de runtime e estenda os configs (eslint/tsconfig)
    para o framework. Os padrões de app nativo estão em `ARCHITECTURE.md`
    (seção *"Padrões para App Nativo"*) e `BEST_PRACTICES.md`.
@@ -47,7 +48,7 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 ## O pipeline
 
 ```
-brainstorming → writing-plans → [mvp-development | post-mvp-development] → verification-before-completion
+brainstorming → writing-plans → [mvp-development | ddd-service-development] (conforme o perfil) → verification-before-completion
 ```
 
 Features novas começam pelo **brainstorming** (produz a spec). Bugs vão direto
@@ -55,5 +56,7 @@ para **systematic-debugging**. Ver `SKILLS.md` e `CLAUDE.md`.
 
 ## Filosofia
 
-Qualidade > velocidade. Comece **simples (MVP)** e evolua para **Clean
-Architecture (Pós-MVP)** quando a complexidade justificar — nunca antes (YAGNI).
+Qualidade > velocidade. Todo sistema nasce **agêntico**: a regra de negócio vive num
+Service por contexto, e REST e **MCP** (para ChatGPT, Claude, Cursor…) são bordas finas
+sobre ele. Projetos `mvp-primeiro` começam enxutos e evoluem para DDD tático quando a
+complexidade justificar; projetos `completo-direto` já nascem completos.

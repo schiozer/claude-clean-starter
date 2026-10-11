@@ -3,6 +3,11 @@
 **Última Atualização**: 2026-07-20  
 **Versão**: 1.0.0
 
+
+> ⚠️ Exemplos ainda no layout antigo (use-cases, `src/presentation/`). O modelo vigente é
+> módulos + `<Ctx>Service` ([ADR-011](../adr/011-service-layer-ddd-modular-e-perfis.md)); este guia
+> será migrado junto com o walking skeleton (entrega 2 da spec da arquitetura agêntica).
+
 ---
 
 ## O que é Zod?

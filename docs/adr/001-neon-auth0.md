@@ -1,7 +1,7 @@
 # 001. Banco (Neon) e Autenticação (Auth0)
 
 **Data**: 2026-08-26
-**Status**: Aceito
+**Status**: Aceito — parcialmente substituída pela [ADR-011](./011-service-layer-ddd-modular-e-perfis.md) (organização do código em módulos + `<Ctx>Service`; Neon e Auth0 seguem valendo)
 
 ## Contexto
 

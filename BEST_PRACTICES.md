@@ -45,8 +45,8 @@ type ReleaseMode = 'total' | 'time_based'
 function ResourceCard() {}
 ```
 
-**Arquivos**: Componentes em PascalCase (`ResourceCard.tsx`); lógica/hooks em
-camelCase (`resourceService.ts`, `useResources.ts`).
+**Arquivos**: componentes e classes em PascalCase (`ResourceCard.tsx`, `ResourceService.ts`);
+funções, hooks e módulos sem classe em camelCase (`useResources.ts`, `schemas.ts`, `tools.ts`).
 
 **SCREAMING_SNAKE_CASE** para constantes globais:
 ```typescript
@@ -86,6 +86,35 @@ function ResourceCard({ resource }: Props) {
   return <div>{/* ... */}</div>
 }
 ```
+
+---
+
+## Módulos e Service Layer
+
+- **Importe só pelo `index.ts`** de outro módulo (`@/modules/resources`), nunca
+  `@/modules/resources/domain/...` — o ESLint (`no-restricted-imports`) barra.
+- **Service recebe `actor` primeiro** e chama o guard na 1ª linha:
+
+```typescript
+// ✅
+async archive(actor: AuthUser, input: ArchiveResourceInput): Promise<ResourceDTO> {
+  requireScope(actor, 'resources:write')
+  const resource = await this.repo.findById(input.id)
+  if (!resource) throw new NotFoundError('Recurso')
+  assertOwnership(actor, resource.ownerId)
+  // ...
+}
+
+// ❌ ownerId vindo do input (a LLM/cliente escolhe de quem é o dado)
+async archive(input: { id: string; ownerId: string }) { /* ... */ }
+```
+
+- **Bordas finas**: handler REST e tool MCP têm só validação, chamada ao service e
+  tradução de erro. Se aparecer um `if` de regra de negócio numa borda, ele pertence ao
+  service.
+- **Service nunca devolve entidade** — sempre DTO (`toResourceDTO`).
+
+Ver [ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md).
 
 ---
 
@@ -204,15 +233,15 @@ Ver [docs/guides/testing-guide.md](./docs/guides/testing-guide.md).
 Estrutura: `tests/{unit,integration,e2e}`. Nomes descrevem comportamento.
 Padrão **AAA** (Arrange, Act, Assert):
 ```typescript
-it('should create resource successfully', async () => {
-  const dto = { title: 'Test' }
-  const mockRepository = createMockRepository()
-  const useCase = new CreateResourceUseCase(mockRepository)
+it('should create resource for the actor', async () => {
+  const repo = new InMemoryResourceRepository()
+  const service = new ResourceService(repo, fixedClock)
+  const actor = makeActor({ scopes: ['resources:write'] })
 
-  const result = await useCase.execute(dto, 'owner-id')
+  const result = await service.create(actor, { title: 'Test' })
 
   expect(result.title).toBe('Test')
-  expect(mockRepository.save).toHaveBeenCalledTimes(1)
+  expect(await repo.findByOwner(actor.tenantId, actor.id, { limit: 10 })).toHaveLength(1)
 })
 ```
 
@@ -249,6 +278,45 @@ focadas; sem duplicação; erros tratados; testes cobrem casos principais; sem
 
 **Como revisar**: construtivo e específico ("Linha 42: `n` poderia ser
 `completedItemsCount`"), não vago ("nomes ruins").
+
+---
+
+## Design de tools MCP
+
+Tools são **UX para a LLM**: nome e descrição decidem se ela escolhe a tool certa.
+
+- **Nome** `verbo_substantivo`, snake_case, em inglês, na linguagem do negócio
+  (`list_resources`, `publish_resource`), não da tabela (`get_resource_rows`).
+- **Descrição diz quando usar**, não só o que faz: "Use para responder 'quais são meus
+  recursos'".
+- **Orientada a tarefa**, não CRUD genérico: prefira `publish_resource` a
+  `update_resource({ published: true })`.
+- **Saída pequena e paginada**: `limit` ≤ 50 + `cursor`; só os campos úteis; IDs estáveis.
+- **Escopo obrigatório** (`<ctx>:read|write`) e **anotações honestas**: `readOnlyHint: true`
+  só se não muda nada; `destructiveHint: true` se apaga/sobrescreve.
+- **Escrita nasce com a flag desligada por padrão** (`mcp.<ctx>.write`) e é ligada por
+  ambiente, conscientemente (ADR-006).
+- **Nunca** aceite tenant/owner no input da tool — derive do `actor`.
+- **Erros**: funcional → mensagem acionável para a LLM ("Título deve ter ao menos 3
+  caracteres"); técnico → genérica ("Falha temporária, tente novamente"), sem stack trace.
+
+```typescript
+// ✅
+defineTool({
+  name: 'publish_resource',
+  description: 'Publica um recurso do usuário. Use quando ele pedir para publicar/tornar visível.',
+  input: z.object({ id: z.string().uuid() }),
+  scope: 'resources:write',
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false }, // 2ª chamada → 'já publicado'
+  flag: 'mcp.resources.write',
+  handler: (actor, input) => service.publish(actor, input),
+})
+
+// ❌ genérica, sem escopo de tarefa, aceita ownerId
+defineTool({ name: 'update', description: 'Atualiza', input: z.any(), /* ... */ })
+```
+
+Ver [ADR-012](./docs/adr/012-mcp-como-borda-agentica.md).
 
 ---
 
@@ -307,6 +375,8 @@ focadas; sem duplicação; erros tratados; testes cobrem casos principais; sem
 - [ ] Sem `console.log`/`debugger` e sem código comentado
 - [ ] Nomes claros; segue convenções
 - [ ] Erros tratados; documentação atualizada (se necessário)
+- [ ] Novo método de service: recebe `actor` e chama guard antes de tocar dados
+- [ ] Nova tool MCP: `scope` + anotações corretas + flag (escrita desligada por padrão)
 
 ---
 
@@ -356,7 +426,7 @@ movimento" (`AccessibilityInfo.isReduceMotionEnabled`).
 ### Testes no nativo
 
 - **Unit**: domínio e hooks (Vitest + Testing Library).
-- **Integration**: funções do backend (validação + guard + use-case).
+- **Integration**: funções do backend (validação + service com guard + repositório).
 - **E2E**: fluxo no simulador iOS (ex.: **Maestro** ou **Detox**) — substitui o
   Playwright da web para telas nativas.
 

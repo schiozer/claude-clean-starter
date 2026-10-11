@@ -9,12 +9,14 @@ Antes de invocar qualquer skill, o agente deve ter lido `ARCHITECTURE.md` e
 `BEST_PRACTICES.md`. Para trabalho em features, leia também a spec relevante em
 `docs/superpowers/specs/`.
 
+Leia também o **Perfil arquitetural** no `CLAUDE.md` — ele decide entre `mvp-development` e `ddd-service-development` (ver [ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md)).
+
 ## Pipeline de Skills
 
 Fluxo padrão para qualquer feature nova:
 
 ```
-brainstorming → writing-plans → [mvp-development | post-mvp-development] → verification-before-completion
+brainstorming → writing-plans → [mvp-development | ddd-service-development] (conforme o perfil) → verification-before-completion
 ```
 
 Nunca pule o brainstorming em features novas. A spec que ele produz é o contrato
@@ -35,8 +37,8 @@ para tudo que vem depois.
 ### Construção — Implementação
 | Skill | Origem | Papel |
 |---|---|---|
-| `mvp-development` | Projeto | Fase inicial/MVP. Arquitetura simples (acesso direto a dados, sem use-cases). |
-| `post-mvp-development` | Projeto | Fase madura. Clean Architecture (domain → application → infrastructure → presentation). |
+| `mvp-development` | Projeto | Perfil `mvp-primeiro` (antes da promoção). Módulos com Service enxuto + REST + MCP; sem aggregates/repositórios. |
+| `ddd-service-development` | Projeto | Perfil `completo-direto` ou promovido. Módulos com DDD tático + Service + REST + MCP. |
 | `superpowers:test-driven-development` | Superpowers | Testes antes da implementação — vale para todo código. |
 | `superpowers:systematic-debugging` | Superpowers | Diagnóstico estruturado antes de qualquer correção. |
 | `superpowers:executing-plans` | Superpowers | Executa o plano tarefa a tarefa, com revisões. |

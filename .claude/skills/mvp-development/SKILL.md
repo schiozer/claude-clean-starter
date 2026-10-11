@@ -1,43 +1,72 @@
 ---
 name: mvp-development
-description: Skill para desenvolvimento em fase inicial/MVP com arquitetura simples. Use quando a feature é essencial para validação e ainda não justifica as camadas completas de Clean Architecture.
+description: Skill para a fase MVP de projetos com perfil `mvp-primeiro` — módulos com Service enxuto (sem aggregates/repositórios), bordas REST + MCP finas desde o dia 1. Não use em projetos `completo-direto`.
 ---
 
 # MVP Development
 
 ## Visão Geral
 
-Guia o desenvolvimento de features na **fase inicial / MVP**, quando o objetivo é
-**validar o produto rápido** com o mínimo de cerimônia arquitetural. A regra é
-KISS/YAGNI: só introduza camadas quando a complexidade justificar.
+Guia features na **fase MVP**: validar o produto rápido com o mínimo de cerimônia, **sem
+abrir mão** da porta única (Service), da autorização no servidor e da borda MCP. A
+estrutura de pastas é a mesma do perfil completo (`src/modules/<ctx>/`) — só faltam
+`domain/` e `infrastructure/`. Assim a promoção não move as bordas.
 
-## Quando Usar
+## Antes de Começar — Perfil
 
-- Features essenciais para validar o produto.
-- CRUD simples, fluxos diretos.
-- Quando pedirem "implemente X no padrão simples/MVP".
+Leia `**Perfil arquitetural**` no `CLAUDE.md` do projeto:
 
-**NÃO use** quando a feature cruza vários domínios, tem regra de negócio rica ou
-exige testes robustos → use `post-mvp-development`.
+- `mvp-primeiro` (não promovido) → use esta skill.
+- `completo-direto` → **não use**; este projeto não tem fase MVP. Use `ddd-service-development`.
+- Ausente ou inválido → **pergunte ao usuário** qual perfil adotar; não assuma.
 
 ## Decisões Arquiteturais (MVP)
 
-- ✅ **Acesso a dados via hooks** (`use*`) que chamam uma **API Route/BFF** — não
-  há SDK de banco no cliente (com Postgres puro, ex.: Neon, todo acesso passa pelo
-  servidor: `hook → /api → DB`). Validação na borda (cliente e servidor).
-- ✅ **Validação com Zod** no ponto de entrada (formulários, rotas).
-- ✅ **Autorização no servidor**, fail-closed — nunca confie apenas no cliente.
-- ✅ **Hooks customizados** (`useState` + `useEffect`) para estado local.
-- ✅ **Context API** só quando necessário (ex.: sessão/auth).
-- ❌ SEM use-cases, repositories ou services.
-- ❌ SEM camada de server-state (ex.: React Query) até doer.
+- ✅ `src/modules/<ctx>/application/<Ctx>Service.ts` com **`actor` primeiro** e guard
+  (`requireScope`) antes de qualquer acesso a dados; acesso ao banco **direto** no service.
+- ✅ `schemas.ts` (Zod) e `dto.ts` — os mesmos usados por REST, MCP e UI.
+- ✅ `interfaces/http/` e `interfaces/mcp/tools.ts` finos; escrita MCP **desligada por padrão**.
+- ✅ Hooks (`useState` + `useEffect`) chamando a API REST; Context só para sessão/auth.
+- ❌ SEM aggregates, value objects, repositórios ou `I*Repository`.
+- ❌ SEM server-state (React Query) até doer.
 
-## Exemplo (hook simples)
+## Exemplo (service enxuto)
 
 ```typescript
-// src/presentation/hooks/useResources.ts
+// src/modules/resources/application/ResourceService.ts
+export class ResourceService {
+  constructor(private db: Db) {}
+
+  async list(actor: AuthUser, input: ListResourcesInput): Promise<ResourceDTO[]> {
+    requireScope(actor, 'resources:read')
+    const rows = await this.db.query(
+      'select id, title, published, created_at from resources where tenant_id = $1 and owner_id = $2 order by created_at desc limit $3',
+      [actor.tenantId, actor.id, input.limit]
+    )
+    return rows.map(toResourceDTO)
+  }
+}
+```
+
+```typescript
+// src/modules/resources/interfaces/mcp/tools.ts
+export const makeResourceTools = (service: ResourceService) => [
+  defineTool({
+    name: 'list_resources',
+    description: 'Lista os recursos do usuário. Use para responder "quais são meus recursos".',
+    input: listResourcesSchema,
+    scope: 'resources:read',
+    annotations: { readOnlyHint: true },
+    flag: 'mcp.resources.read',
+    handler: (actor, input) => service.list(actor, input),
+  }),
+]
+```
+
+```typescript
+// src/ui/hooks/useResources.ts
 export function useResources() {
-  const [resources, setResources] = useState<Resource[]>([])
+  const [resources, setResources] = useState<ResourceDTO[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { void fetchResources() }, [])
@@ -60,15 +89,24 @@ export function useResources() {
 
 ## Checklist (MVP)
 
-- [ ] Validação Zod na borda
-- [ ] Autorização no servidor
-- [ ] Erros tratados (funcional vs técnico — ver BEST_PRACTICES)
-- [ ] Loading/erro na UI
-- [ ] TypeScript sem `any`
-- [ ] Teste ao menos das validações e dos hooks críticos
+- [ ] Perfil verificado no `CLAUDE.md`
+- [ ] Service: `actor` primeiro, guard antes de dados, DTO na saída
+- [ ] Validação Zod na borda (mesmo schema em REST e MCP)
+- [ ] Tool MCP perguntada ao usuário (expor? flag?); escrita desligada por padrão
+- [ ] Erros funcional vs técnico (ver BEST_PRACTICES)
+- [ ] Loading/erro na UI; TypeScript sem `any`
+- [ ] Testes do service (escopo, isolamento por owner) e dos hooks críticos
 
-## Quando Graduar para Pós-MVP
+## Promoção para o Completo
 
-Migre para `post-mvp-development` quando surgir: regra de negócio que cruza
-entidades, necessidade de trocar infraestrutura sem tocar o domínio, ou cobertura
-de testes robusta. Documente a virada em um ADR.
+Quando surgir regra que cruza entidades, invariantes ricas ou necessidade de trocar
+infraestrutura, **proponha** a promoção ao usuário (nunca promova sozinho). Se aceita:
+
+1. Registrar ADR do projeto ("promoção do projeto ao perfil completo"). A promoção é
+   **por projeto**, não por módulo.
+2. Trocar o campo no `CLAUDE.md` para exatamente
+   `**Perfil arquitetural**: mvp-primeiro (promovido — ADR-NNN)`.
+3. Migrar módulo a módulo (já sob `ddd-service-development`): extrair VOs/aggregate para `domain/`, criar `I<Agg>Repository` e o
+   repositório em `infrastructure/`, injetar no service. **Não** alterar `interfaces/` nem
+   a assinatura pública do service — os testes de REST/MCP devem passar sem mudança.
+4. Seguir daí com `ddd-service-development`.

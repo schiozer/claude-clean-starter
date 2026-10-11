@@ -6,6 +6,14 @@
 
 **Versão do template**: 1.0.0
 
+**Perfil arquitetural**: <mvp-primeiro | completo-direto>
+
+> Preencha ao adotar o template ([ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md)).
+> `mvp-primeiro` = começa enxuto e é promovido por decisão explícita (o campo passa a
+> `mvp-primeiro (promovido — ADR-NNN)`);
+> `completo-direto` = projeto pequeno, **sem fase MVP**. Se estiver vazio ou inválido,
+> o Claudinho **pergunta** antes de implementar.
+
 > Este é um repositório **template** (`claude-clean-starter`). Ao iniciar um
 > projeto real, ajuste este arquivo: preencha a stack concreta, renomeie o
 > projeto e remova o que não se aplicar. O que está aqui é a **direção geral**
@@ -29,7 +37,7 @@ Se você está lendo isso, provavelmente sou eu mesmo (Claude) trabalhando no pr
 Para qualquer feature nova, siga o pipeline completo (ver `SKILLS.md`):
 
 ```
-brainstorming → writing-plans → [mvp-development | post-mvp-development] → verification-before-completion
+brainstorming → writing-plans → [mvp-development | ddd-service-development] (conforme o perfil) → verification-before-completion
 ```
 
 Toda funcionalidade é **entrevistada (brainstorming) + planejada** e **sempre**
@@ -41,8 +49,15 @@ Para bug fixes ou pequenas correções, use `superpowers:systematic-debugging` d
 
 ### 2. **Skills de Implementação**
 
-- **Fase inicial / MVP** (arquitetura simples): `mvp-development`
-- **Fase madura / Pós-MVP** (Clean Architecture): `post-mvp-development`
+A skill de implementação é escolhida pelo **Perfil arquitetural** (topo deste arquivo):
+
+- `mvp-primeiro` (não promovido): `mvp-development` — módulos com Service enxuto + REST + MCP.
+- `completo-direto` ou `mvp-primeiro` promovido: `ddd-service-development` — módulos com
+  DDD tático + Service + REST + MCP.
+- Perfil vazio/inválido: **pergunte** ao usuário antes de implementar.
+
+Em ambos, toda capacidade nova pergunta se deve virar **tool MCP** e com qual flag
+(escrita nasce desligada) — ver [ADR-012](./docs/adr/012-mcp-como-borda-agentica.md).
 
 ### 3. **Specs são a Fonte da Verdade**
 
@@ -113,19 +128,19 @@ ver ADRs 002, 003 e 004.
 <projeto>/
 ├── .claude/
 │   ├── commands/                  # Slash-commands do projeto (templates)
-│   └── skills/                    # Skills MVP e Pós-MVP
+│   └── skills/                    # mvp-development, ddd-service-development
 ├── docs/
 │   ├── adr/                       # Architecture Decision Records
-│   ├── guides/                    # Guias técnicos (Zod, Testing, Errors)
+│   ├── guides/                    # Guias técnicos (Zod, Testing, Errors, Deploy/CI, MCP)
 │   └── superpowers/
 │       ├── specs/                 # Especificações de features
 │       └── plans/                 # Planos de implementação
 ├── src/
-│   ├── domain/                    # Pós-MVP: entidades, interfaces
-│   ├── application/               # Pós-MVP: use-cases, services
-│   ├── infrastructure/            # Repositories, serviços externos
-│   ├── presentation/              # UI (app/, components/, hooks/)
-│   └── shared/                    # Erros, utils, constants
+│   ├── modules/<contexto>/        # domain/ (completo), application/ (Service), infrastructure/ (completo), interfaces/{http,mcp}
+│   ├── shared/                    # kernel/, auth/, mcp/, errors.ts, handleApiError.ts
+│   ├── ui/                        # components/, hooks/
+│   ├── composition.ts             # wiring deps → services → bordas
+│   └── app/                       # rotas (Next.js): api/<ctx>, api/mcp
 ├── tests/
 │   ├── unit/
 │   ├── integration/
@@ -138,30 +153,27 @@ ver ADRs 002, 003 e 004.
 
 ---
 
-## 🎯 MVP vs Pós-MVP
+## 🎯 Perfis: MVP vs Completo
 
-### MVP — Arquitetura Simples
+Em **ambos** os perfis: módulos por contexto, `<Ctx>Service` como porta única (`actor`
+primeiro + guard), Zod nas bordas, REST + MCP finos, autorização no servidor.
 
-**Quando**: features essenciais para validação rápida.
+### MVP (`mvp-primeiro`, antes da promoção)
 
-- ✅ Acesso a dados direto (via hooks), com validação na borda
-- ✅ Validação Zod
-- ✅ Autorização no servidor (nunca confie só no cliente)
-- ✅ Hooks customizados (useState + useEffect)
-- ✅ Context API (apenas quando necessário, ex.: auth)
-- ❌ SEM use-cases / repositories / services
-- ❌ SEM camada de server-state (React Query) até precisar
+- ✅ Service acessa o banco direto
+- ✅ Hooks (useState + useEffect); Context só para auth
+- ❌ SEM aggregates, value objects e repositórios
+- ❌ SEM server-state (React Query) até precisar
 
-### Pós-MVP — Arquitetura Completa
+### Completo (`completo-direto`, ou `mvp-primeiro` promovido)
 
-**Quando**: features avançadas, mais domínios, mais complexidade.
+- ✅ DDD tático: aggregates, value objects, repositórios (interface + implementação)
+- ✅ Domain events só com consumidor real
+- ✅ Server-state/UI-state quando fizer sentido
+- ✅ Testes robustos (unit, integration REST + MCP, E2E)
 
-- ✅ Clean Architecture (domain, application, infrastructure, presentation)
-- ✅ Use cases, Repositories (interfaces + implementações), Services
-- ✅ Server-state (ex.: React Query) + UI-state (ex.: Zustand) quando fizer sentido
-- ✅ Testes robustos (unit, integration, E2E)
-
-Ver as skills `mvp-development` e `post-mvp-development` para detalhes.
+Ver as skills `mvp-development` e `ddd-service-development` e a
+[ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md).
 
 ---
 
@@ -173,7 +185,7 @@ Este template assume um projeto **TypeScript** com **testes em Vitest** e
 - **Frontend**: framework de sua escolha (o template usa React/Next.js nos exemplos)
 - **Validação**: Zod
 - **Banco / Auth / Storage**: defina os provedores do seu projeto e isole-os atrás
-  de interfaces (`I*Repository`, `IAuthProvider`) para poder trocá-los.
+  de interfaces (`I*Repository`, `IAuthProvider`, `IAccessTokenVerifier`) para poder trocá-los.
 - **Testes**: Vitest (unit/integration) + Playwright (E2E)
 
 > Documente a stack concreta e as decisões (banco, auth, hospedagem) em ADRs.
@@ -187,6 +199,7 @@ Antes de usar uma tecnologia pela primeira vez, leia o guia:
 - **Validação (Zod)** → [docs/guides/zod-guide.md](./docs/guides/zod-guide.md)
 - **Testes** → [docs/guides/testing-guide.md](./docs/guides/testing-guide.md)
 - **Error Handling** → [docs/guides/error-handling-guide.md](./docs/guides/error-handling-guide.md)
+- **MCP (conectar ChatGPT/Claude)** → [docs/guides/mcp-guide.md](./docs/guides/mcp-guide.md)
 
 ---
 
@@ -205,8 +218,9 @@ Ver [BEST_PRACTICES.md](./BEST_PRACTICES.md) completo.
 ## 🔐 Segurança
 
 - **Autorização no servidor** (fail-closed): nunca confie apenas no cliente.
-  Padrão = **guards na camada de aplicação** (validam o JWT/OIDC do IdP e a regra
-  de acesso antes do repositório); mecanismos do banco (ex.: RLS) são reforço
+  A borda valida a identidade (sessão, JWT OAuth ou PAT → `AuthUser`); os **guards no
+  service** (`requireScope`, `assertOwnership`) aplicam a regra de acesso antes de tocar
+  dados; mecanismos do banco (ex.: RLS) são reforço
   opcional. Sempre "esqueceu de autorizar → sem acesso" (ver ARCHITECTURE.md).
 - **Validação** no frontend E no backend (mesmos schemas Zod).
 - **Secrets**: nunca commitar `.env*`; API keys via `process.env`. Ver `.gitignore`.
@@ -227,6 +241,7 @@ BEST_PRACTICES.md e a spec → 4. Implementar (TDD) → 5. Testar (`npm test`) �
 - [ ] Validação Zod nos formulários / bordas
 - [ ] Erros tratados (mensagens user-friendly)
 - [ ] Autorização no servidor (se nova entidade/rota)
+- [ ] Tool MCP (se exposta): `scope` + anotações + flag (escrita desligada por padrão)
 - [ ] Responsivo (se UI)
 - [ ] Loading states
 - [ ] TypeScript sem `any`
@@ -263,7 +278,7 @@ Contexto / Decisão / Consequências / Alternativas.
 
 - Sempre me apresento: "Oi! Sou o **Claudinho**, vou te ajudar!"
 - Pergunto antes de agir quando há múltiplas opções.
-- Explico decisões arquiteturais (por que MVP vs Pós-MVP, etc.).
+- Explico decisões arquiteturais (perfil MVP vs completo, expor ou não via MCP, etc.).
 
 ---
 
