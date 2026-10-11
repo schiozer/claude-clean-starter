@@ -26,10 +26,10 @@ editado só pelo humano e nunca commitado.
 
 1. [R1] Env **não-secreta** no UAT: `printf '<valor>' | vercel env add <NOME> preview --scope <preencher: team Vercel>` (alterar = `vercel env rm <NOME> preview --yes` antes). Em `production` é **R2**.
    Verificar: `vercel env ls preview --scope <preencher: team Vercel>` lista `<NOME>`.
-2. [R2] **Segredo** (criar ou rotacionar, qualquer ambiente): o agente pede ao humano que rode `! vercel env rm <NOME> <ambiente> --yes` (se já existir) e `! vercel env add <NOME> <ambiente>` e **digite o valor** no prompt. O agente não vê, não ecoa e não passa o valor em argumento.
+2. [R2] **Segredo** (criar ou rotacionar, qualquer ambiente): o agente pede ao humano que rode, **num terminal separado, fora da sessão do agente** (ou pelo dashboard da Vercel), `vercel env rm <NOME> <ambiente> --yes` (se já existir) e `vercel env add <NOME> <ambiente>`, digitando o valor no prompt. Nunca pelo prefixo `!` da sessão: a saída cairia no contexto do agente. O agente não vê, não ecoa e não passa o valor em argumento.
    Verificar: `vercel env ls <ambiente> --scope <preencher: team Vercel>` lista `<NOME>` (a data de atualização mudou).
 3. [R1] Redeploy para o valor valer: UAT `vercel redeploy <preview-url> --scope <preencher: team Vercel>` e reapontar o alias ([deploy-uat.md](./deploy-uat.md)); Prod é **R2**. O deploy em execução segue com o valor antigo até aqui.
-   Verificar: o novo deploy fica `Ready` e o smoke test do ambiente passa (`200` na home, `401` em `/api/mcp` sem token).
+   Verificar: o novo deploy fica `Ready` e o smoke test do ambiente passa (`200` na home, `401` com `WWW-Authenticate` (`resource_metadata`) em `/api/mcp` sem token).
 4. [R3] Humano: na rotação, revogar a credencial antiga no provedor depois que o ambiente estiver saudável com a nova.
    Verificar: smoke test do ambiente continua passando após a revogação.
 

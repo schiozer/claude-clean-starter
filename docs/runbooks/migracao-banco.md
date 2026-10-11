@@ -25,10 +25,10 @@ migração ou a restauração do branch de backup.
 
 ## Passos
 
-1. [R1] Aplicar no Dev/preview: `node scripts/apply-migration.mjs drizzle/NNNN_nome.sql --env .env.dev`.
+1. [R1] Aplicar no Dev: `node scripts/apply-migration.mjs drizzle/NNNN_nome.sql --env .env.dev`.
    Verificar: saída do aplicador sem erro e a mudança visível (`neonctl` → SQL Editor ou `information_schema.columns` filtrando a tabela).
 2. [R1] Aplicar no UAT: `node scripts/apply-migration.mjs drizzle/NNNN_nome.sql --env .env.uat`.
-   Verificar: idem, no branch `uat`; o preview do PR funciona com o schema novo.
+   Verificar: idem, no branch `uat`; o UAT (alias, branch `uat`) funciona com o schema novo.
 3. [R2] Criar o branch de backup de Prod: `neonctl branches create --name backup-<AAAA-MM-DD>-NNNN --parent main --project-id <preencher: id do projeto Neon>`.
    Verificar: `neonctl branches list --project-id <preencher: id do projeto Neon>` mostra o backup.
 4. [R2] Aplicar em Prod (antes do merge): `node scripts/apply-migration.mjs drizzle/NNNN_nome.sql --env .env.prod`.
@@ -40,7 +40,7 @@ migração ou a restauração do branch de backup.
 
 ## Rollback
 
-1. [R1] Dev/UAT: aplicar a migração inversa (`drizzle/NNNN+1_reverte_nome.sql`, revisada no PR) ou resetar o branch: `neonctl branches reset <dev|uat> --parent --project-id <preencher: id do projeto Neon>`.
+1. [R1] Dev/UAT: aplicar a migração inversa (`drizzle/NNNN+1_reverte_nome.sql`, revisada no PR). Nunca `neonctl branches reset … --parent` no `uat`/`dev`: o pai é `main` e o reset copiaria dados de Prod.
    Verificar: o schema voltou ao estado anterior no branch.
 2. [R2] Prod: preferir a migração inversa aditiva por PR; em dano de dados, restaurar do backup: `neonctl branches restore main backup-<AAAA-MM-DD>-NNNN --project-id <preencher: id do projeto Neon>` (ou point-in-time: `main@<timestamp>`).
    Verificar: dados/schema conferidos no branch `main` e Prod saudável.

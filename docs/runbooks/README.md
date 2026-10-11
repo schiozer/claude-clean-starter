@@ -6,8 +6,9 @@ passo a passo, com classe de risco e verificação em cada passo. Regras em
 [ADR-013](../adr/013-governanca-operacional-e-runbooks.md).
 
 > Este é o catálogo do **template**: os comandos assumem a stack padrão (Vercel + Neon +
-> Auth0) e os valores do projeto estão como `<preencher: …>`. Ao adotar, complete-os
-> (checklist abaixo).
+> Auth0) e os valores do projeto estão como `<preencher: …>` (entradas, decididas pelo
+> humano) ou `<gerado: …>` (saídas do `bootstrap-ambientes.md`, gravadas por ele via PR).
+> Ao adotar, complete-os (checklist abaixo).
 
 ## Catálogo
 
@@ -37,7 +38,7 @@ R2; na dúvida, vale a classe mais alta.
 ## Como executar
 
 Peça ao agente a operação ("faça o deploy em UAT", "ligue a escrita MCP no UAT"). Ele usa a
-skill `runbook-execution`: localiza o runbook nesta tabela, recusa se houver `<preencher`,
+skill `runbook-execution`: localiza o runbook nesta tabela, recusa se houver `<preencher` (ou `<gerado`, fora do bootstrap),
 roda o pre-flight, aplica o gate de cada passo, verifica, faz rollback em falha e registra
 a execução no PR (ou numa issue `ops`). Sem runbook para a operação, ele não executa —
 propõe um.
@@ -53,11 +54,12 @@ propõe um.
 
 `npm run check:runbooks` valida o formato de todo runbook e a presença do catálogo
 obrigatório (roda no CI). `npm run check:runbooks -- --strict` também exige zero
-`<preencher` e `Última verificação` em data ISO válida — é o modo do projeto adotado.
+`<preencher`/`<gerado` e `Última verificação` em data ISO válida — é o modo do projeto adotado.
 
 ## Checklist de adoção
 
-- [ ] Preencher todo `<preencher>` dos runbooks (team Vercel, projeto Neon, tenants Auth0,
-      URLs, responsáveis) e datar `Última verificação`.
+- [ ] Preencher todo `<preencher>` dos runbooks (team Vercel, org Neon, URLs,
+      responsáveis), executar o `bootstrap-ambientes.md` (que grava os `<gerado>`: id do
+      projeto Neon, tenants Auth0) e datar `Última verificação`.
 - [ ] Trocar o passo do CI para `npm run check:runbooks -- --strict`.
 - [ ] Adicionar um runbook para cada operação recorrente nova do projeto.

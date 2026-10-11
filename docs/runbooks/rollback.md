@@ -27,17 +27,19 @@ não volta por aqui: migração é sempre aditiva e o reverso é uma nova migra�
 1. [R0] Diagnosticar: `vercel logs <deploy-url> --scope <preencher: team Vercel>` e o PR/commit do deploy suspeito.
    Verificar: a feature/commit suspeito está identificado (ex.: erros só em `/api/<ctx>`).
 2. [R2] Desligar a feature pelo kill switch `<CTX>_ENABLED=off` no ambiente afetado, via [feature-flags.md](./feature-flags.md) (em UAT é R1; desliga também as tools MCP da feature).
-   Verificar: `/api/<ctx>` responde `404` e o erro parou nos logs. Resolveu → ir para a Verificação final.
+   Verificar: `/api/<ctx>` responde `404` e o erro parou nos logs. Resolveu → ir para a Verificação final; não resolveu → passo 3 (é o fluxo previsto, **não** é falha que dispara o Rollback deste runbook).
 3. [R2] Promover o deploy anterior saudável: `vercel rollback <deploy-anterior> --scope <preencher: team Vercel>` (UAT: reapontar o alias, R1, como no [deploy-uat.md](./deploy-uat.md)).
-   Verificar: `vercel ls <preencher: projeto Vercel> --prod --scope <preencher: team Vercel>` mostra o deploy anterior servindo e o smoke test passa.
-4. [R1] Abrir o PR de revert: `git switch -c revert/<sha> origin/main && git revert <sha> && git push -u origin revert/<sha> && gh pr create --base main --fill`.
+   Verificar: `vercel inspect https://<preencher: domínio de Prod> --scope <preencher: team Vercel>` mostra o deploy anterior servindo e o smoke test passa. Atenção: após `vercel rollback`, a Vercel **desliga a atribuição automática** do domínio — novos deploys de Prod não entram no ar até o passo 6.
+4. [R1] Abrir o PR de revert: `git fetch origin && git switch -c revert/<sha> origin/main && git revert <sha>` (commit de merge: `git revert -m 1 <sha>`) e `git push -u origin revert/<sha> && gh pr create --base main --fill`.
    Verificar: `gh pr checks <n> --watch` verde.
 5. [R3] Humano: fazer o merge do PR de revert na `main` e avisar quando terminar.
-   Verificar: `gh pr view <n> --json state` → `MERGED` e o novo deploy de Prod fica `Ready`.
+   Verificar: `gh pr view <n> --json state` → `MERGED` e o deploy do commit de revert fica `Ready` em `vercel ls <preencher: projeto Vercel> --prod`.
+6. [R2] Se o passo 3 foi executado: promover o deploy do revert, religando a atribuição automática: `vercel promote <deploy-do-revert> --scope <preencher: team Vercel>`.
+   Verificar: `vercel inspect https://<preencher: domínio de Prod>` mostra o deploy do commit de revert (sem isso, merges futuros não chegam a Prod).
 
 ## Verificação final
 
-- Smoke test do ambiente ok (`200` na home, `401` em `/api/mcp` sem token) e logs sem o erro.
+- Smoke test do ambiente ok (`200` na home, `401` com `WWW-Authenticate` (`resource_metadata`) em `/api/mcp` sem token) e logs sem o erro.
 - Incidente comunicado ao humano com causa provável e o que foi feito.
 
 ## Rollback
