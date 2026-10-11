@@ -114,6 +114,24 @@ describe('checkRunbook', () => {
     expect(checkRunbook(fenced)).toEqual([])
   })
 
+  it('seção H2 desconhecida → erro (passos nela escapariam da validação)', () => {
+    const extra = swap('## Verificação final', '## Passos (Prod)\n\n1. vercel promote x\n\n## Verificação final')
+    expect(checkRunbook(extra)).toContain('seção desconhecida: ## Passos (Prod)')
+  })
+
+  it('item numerado fora de Pre-flight/Passos/Rollback → erro', () => {
+    const stray = swap('- Smoke test ok.', '1. vercel promote x')
+    expect(checkRunbook(stray)).toContain(
+      '## Verificação final: item numerado fora de Pre-flight/Passos/Rollback (use lista com "-")'
+    )
+  })
+
+  it('estrito rejeita <gerado (saída de bootstrap não registrada)', () => {
+    const gen = swap('time-plataforma', '<gerado: id do projeto>')
+    expect(checkRunbook(gen)).toEqual([])
+    expect(checkRunbook(gen, { strict: true })).toContain('linha 3: placeholder <gerado> pendente')
+  })
+
   it('CRLF → mesmas regras', () => {
     expect(checkRunbook(VALID.replace(/\n/g, '\r\n'))).toEqual([])
   })
