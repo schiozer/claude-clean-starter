@@ -34,6 +34,19 @@ describe('rota /api/resources (flag on, Dev local)', () => {
     expect((await res.json()).code).toBe('VALIDATION_ERROR')
   })
 
+  it('POST com JSON malformado → 400 VALIDATION_ERROR (não 500)', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const req = new Request('http://localhost/api/resources', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{"title":',
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'JSON inválido', code: 'VALIDATION_ERROR' })
+    expect(spy).not.toHaveBeenCalled()
+  })
+
   it('POST ignora ownerId do corpo (owner vem da sessão)', async () => {
     const res = await POST(postReq({ title: 'Válido', ownerId: 'bia' }))
     expect((await res.json()).ownerId).toBe('dev-user')
