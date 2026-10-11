@@ -1,4 +1,5 @@
 import type { ResolveActor } from '@/shared/auth'
+import { ValidationError } from '@/shared/errors'
 import { ensureEnabled } from '@/shared/featureFlags'
 import { handleApiError } from '@/shared/handleApiError'
 import type { ResourceService } from '../../application/ResourceService'
@@ -11,6 +12,14 @@ function listInputFrom(url: string): unknown {
   return {
     limit: limit === null ? undefined : Number(limit),
     cursor: params.get('cursor') ?? undefined,
+  }
+}
+
+async function jsonBody(req: Request): Promise<unknown> {
+  try {
+    return await req.json()
+  } catch {
+    throw new ValidationError('JSON inválido')
   }
 }
 
@@ -30,7 +39,7 @@ export const makeResourceHandlers = (service: ResourceService, resolveActor: Res
     try {
       ensureEnabled('resources')
       const actor = await resolveActor(req)
-      const input = createResourceSchema.parse(await req.json())
+      const input = createResourceSchema.parse(await jsonBody(req))
       return Response.json(await service.create(actor, input), { status: 201 })
     } catch (error) {
       return handleApiError(error, 'api/resources:POST')
