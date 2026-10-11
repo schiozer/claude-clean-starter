@@ -59,6 +59,8 @@ export class Auth0JwtVerifier implements IAccessTokenVerifier {
         via: 'oauth',
       }
     } catch (error) {
+      // JWKS fora do ar/corrompido é falha nossa (técnica → 500), não token ruim.
+      if (error instanceof errors.JWKSTimeout || error instanceof errors.JWKSInvalid) throw error
       if (error instanceof errors.JOSEError) throw new UnauthorizedError('Token inválido ou expirado')
       throw error
     }
