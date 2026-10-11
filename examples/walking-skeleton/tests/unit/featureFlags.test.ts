@@ -23,7 +23,7 @@ describe('API legada', () => {
 
 describe('isEnabled', () => {
   it('mcp.resources.read nasce ligada', () => {
-    expect(isEnabled('mcp.resources.read', {})).toBe(true)
+    expect(isEnabled('mcp.resources.read', { RESOURCES_ENABLED: 'on' })).toBe(true)
   })
   it('mcp.resources.read pode ser desligada', () => {
     expect(isEnabled('mcp.resources.read', { MCP_RESOURCES_READ: 'off' })).toBe(false)
@@ -33,9 +33,21 @@ describe('isEnabled', () => {
     expect(isEnabled('mcp.resources.write', { MCP_RESOURCES_WRITE: 'yes' })).toBe(false)
   })
   it('mcp.resources.write liga só com on', () => {
-    expect(isEnabled('mcp.resources.write', { MCP_RESOURCES_WRITE: 'on' })).toBe(true)
+    expect(isEnabled('mcp.resources.write', { RESOURCES_ENABLED: 'on', MCP_RESOURCES_WRITE: 'on' })).toBe(true)
   })
   it('ensureEnabled lança NotFoundError quando desligada', () => {
     expect(() => ensureEnabled('resources', {})).toThrow(NotFoundError)
+  })
+})
+
+describe('dependência entre flags', () => {
+  it('feature desligada desliga as tools MCP dela (kill switch cobre a borda agêntica)', () => {
+    expect(isEnabled('mcp.resources.read', {})).toBe(false)
+    expect(isEnabled('mcp.resources.write', { MCP_RESOURCES_WRITE: 'on' })).toBe(false)
+  })
+  it('feature ligada: leitura MCP nasce ligada, escrita só com on', () => {
+    expect(isEnabled('mcp.resources.read', { RESOURCES_ENABLED: 'on' })).toBe(true)
+    expect(isEnabled('mcp.resources.write', { RESOURCES_ENABLED: 'on' })).toBe(false)
+    expect(isEnabled('mcp.resources.write', { RESOURCES_ENABLED: 'on', MCP_RESOURCES_WRITE: 'on' })).toBe(true)
   })
 })

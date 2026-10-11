@@ -13,6 +13,7 @@ describe('/api/mcp', () => {
 
   beforeEach(async () => {
     process.env.APP_ENV = 'development'
+    process.env.RESOURCES_ENABLED = 'on'
     process.env.MCP_RESOURCE_URL = 'http://localhost/api/mcp'
     resourceRepository.clear()
     personalTokens.clear()
@@ -26,7 +27,7 @@ describe('/api/mcp', () => {
     })
   })
   afterEach(() => {
-    for (const k of ['APP_ENV', 'MCP_RESOURCE_URL', 'MCP_RESOURCES_READ', 'MCP_RESOURCES_WRITE']) delete process.env[k]
+    for (const k of ['APP_ENV', 'RESOURCES_ENABLED', 'MCP_RESOURCE_URL', 'MCP_RESOURCES_READ', 'MCP_RESOURCES_WRITE']) delete process.env[k]
     vi.restoreAllMocks()
   })
 
@@ -64,6 +65,13 @@ describe('/api/mcp', () => {
 
   it('token não-PAT sem Auth0 configurado → 401', async () => {
     expect((await POST(rpc('tools/list', {}, 'eyJhbGciOi.qualquer.coisa'))).status).toBe(401)
+  })
+
+  it('feature desligada (RESOURCES_ENABLED ausente) → nenhuma tool, mesmo com as flags MCP ligadas', async () => {
+    delete process.env.RESOURCES_ENABLED
+    process.env.MCP_RESOURCES_READ = 'on'
+    process.env.MCP_RESOURCES_WRITE = 'on'
+    expect(await names(await POST(rpc('tools/list', {}, writeToken)))).toEqual([])
   })
 
   it('tools/list esconde create_resource com a flag de escrita desligada (padrão)', async () => {

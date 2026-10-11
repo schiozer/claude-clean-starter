@@ -45,6 +45,9 @@ npm run lint && npm run type-check && npm test && npm run build
 | `MCP_RESOURCES_READ`  | on      | `list_resources`                                               |
 | `MCP_RESOURCES_WRITE` | **off** | `create_resource` (precisa também do escopo `resources:write`) |
 
+As flags `MCP_*` só valem com `RESOURCES_ENABLED=on`: desligar a feature desliga também as
+tools MCP dela (kill switch único).
+
 ## Mapeamento de deploy (ver docs/guides/deploy-ci-guide.md)
 
 - **PR → UAT**: preview deployment (site/celular).

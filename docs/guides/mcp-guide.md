@@ -62,6 +62,10 @@ As tools ficam atrás de flags (ADR-006):
 | `mcp.<ctx>.read`  | `MCP_RESOURCES_READ`  | ligada        | tools de leitura do módulo aparecem                        |
 | `mcp.<ctx>.write` | `MCP_RESOURCES_WRITE` | **desligada** | tools de escrita aparecem (se o token tiver `<ctx>:write`) |
 
+As flags MCP dependem da flag da feature (no skeleton, `RESOURCES_ENABLED`): com a feature
+desligada nenhuma tool do módulo aparece, mesmo com `MCP_*=on` — o kill switch da feature cobre
+todas as bordas.
+
 Ligue a escrita **por ambiente**, conscientemente — comece pelo UAT. Para demonstrar escrita no
 UAT, ligue `MCP_RESOURCES_WRITE=on` só no ambiente de UAT.
 
