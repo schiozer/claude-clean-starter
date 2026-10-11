@@ -33,6 +33,11 @@ describe('loadMcpConfig', () => {
     expect(() => loadMcpConfig({ MCP_RESOURCE_URL: 'https://x.com/api/mcp', AUTH0_ISSUER_BASE_URL: 'http://t.auth0.com/' })).toThrow('https')
     expect(loadMcpConfig({ MCP_RESOURCE_URL: 'http://localhost:3000/api/mcp', APP_ENV: 'development' }).resourceUrl.port).toBe('3000')
   })
+  it('MCP_RESOURCE_URL sem caminho (só o origin) → erro: o resource é a URL exata do MCP', () => {
+    expect(() => loadMcpConfig({ MCP_RESOURCE_URL: 'https://uat.example.com' })).toThrow('caminho')
+    expect(() => loadMcpConfig({ MCP_RESOURCE_URL: 'https://uat.example.com/' })).toThrow('caminho')
+  })
+
   it('URL malformada → erro', () => {
     expect(() => loadMcpConfig({ MCP_RESOURCE_URL: 'nao-e-url' })).toThrow('MCP_RESOURCE_URL')
   })

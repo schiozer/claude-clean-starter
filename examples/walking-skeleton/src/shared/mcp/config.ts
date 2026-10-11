@@ -25,6 +25,9 @@ export function loadMcpConfig(env: Env = process.env): McpConfig {
   const isDev = isDevEnvironment(env)
   if (!env.MCP_RESOURCE_URL) throw new Error('MCP_RESOURCE_URL não configurada')
   const resourceUrl = parseUrl('MCP_RESOURCE_URL', env.MCP_RESOURCE_URL, isDev)
+  if (resourceUrl.pathname === '/') {
+    throw new Error('MCP_RESOURCE_URL precisa do caminho do MCP (ex.: https://<host>/api/mcp), não só o origin')
+  }
   const issuerBaseUrl = env.AUTH0_ISSUER_BASE_URL
     ? parseUrl('AUTH0_ISSUER_BASE_URL', env.AUTH0_ISSUER_BASE_URL, isDev)
     : null
