@@ -92,7 +92,7 @@ function ResourceCard({ resource }: Props) {
 ## Módulos e Service Layer
 
 - **Importe só pelo `index.ts`** de outro módulo (`@/modules/resources`), nunca
-  `@/modules/resources/domain/...` — o ESLint (`no-restricted-imports`) barra.
+  `@/modules/resources/domain/...` — a regra ESLint `module-boundary` barra (alias ou caminho relativo).
 - **Service recebe `actor` primeiro** e chama o guard na 1ª linha:
 
 ```typescript

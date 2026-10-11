@@ -42,7 +42,7 @@ pequenos não devem ser empurrados para "evoluir depois".
    repositório por aggregate. Domain events são **opcionais** (só com consumidor real).
 
 4. **Regras de fronteira:**
-   1. Fora do módulo importa-se só `modules/<ctx>/index.ts` (ESLint `no-restricted-imports`),
+   1. Fora do módulo importa-se só `modules/<ctx>/index.ts` (regra ESLint `module-boundary` — alias e imports relativos),
       que exporta service, schemas, DTOs e as factories das bordas (`make<Ctx>Tools(service)`).
       Única exceção: `src/composition.ts` (instancia repositórios e monta services e bordas).
    2. Contexto fala com contexto pelo **service**, nunca pelo repositório.
