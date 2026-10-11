@@ -2,6 +2,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { requireScope, type AuthUser } from '@/shared/auth'
 import { isEnabled } from '@/shared/featureFlags'
 import { systemClock, type Clock } from '@/shared/kernel'
+import { logError } from '@/shared/logError'
 import type { IAuditLog } from './audit'
 import type { AnyTool } from './defineTool'
 import type { IRateLimiter } from './rateLimit'
@@ -30,8 +31,14 @@ export async function callTool(
 
   const result = await execute(tool, actor, args, deps)
 
-  if (!tool.annotations.readOnlyHint) {
-    const code = result.isError ? String(result._meta?.code ?? 'INTERNAL_ERROR') : undefined
+  if (!tool.annotations.readOnlyHint) await audit(tool, actor, result, deps)
+  return result
+}
+
+/** A escrita já aconteceu: falha da auditoria é logada, nunca devolvida como erro à LLM. */
+async function audit(tool: AnyTool, actor: AuthUser, result: CallToolResult, deps: CallToolDeps): Promise<void> {
+  const code = result.isError ? String(result._meta?.code ?? 'INTERNAL_ERROR') : undefined
+  try {
     await deps.audit.record({
       at: (deps.clock ?? systemClock).now().toISOString(),
       actorId: actor.id,
@@ -41,8 +48,9 @@ export async function callTool(
       outcome: result.isError ? 'error' : 'ok',
       ...(code ? { code } : {}),
     })
+  } catch (error) {
+    logError('mcp:audit', error)
   }
-  return result
 }
 
 async function execute(tool: AnyTool, actor: AuthUser, args: unknown, deps: CallToolDeps): Promise<CallToolResult> {

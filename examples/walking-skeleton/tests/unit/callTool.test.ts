@@ -111,3 +111,15 @@ describe('callTool', () => {
     spy.mockRestore()
   })
 })
+
+describe('callTool — auditoria indisponível', () => {
+  it('escrita já feita não vira erro se o audit.record falhar (loga e devolve o resultado)', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const failingAudit = { record: vi.fn(async () => Promise.reject(new Error('audit db down'))) }
+    const result = await callTool(tools, writer, 'create_thing', { title: 'Novo' }, { ...deps(), audit: failingAudit })
+    expect(result.isError).toBeFalsy()
+    expect(writeHandler).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledWith('[mcp:audit]', expect.objectContaining({ message: 'audit db down' }))
+    spy.mockRestore()
+  })
+})
