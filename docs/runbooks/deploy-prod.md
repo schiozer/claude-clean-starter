@@ -33,14 +33,18 @@ confere, acompanha o deploy e faz o smoke test.
    Verificar: `gh pr view <n> --json state,mergeCommit` → `state: MERGED`; anotar o `mergeCommit`.
 4. [R0] Acompanhar o deploy de Produção: `vercel ls <preencher: projeto Vercel> --prod --scope <preencher: team Vercel>`.
    Verificar: o deploy do `mergeCommit` chega a `Ready` (`Error` → [rollback.md](./rollback.md)).
-5. [R0] Smoke test em Prod: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: domínio de Prod>/` e `curl -s -o /dev/null -w '%{http_code}' -X POST https://<preencher: domínio de Prod>/api/mcp`.
-   Verificar: `200` na home e `401` no `/api/mcp` sem token.
-6. [R0] Observar erros por alguns minutos: `vercel logs <deploy-url> --scope <preencher: team Vercel>`.
+5. [R0] Conferir que o domínio de Prod serve **esse** deploy: `vercel inspect https://<preencher: domínio de Prod> --scope <preencher: team Vercel>`.
+   Verificar: o deploy servido é o do `mergeCommit`. Se é outro, há um `vercel rollback` ativo (a atribuição automática do domínio fica desligada) → passo 6; senão, pular o passo 6.
+6. [R2] Só com rollback ativo: promover o novo deploy, religando a atribuição automática: `vercel promote <deploy-do-mergeCommit> --scope <preencher: team Vercel>`.
+   Verificar: `vercel inspect https://<preencher: domínio de Prod>` mostra o deploy do `mergeCommit`.
+7. [R0] Smoke test em Prod: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: domínio de Prod>/` e `curl -si -X POST https://<preencher: domínio de Prod>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'`.
+   Verificar: `200` na home e `/api/mcp` sem token → `401` com `WWW-Authenticate` contendo `resource_metadata`.
+8. [R0] Observar erros por alguns minutos: `vercel logs <deploy-url> --scope <preencher: team Vercel>`.
    Verificar: sem pico de erros 5xx novos (havendo → [rollback.md](./rollback.md)).
 
 ## Verificação final
 
-- Deploy de Prod `Ready` no commit do merge; smoke test ok; logs sem erros novos.
+- Domínio de Prod servindo o deploy do commit do merge; smoke test ok; logs sem erros novos.
 - Humano avisado do resultado.
 
 ## Rollback

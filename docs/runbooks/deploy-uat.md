@@ -12,13 +12,14 @@ fazer o smoke test. **Não faz merge** — Prod é o [deploy-prod.md](./deploy-p
 
 ## Pré-condições
 
+- `bootstrap-ambientes.md` já executado (antes disso não há UAT a operar: push + PR seguem só as regras 5 e 8 do `CLAUDE.md`).
 - Trabalho commitado numa feature branch curta (`tipo/descricao`, [ADR-005](../adr/005-trunk-based-development.md)), nunca na `main`.
 - Migração aditiva, se houver, já aplicada no branch Neon de preview/UAT ([migracao-banco.md](./migracao-banco.md)).
 - Envs/flags necessárias já existem no ambiente Preview ([segredos-e-env.md](./segredos-e-env.md), [feature-flags.md](./feature-flags.md)).
 
 ## Pre-flight
 
-1. [R0] Conferir a conta `gh` ativa: `gh auth status --active` → `<preencher: conta do repo>` (regra 5 do `CLAUDE.md`; se divergir, `gh auth switch --user <conta>` e repetir).
+1. [R0] Conferir a conta `gh` ativa: `gh auth status --active` → `<preencher: conta do repo>` (regra 5 do `CLAUDE.md`; divergiu → parar e pedir ao humano a troca de conta).
 2. [R0] Conferir o scope Vercel: `vercel project ls --scope <preencher: team Vercel>` lista `<preencher: projeto Vercel>`.
 3. [R0] Conferir a branch: `git branch --show-current` ≠ `main` e `git status --porcelain` vazio.
 
@@ -36,12 +37,12 @@ fazer o smoke test. **Não faz merge** — Prod é o [deploy-prod.md](./deploy-p
    Verificar: o deploy mais recente da branch está `Ready`; anotar a `<preview-url>`.
 6. [R1] Apontar o alias estável do UAT para o preview: `vercel alias set <preview-url> <preencher: alias UAT, ex. projeto-uat.vercel.app> --scope <preencher: team Vercel>`.
    Verificar: `vercel alias ls --scope <preencher: team Vercel>` mostra o alias → `<preview-url>`.
-7. [R0] Smoke test no alias: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: alias UAT>/` e `curl -s -o /dev/null -w '%{http_code}' -X POST https://<preencher: alias UAT>/api/mcp`.
-   Verificar: `200` na home e `401` no `/api/mcp` sem token (o MCP está no ar e fail-closed).
+7. [R0] Smoke test no alias: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: alias UAT>/` e `curl -si -X POST https://<preencher: alias UAT>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'`.
+   Verificar: `200` na home e o header `WWW-Authenticate` com `resource_metadata` (é o 401 **do app**, fail-closed). Um 401 sem esse header vem da _Deployment Protection_ da Vercel → a exceção do alias UAT não está configurada ([bootstrap-ambientes.md](./bootstrap-ambientes.md)); parar.
 
 ## Verificação final
 
-- PR aberto e verde; alias do UAT apontando para o preview do PR; smoke test ok.
+- PR aberto e verde; alias do UAT apontando para o preview do PR; smoke test ok (home `200`, `/api/mcp` com `WWW-Authenticate` do app).
 - URL do UAT informada ao humano para o teste de aceite (site/celular).
 
 ## Rollback
