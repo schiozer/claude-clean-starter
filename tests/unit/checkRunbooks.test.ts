@@ -167,3 +167,15 @@ describe('checkCatalog', () => {
     expect(checkCatalog(join(dir, 'nao-existe'))[0]).toContain('diretório de runbooks não encontrado')
   })
 })
+
+describe('catálogo do template (docs/runbooks)', () => {
+  it('passa no modo normal', () => {
+    expect(checkCatalog(join(process.cwd(), 'docs/runbooks'))).toEqual([])
+  })
+
+  it('falha no modo estrito enquanto houver <preencher>', () => {
+    expect(checkCatalog(join(process.cwd(), 'docs/runbooks'), { strict: true }).join()).toContain(
+      'placeholder <preencher> pendente'
+    )
+  })
+})
