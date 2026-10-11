@@ -347,6 +347,7 @@ describe('/api/mcp', () => {
 
   beforeEach(async () => {
     process.env.APP_ENV = 'development'
+    process.env.RESOURCES_ENABLED = 'on'
     process.env.MCP_RESOURCE_URL = 'http://localhost/api/mcp'
     resourceRepository.clear()
     personalTokens.clear()
@@ -357,7 +358,13 @@ describe('/api/mcp', () => {
     })
   })
   afterEach(() => {
-    for (const k of ['APP_ENV', 'MCP_RESOURCE_URL', 'MCP_RESOURCES_READ', 'MCP_RESOURCES_WRITE'])
+    for (const k of [
+      'APP_ENV',
+      'RESOURCES_ENABLED',
+      'MCP_RESOURCE_URL',
+      'MCP_RESOURCES_READ',
+      'MCP_RESOURCES_WRITE',
+    ])
       delete process.env[k]
   })
 

@@ -29,7 +29,7 @@ const tools = [
 ]
 
 const writer = makeActor({ id: 'ana', tenantId: 't1', via: 'pat', scopes: ['things:read', 'things:write'] })
-const WRITE_ON = { MCP_RESOURCES_WRITE: 'on' }
+const WRITE_ON = { RESOURCES_ENABLED: 'on', MCP_RESOURCES_WRITE: 'on' }
 
 let audit: InMemoryAuditLog
 let rateLimiter: InMemoryRateLimiter
@@ -55,7 +55,7 @@ describe('callTool', () => {
   })
 
   it('flag de escrita desligada → NOT_FOUND e não executa nem audita', async () => {
-    const result = await callTool(tools, writer, 'create_thing', { title: 'Novo' }, deps({}))
+    const result = await callTool(tools, writer, 'create_thing', { title: 'Novo' }, deps({ RESOURCES_ENABLED: 'on' }))
     expect(result._meta).toEqual({ code: 'NOT_FOUND' })
     expect(writeHandler).not.toHaveBeenCalled()
     expect(audit.entries).toHaveLength(0)

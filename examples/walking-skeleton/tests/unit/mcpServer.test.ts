@@ -8,7 +8,7 @@ import { rpc } from '../helpers/mcpRequest'
 
 afterEach(() => vi.restoreAllMocks())
 
-const ENV = { MCP_RESOURCE_URL: 'http://localhost/api/mcp', APP_ENV: 'development' }
+const ENV = { RESOURCES_ENABLED: 'on', MCP_RESOURCE_URL: 'http://localhost/api/mcp', APP_ENV: 'development' }
 
 const listThings = defineTool({
   name: 'list_things',

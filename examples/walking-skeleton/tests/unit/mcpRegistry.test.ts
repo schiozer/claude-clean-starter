@@ -29,17 +29,17 @@ const both = makeActor({ scopes: ['things:read', 'things:write'] })
 
 describe('visibleTools', () => {
   it('escrita fica oculta com a flag desligada (padrão), mesmo com escopo', () => {
-    expect(names(visibleTools(tools, both, {}))).toEqual(['list_things'])
+    expect(names(visibleTools(tools, both, { RESOURCES_ENABLED: 'on' }))).toEqual(['list_things'])
   })
   it('flag ligada mas sem escopo → oculta', () => {
     const readOnly = makeActor({ scopes: ['things:read'] })
-    expect(names(visibleTools(tools, readOnly, { MCP_RESOURCES_WRITE: 'on' }))).toEqual(['list_things'])
+    expect(names(visibleTools(tools, readOnly, { RESOURCES_ENABLED: 'on', MCP_RESOURCES_WRITE: 'on' }))).toEqual(['list_things'])
   })
   it('flag ligada E escopo → visível', () => {
-    expect(names(visibleTools(tools, both, { MCP_RESOURCES_WRITE: 'on' }))).toEqual(['list_things', 'create_thing'])
+    expect(names(visibleTools(tools, both, { RESOURCES_ENABLED: 'on', MCP_RESOURCES_WRITE: 'on' }))).toEqual(['list_things', 'create_thing'])
   })
   it('flag de leitura desligada → leitura oculta', () => {
-    expect(names(visibleTools(tools, both, { MCP_RESOURCES_READ: 'off' }))).toEqual([])
+    expect(names(visibleTools(tools, both, { RESOURCES_ENABLED: 'on', MCP_RESOURCES_READ: 'off' }))).toEqual([])
   })
 })
 
