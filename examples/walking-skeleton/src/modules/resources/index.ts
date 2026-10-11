@@ -14,3 +14,4 @@ export {
 } from './application/dto'
 export { ResourceService } from './application/ResourceService'
 export { makeResourceHandlers } from './interfaces/http/handlers'
+export { makeResourceTools } from './interfaces/mcp/tools'
