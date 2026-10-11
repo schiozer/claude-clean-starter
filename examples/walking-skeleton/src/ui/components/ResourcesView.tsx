@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
-import { useResources } from '@/presentation/hooks/useResources'
-import { createResourceSchema } from '@/application/validators/resourceSchemas'
+import { useResources } from '@/ui/hooks/useResources'
+import { createResourceSchema } from '@/modules/resources/schemas'
 
 export function ResourcesView() {
   const { resources, error, loading, create } = useResources()

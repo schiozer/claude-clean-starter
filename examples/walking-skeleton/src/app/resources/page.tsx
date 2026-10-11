@@ -1,10 +1,10 @@
-import { isResourcesEnabled } from '@/shared/featureFlags'
-import { ResourcesView } from '@/presentation/components/ResourcesView'
+import { isEnabled } from '@/shared/featureFlags'
+import { ResourcesView } from '@/ui/components/ResourcesView'
 
 export const dynamic = 'force-dynamic'
 
 export default function ResourcesPage() {
-  if (!isResourcesEnabled()) {
+  if (!isEnabled('resources')) {
     return <main>Funcionalidade desativada.</main>
   }
   return <ResourcesView />
