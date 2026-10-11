@@ -23,6 +23,17 @@ function remoteJwks(issuer: string): JWTVerifyGetKey {
   return jwks
 }
 
+/**
+ * Sem RBAC o Auth0 emite qualquer `scope` que o cliente pedir. Vale só o que o papel do
+ * usuário concede (claim `permissions`, com "Add Permissions in the Access Token");
+ * claim ausente → nenhum escopo (fail-closed).
+ */
+function grantedScopes(scope: unknown, permissions: unknown): string[] {
+  if (!Array.isArray(permissions)) return []
+  const requested = typeof scope === 'string' ? scope.split(' ').filter(Boolean) : []
+  return requested.filter((s) => permissions.includes(s))
+}
+
 export class Auth0JwtVerifier implements IAccessTokenVerifier {
   private readonly issuer: string
   private readonly jwks: JWTVerifyGetKey
@@ -41,11 +52,10 @@ export class Auth0JwtVerifier implements IAccessTokenVerifier {
       })
       if (!payload.sub) throw new UnauthorizedError('Token sem sub')
       const tenant = payload[this.options.tenantClaim ?? 'tenant_id']
-      const scope = typeof payload.scope === 'string' ? payload.scope : ''
       return {
         id: payload.sub,
         tenantId: typeof tenant === 'string' && tenant ? tenant : payload.sub,
-        scopes: scope.split(' ').filter(Boolean),
+        scopes: grantedScopes(payload.scope, payload.permissions),
         via: 'oauth',
       }
     } catch (error) {
