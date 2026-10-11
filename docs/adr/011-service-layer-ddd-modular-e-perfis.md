@@ -70,8 +70,6 @@ pequenos não devem ser empurrados para "evoluir depois".
 - ➖ Services podem crescer demais; mitigação: dividir por subcontexto quando passar de
   ~10 métodos públicos ou misturar linguagens de negócio.
 - ➖ Mais um conceito para o time (perfil); mitigação: as skills leem e aplicam o perfil.
-- ➖ O walking skeleton fica no layout antigo até a entrega 2 da spec
-  `2026-10-10-arquitetura-agentica-mcp-design.md`.
 
 ## Alternativas Consideradas
 

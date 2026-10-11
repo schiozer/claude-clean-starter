@@ -196,7 +196,9 @@ describe('ResourceService', () => {
     await service.create(makeActor({ id: 'ana', scopes: write }), { title: 'Da Ana' })
     await service.create(makeActor({ id: 'bia', scopes: write }), { title: 'Da Bia' })
 
-    const result = await service.list(makeActor({ id: 'ana', scopes: ['resources:read'] }), { limit: 20 })
+    const result = await service.list(makeActor({ id: 'ana', scopes: ['resources:read'] }), {
+      limit: 20,
+    })
 
     expect(result.map((r) => r.title)).toEqual(['Da Ana'])
   })
@@ -232,7 +234,9 @@ describe('requireScope', () => {
   })
 
   it('passa quando o escopo está presente', () => {
-    expect(() => requireScope(makeActor({ scopes: ['resources:read'] }), 'resources:read')).not.toThrow()
+    expect(() =>
+      requireScope(makeActor({ scopes: ['resources:read'] }), 'resources:read')
+    ).not.toThrow()
   })
 })
 
@@ -274,10 +278,12 @@ const postReq = (body: unknown) =>
 
 describe('rota /api/resources (flag on)', () => {
   beforeEach(() => {
+    process.env.APP_ENV = 'development'
     process.env.RESOURCES_ENABLED = 'on'
     resourceRepository.clear()
   })
   afterEach(() => {
+    delete process.env.APP_ENV
     delete process.env.RESOURCES_ENABLED
   })
 
@@ -316,6 +322,8 @@ describe('rota /api/resources (flag off)', () => {
 })
 ```
 
+O login stub só existe com `APP_ENV=development`; sem ele a rota responde 401 — teste isso também.
+
 Dois cuidados que este teste ilustra: **(1)** afirmar `code` no corpo (não só o status)
 trava o contrato funcional/técnico; **(2)** com o flag off, verificar que a persistência
 **não** foi tocada — o gate corta antes de qualquer efeito.
@@ -332,30 +340,25 @@ automatizado (o `Auth0JwtVerifier` tem teste próprio, com JWKS local).
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { POST } from '@/app/api/mcp/route'
 import { resourceRepository, personalTokens } from '@/composition'
-
-const rpc = (method: string, params: unknown, token?: string) =>
-  new Request('http://localhost/api/mcp', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json, text/event-stream',
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  })
+import { rpc } from '../helpers/mcpRequest'
 
 describe('/api/mcp', () => {
   let readToken: string
 
   beforeEach(async () => {
-    process.env.MCP_RESOURCES_READ = 'on'
+    process.env.APP_ENV = 'development'
+    process.env.MCP_RESOURCE_URL = 'http://localhost/api/mcp'
     resourceRepository.clear()
     personalTokens.clear()
-    readToken = await personalTokens.issue({ userId: 'ana', tenantId: 't1', scopes: ['resources:read'] })
+    readToken = await personalTokens.issue({
+      userId: 'ana',
+      tenantId: 't1',
+      scopes: ['resources:read'],
+    })
   })
   afterEach(() => {
-    delete process.env.MCP_RESOURCES_READ
-    delete process.env.MCP_RESOURCES_WRITE
+    for (const k of ['APP_ENV', 'MCP_RESOURCE_URL', 'MCP_RESOURCES_READ', 'MCP_RESOURCES_WRITE'])
+      delete process.env[k]
   })
 
   it('sem token → 401 com WWW-Authenticate apontando o resource_metadata', async () => {
@@ -378,7 +381,9 @@ describe('/api/mcp', () => {
     const res = await POST(rpc('tools/call', { name: 'list_resources', arguments: {} }, readToken))
     const { result } = await res.json()
     expect(result.isError).toBeFalsy()
-    expect(result.structuredContent.items.map((r: { title: string }) => r.title)).toEqual(['Da Ana'])
+    expect(result.structuredContent.items.map((r: { title: string }) => r.title)).toEqual([
+      'Da Ana',
+    ])
   })
 })
 ```
