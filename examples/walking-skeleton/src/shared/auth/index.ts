@@ -11,3 +11,4 @@ export {
   type IssueTokenInput,
 } from './personalTokens'
 export { Auth0JwtVerifier, type Auth0JwtVerifierOptions } from './Auth0JwtVerifier'
+export { readBearerToken, CompositeTokenVerifier } from './bearer'
