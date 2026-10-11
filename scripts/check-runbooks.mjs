@@ -28,7 +28,8 @@ const META_KEYS = ['Responsável', 'Última verificação', 'Ambientes']
 const STEP_SECTIONS = ['Pre-flight', 'Passos', 'Rollback']
 const VERIFY_SECTIONS = ['Passos', 'Rollback']
 const ENVIRONMENTS = ['Dev', 'UAT', 'Prod']
-const PLACEHOLDER = '<preencher'
+// `<preencher`: entrada do projeto; `<gerado`: saída do bootstrap, gravada após executá-lo.
+const PLACEHOLDERS = ['<preencher', '<gerado']
 
 function parse(markdown) {
   const meta = {}
@@ -91,6 +92,9 @@ function checkMeta(meta, errors) {
 }
 
 function checkSections(sections, errors) {
+  for (const { title } of sections) {
+    if (!SECTIONS.includes(title)) errors.push(`seção desconhecida: ## ${title}`)
+  }
   const titles = sections.map((s) => s.title).filter((t) => SECTIONS.includes(t))
   const missing = SECTIONS.filter((t) => !titles.includes(t))
   for (const title of missing) errors.push(`seção ausente: ## ${title}`)
@@ -100,6 +104,14 @@ function checkSections(sections, errors) {
 }
 
 function checkSteps(sections, errors) {
+  for (const section of sections.filter((s) => SECTIONS.includes(s.title))) {
+    if (STEP_SECTIONS.includes(section.title)) continue
+    if (section.lines.some(({ text, code }) => !code && /^\d+\.\s/.test(text))) {
+      errors.push(
+        `## ${section.title}: item numerado fora de Pre-flight/Passos/Rollback (use lista com "-")`
+      )
+    }
+  }
   for (const section of sections.filter((s) => STEP_SECTIONS.includes(s.title))) {
     const items = steps(section)
     if (!items.length) errors.push(`## ${section.title}: nenhum passo numerado`)
@@ -122,7 +134,11 @@ function checkSteps(sections, errors) {
 
 function checkStrict(markdown, meta, errors) {
   markdown.split(/\r?\n/).forEach((line, index) => {
-    if (line.includes(PLACEHOLDER)) errors.push(`linha ${index + 1}: placeholder <preencher> pendente`)
+    for (const placeholder of PLACEHOLDERS) {
+      if (line.includes(placeholder)) {
+        errors.push(`linha ${index + 1}: placeholder ${placeholder}> pendente`)
+      }
+    }
   })
   const date = meta['Última verificação']
   if (date && !isIsoDate(date)) errors.push(`Última verificação inválida: "${date}" (use AAAA-MM-DD)`)
