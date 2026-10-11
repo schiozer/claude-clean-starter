@@ -114,7 +114,7 @@ src/
 
 **Regras de fronteira:**
 
-1. Fora do módulo, importa-se **só** o `index.ts` (forçado por `no-restricted-imports` no ESLint).
+1. Fora do módulo, importa-se **só** o `index.ts` (forçado pela regra ESLint `module-boundary`, para alias e relativos).
 2. Um contexto fala com outro **pelo service** do outro, nunca pelo repositório.
 3. `interfaces/*` não contém regra de negócio nem autorização: valida, chama o service, traduz.
 4. No MVP, `domain/` e `infrastructure/` não existem; o service acessa dados direto.
@@ -230,7 +230,7 @@ No `examples/walking-skeleton/`:
 - Tools `list_resources` (flag ligada por padrão) e `create_resource` (flag **desligada** por padrão).
 - `Auth0JwtVerifier`, `PersonalTokenVerifier` (repositório in-memory no skeleton) e o
   `StubAuthProvider` atual adaptado para produzir `AuthUser` com escopos no Dev local.
-- Regra `no-restricted-imports` no ESLint do exemplo.
+- Regra ESLint `module-boundary` no exemplo (`eslint-rules/`).
 
 A entrega 2 terá sua própria spec curta de refinamento (se necessário) e seu próprio plano.
 

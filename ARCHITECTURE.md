@@ -88,7 +88,7 @@ src/
 
 ### Regras de fronteira
 
-1. Fora do módulo, importa-se **só** `modules/<ctx>/index.ts` (ESLint `no-restricted-imports`).
+1. Fora do módulo, importa-se **só** `modules/<ctx>/index.ts` (regra ESLint `module-boundary` — alias e imports relativos).
    O `index.ts` exporta o service, schemas, DTOs e as **factories das bordas**
    (`make<Ctx>Tools(service)`, `make<Ctx>Handlers(service, resolveActor)`). **Única exceção:**
    `src/composition.ts`, que importa `infrastructure/` para instanciar repositórios, monta os

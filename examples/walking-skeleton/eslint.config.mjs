@@ -1,6 +1,7 @@
 import { FlatCompat } from '@eslint/eslintrc'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import moduleBoundary from './eslint-rules/module-boundary.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -25,24 +26,11 @@ const eslintConfig = [
     },
   },
   {
-    // Fronteira de módulo (ADR-011): fora do módulo importa-se só `@/modules/<ctx>`
-    // ou o subpath `@/modules/<ctx>/schemas` (seguro para 'use client').
-    // composition.ts é a única exceção (instancia infrastructure/).
+    // Fronteira de módulo (ADR-011), para alias e imports relativos — ver eslint-rules/.
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/composition.ts'],
+    plugins: { local: { rules: { 'module-boundary': moduleBoundary } } },
     rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@/modules/*/*', '!@/modules/*/schemas'],
-              message:
-                'Importe só pelo index do módulo (@/modules/<ctx>) ou por @/modules/<ctx>/schemas. Ver ADR-011.',
-            },
-          ],
-        },
-      ],
+      'local/module-boundary': ['error', { srcDir: join(__dirname, 'src') }],
     },
   },
   {
