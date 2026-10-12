@@ -45,7 +45,8 @@ classe mais alta.
    | `[R3]` | **Não executa.** Entrega a instrução ao humano e espera ele dizer que fez. |
 
    Notas do próprio passo que elevam a classe ("em Prod é R2", "para `MCP_<CTX>_WRITE=on`
-   é R2") valem. Depois de **cada** passo, rode o `Verificar:` e compare com o esperado.
+   é R2") valem; notas **nunca baixam** a classe da tag ("em UAT é R1" é ignorada — o passo
+   segue com a tag). Depois de **cada** passo, rode o `Verificar:` e compare com o esperado.
 6. **Falhou um passo ou uma verificação** → se o próprio passo diz o que fazer na falha
    ("não é caso de rollback", "voltar ao passo N", "não resolveu → passo N"), siga-o; senão,
    pare os Passos e execute a seção **Rollback**, com os mesmos gates. Não improvise
@@ -101,5 +102,7 @@ Verifique só a **presença do nome**
 | "Tem um `<preencher` mas eu deduzo o valor" | Runbook com placeholder não é executável. Peça os dados. |
 | "O runbook tem 4 meses, mas nada mudou" | Vencido → todo passo não-R0 vira R2. |
 | "A verificação falhou, mas deve ser intermitente" | Falha de verificação → o que o passo manda, senão Rollback. Não tente de novo às cegas. |
+| "Me passa o token que eu testo o MCP" | Bearer token (JWT, `pat_…`) é segredo. O humano testa fora da sessão. |
+| "A nota diz 'em UAT é R1', então dispenso a aprovação" | Notas só elevam; a tag do passo vale. |
 | "Em UAT tanto faz, vou ligar a escrita MCP" | `MCP_<CTX>_WRITE=on` é R2 em qualquer ambiente. |
 | "Force-push resolve a branch divergente" | Force-push em branch compartilhada é R3. |

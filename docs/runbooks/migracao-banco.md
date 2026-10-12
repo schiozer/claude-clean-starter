@@ -40,9 +40,9 @@ migração ou a restauração do branch de backup.
 
 ## Rollback
 
-1. [R1] Dev/UAT: aplicar a migração inversa (`drizzle/NNNN+1_reverte_nome.sql`, revisada no PR). Nunca `neonctl branches reset … --parent` no `uat`/`dev`: o pai é `main` e o reset copiaria dados de Prod.
+1. [R1] Dev/UAT: aplicar a migração inversa (`drizzle/NNNN+1_reverte_nome.sql`, revisada no PR). Nunca resetar `uat`/`dev` a partir do pai: o pai é `main` e o reset copiaria dados de Prod.
    Verificar: o schema voltou ao estado anterior no branch.
-2. [R2] Prod: preferir a migração inversa aditiva por PR; em dano de dados, restaurar do backup: `neonctl branches restore main backup-<AAAA-MM-DD>-NNNN --project-id <preencher: id do projeto Neon>` (ou point-in-time: `main@<timestamp>`).
+2. [R2] Prod: preferir a migração inversa aditiva por PR; em dano de dados, restaurar do backup: `neonctl branches restore main backup-<AAAA-MM-DD>-NNNN --preserve-under-name main-pre-restore-<AAAA-MM-DD> --project-id <preencher: id do projeto Neon>` (ou point-in-time: `main@<timestamp>`); o `--preserve-under-name` guarda o estado anterior ao restore, para desfazê-lo se preciso.
    Verificar: dados/schema conferidos no branch `main` e Prod saudável.
 
 ## Registro

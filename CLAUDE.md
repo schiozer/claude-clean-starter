@@ -77,11 +77,12 @@ Architecture Decision Records em `docs/adr/`. Quando tomar decisão arquitetural
 Se você trabalha com **múltiplas contas git/gh** na mesma máquina (ex.: pessoal e
 corporativa), a conta ativa **assina o merge** e pode afetar deploys e permissões.
 
-**Regra genérica** — antes de **qualquer** `git push`, `gh pr merge` ou `gh pr create`:
+**Regra genérica** — antes de **qualquer** `git push` ou `gh pr create` (e, do lado humano,
+antes do merge — o agente nunca roda `gh pr merge`, ver regra 10):
 
 1. Verifique a conta ativa (`gh auth status --active`).
 2. Se não for a conta correta para **este** repositório, troque-a.
-3. Execute a operação (push/merge/PR).
+3. Execute a operação (push/PR; o merge é do humano).
 4. Restaure a conta padrão da sua máquina ao final, se aplicável.
 
 > Preencha as contas concretas do SEU ambiente aqui ao adotar o template.

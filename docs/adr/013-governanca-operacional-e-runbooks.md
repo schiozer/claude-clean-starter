@@ -40,13 +40,18 @@ Todo passo numerado de Pre-flight, Passos e Rollback leva **exatamente uma** tag
 
 | Classe | Exemplos | Gate |
 | --- | --- | --- |
-| `[R0]` leitura | status de deploy, logs, listar envs (só **nomes**), listar flags, `gh pr checks`, smoke test GET | Livre em qualquer ambiente |
-| `[R1]` mutação reversível fora de Prod | push de branch / abrir PR (dispara UAT), env var **não-secreta** em Dev/UAT, flag em Dev/UAT (exceto escrita MCP), reset de branch Neon de Dev/preview, migração em Dev/preview | Agente executa e **registra** |
+| `[R0]` leitura | status de deploy, logs, listar envs (só **nomes**), listar flags, `gh pr checks`, smoke test sem credencial | Livre em qualquer ambiente |
+| `[R1]` mutação reversível fora de Prod | push de branch / abrir PR (dispara UAT), env var **não-secreta** em Dev/UAT, flag em Dev/UAT (exceto escrita MCP), migração em Dev/UAT (o reset de `dev`/`uat` a partir do pai copiaria dados de Prod — é R2) | Agente executa e **registra** |
 | `[R2]` alto impacto | qualquer mutação em Prod; criar/rotacionar/remover **segredo** em qualquer ambiente; migração em Prod; operação destrutiva (drop, delete de branch/projeto/tenant/cliente); ligar **escrita MCP** (`MCP_<CTX>_WRITE`) em qualquer ambiente; ligar DCR em Prod; promover/reverter deploy de Prod | **Aprovação humana explícita por operação** (item 3) |
 | `[R3]` proibido ao agente | merge na `main` (= deploy Prod), push direto na `main`, force-push em branch compartilhada, ler/imprimir valor de segredo, desligar proteções (branch protection, required checks, RBAC, Deployment Protection, consentimento do DCR) | Agente **recusa**; o passo é escrito como instrução ao humano (`[R3] Humano: …`) |
 
 **Regra de elevação:** passo `[R1]` executado contra **Prod** vira R2; qualquer passo não-R0
 de runbook **vencido** (item 4) vira R2. Na dúvida entre duas classes, vale a mais alta.
+Notas do passo só **elevam** ("em Prod é R2"); nunca baixam a classe da tag — um passo
+que vale para UAT e Prod leva a tag do ambiente mais arriscado. O validador impõe a classe
+mínima de comandos conhecidos (`gh pr merge`, `vercel env pull` e force-push só em
+`[R3] Humano:`; `vercel rollback`/`promote`, `neonctl branches delete|restore|reset`, migração
+em `.env.prod` no mínimo `[R2]`) e recusa mais de uma tag por passo.
 
 ### 3. Protocolo de aprovação R2
 
@@ -61,7 +66,8 @@ ambígua = não. Negada a aprovação, o agente para e registra "interrompido po
 - **Pre-flight de identidade** antes de qualquer R1+: conta `gh` ativa (regra 5 do
   `CLAUDE.md`), team/scope Vercel, projeto e branch Neon, tenant Auth0 — todos do
   ambiente-alvo, conforme os valores declarados no runbook. Divergência → para.
-- **Segredos:** o agente nunca vê nem imprime o valor. O humano o digita no dashboard ou
+- **Segredos:** o agente nunca vê nem imprime o valor — isso inclui **bearer tokens** (JWT
+  OAuth, PAT `pat_…`) usados para testar o MCP. O humano o digita no dashboard ou
   rodando `vercel env add <NOME> <ambiente>` num terminal separado, **fora da sessão do
   agente** (nunca pelo prefixo `!`, cuja saída cai no contexto); o agente verifica só a
   **presença do nome**. Nunca em

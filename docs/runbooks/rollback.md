@@ -26,9 +26,9 @@ não volta por aqui: migração é sempre aditiva e o reverso é uma nova migra�
 
 1. [R0] Diagnosticar: `vercel logs <deploy-url> --scope <preencher: team Vercel>` e o PR/commit do deploy suspeito.
    Verificar: a feature/commit suspeito está identificado (ex.: erros só em `/api/<ctx>`).
-2. [R2] Desligar a feature pelo kill switch `<CTX>_ENABLED=off` no ambiente afetado, via [feature-flags.md](./feature-flags.md) (em UAT é R1; desliga também as tools MCP da feature).
+2. [R2] Desligar a feature pelo kill switch `<CTX>_ENABLED=off` no ambiente afetado, via [feature-flags.md](./feature-flags.md) (desliga também as tools MCP da feature).
    Verificar: `/api/<ctx>` responde `404` e o erro parou nos logs. Resolveu → ir para a Verificação final; não resolveu → passo 3 (é o fluxo previsto, **não** é falha que dispara o Rollback deste runbook).
-3. [R2] Promover o deploy anterior saudável: `vercel rollback <deploy-anterior> --scope <preencher: team Vercel>` (UAT: reapontar o alias, R1, como no [deploy-uat.md](./deploy-uat.md)).
+3. [R2] Promover o deploy anterior saudável: `vercel rollback <deploy-anterior> --scope <preencher: team Vercel>` (em UAT, use o Rollback do [deploy-uat.md](./deploy-uat.md), que reaponta o alias).
    Verificar: `vercel inspect https://<preencher: domínio de Prod> --scope <preencher: team Vercel>` mostra o deploy anterior servindo e o smoke test passa. Atenção: após `vercel rollback`, a Vercel **desliga a atribuição automática** do domínio — novos deploys de Prod não entram no ar até o passo 6.
 4. [R1] Abrir o PR de revert: `git fetch origin && git switch -c revert/<sha> origin/main && git revert <sha>` (commit de merge: `git revert -m 1 <sha>`) e `git push -u origin revert/<sha> && gh pr create --base main --fill`.
    Verificar: `gh pr checks <n> --watch` verde.
