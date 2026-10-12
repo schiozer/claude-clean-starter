@@ -295,7 +295,7 @@ fora de histórico, e revisão do usuário.
 - [x] `ddd-service-development` existe; `post-mvp-development` removida; nenhuma referência órfã.
 - [x] `mvp-development` usa `modules/` + service enxuto + MCP e recusa em `completo-direto`.
 - [x] `docs/guides/mcp-guide.md` explica conexão do ChatGPT, setup do Auth0 e PAT.
-- [ ] Lint/format da raiz passando; entregue via PR (regra 8).
+- [x] Lint/format da raiz passando; entregue via PR (regra 8).
 
 **Entrega 2**
 - [ ] Walking skeleton migrado para `modules/resources/`; testes existentes adaptados e passando.

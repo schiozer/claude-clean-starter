@@ -1,12 +1,7 @@
 # Guia de Validação com Zod
 
-**Última Atualização**: 2026-07-20  
-**Versão**: 1.0.0
-
-
-> ⚠️ Exemplos ainda no layout antigo (use-cases, `src/presentation/`). O modelo vigente é
-> módulos + `<Ctx>Service` ([ADR-011](../adr/011-service-layer-ddd-modular-e-perfis.md)); este guia
-> será migrado junto com o walking skeleton (entrega 2 da spec da arquitetura agêntica).
+**Última Atualização**: 2026-10-10
+**Versão**: 2.0.0
 
 ---
 
@@ -92,7 +87,8 @@ if (!result.success) {
 ```
 
 **Quando usar**:
-- `parse()`: em API routes (throw erro imediatamente)
+- `parse()`: nas bordas do servidor (handler REST, tool MCP) — o `ZodError` sobe e a
+  fronteira de erro o traduz (ver [error-handling-guide](./error-handling-guide.md))
 - `safeParse()`: em formulários (mostrar erros inline)
 
 ---
@@ -384,148 +380,152 @@ z.setErrorMap(zodI18nMap)
 
 ---
 
-## Casos de Uso neste projeto
+## Zod neste projeto: um schema, três bordas
 
-### Formulário de Criação de Programa
+Os schemas de um contexto moram em **`src/modules/<ctx>/application/schemas.ts`** e são
+exportados pelo `index.ts` do módulo. O **mesmo** schema valida a entrada na UI, no
+handler REST e na tool MCP — e o `<Ctx>Service` recebe o tipo inferido
+([ADR-011](../adr/011-service-layer-ddd-modular-e-perfis.md)).
 
-```typescript
-// src/shared/validators/programSchemas.ts
-import { z } from 'zod'
-
-export const createProgramSchema = z.object({
-  title: z.string()
-    .min(3, 'Título deve ter pelo menos 3 caracteres')
-    .max(100, 'Título muito longo'),
-  
-  description: z.string()
-    .max(1000, 'Descrição muito longa')
-    .nullable(),
-  
-  duration_weeks: z.number()
-    .int('Duração deve ser número inteiro')
-    .positive('Duração deve ser positiva')
-    .nullable(),
-  
-  is_free: z.boolean(),
-  
-  price_brl: z.number()
-    .nonnegative('Preço não pode ser negativo')
-    .nullable(),
-  
-  release_mode: z.enum(['total', 'time_based', 'completion_based'], {
-    errorMap: () => ({ message: 'Modo de liberação inválido' })
-  })
-}).refine(
-  data => data.is_free || (data.price_brl !== null && data.price_brl > 0),
-  {
-    message: 'Programa pago deve ter preço válido',
-    path: ['price_brl']
-  }
-)
-
-export type CreateProgramDTO = z.infer<typeof createProgramSchema>
+```
+UI (safeParse, erros inline) ─┐
+REST handler (parse) ─────────┼──► createResourceSchema ──► ResourceService.create(actor, input)
+Tool MCP (parse + JSON Schema)┘
 ```
 
-### Usar em Componente React
+### Schemas do módulo
 
 ```typescript
-// src/presentation/components/dashboard/ProgramFormModal.tsx
-import { useState } from 'react'
-import { createProgramSchema } from '@/shared/validators/programSchemas'
+// src/modules/resources/application/schemas.ts
 import { z } from 'zod'
 
-export function ProgramFormModal() {
-  const [formData, setFormData] = useState({
-    title: '',
-    description: null,
-    duration_weeks: null,
-    is_free: true,
-    price_brl: null,
-    release_mode: 'total'
-  })
-  
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  
-  const handleSubmit = (e: React.FormEvent) => {
+export const createResourceSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(3, 'Título deve ter de 3 a 100 caracteres')
+    .max(100, 'Título deve ter de 3 a 100 caracteres')
+    .describe('Título do recurso'),
+})
+
+export const listResourcesSchema = z.object({
+  limit: z.number().int().min(1).max(50).default(20).describe('Quantidade máxima (≤ 50)'),
+  cursor: z.string().optional().describe('Cursor devolvido pela página anterior'),
+})
+
+export type CreateResourceInput = z.infer<typeof createResourceSchema>
+export type ListResourcesInput = z.infer<typeof listResourcesSchema>
+```
+
+Três regras que valem para todo schema de entrada:
+
+- **Nunca** inclua `ownerId`, `tenantId` ou `userId` no schema de entrada: quem age vem do
+  `actor`, não do input (a LLM ou o cliente não escolhem de quem é o dado).
+- Paginação com `limit` ≤ 50 e `cursor` — saída pequena é UX para a LLM também.
+- `.describe()` nos campos: vira a descrição do parâmetro no JSON Schema que a tool MCP
+  publica, e ajuda a LLM a preencher certo.
+
+> **Zod valida forma; o domínio valida regra.** O schema barra o óbvio cedo (tipo,
+> tamanho). A invariante de negócio continua no Value Object (`Title.of`) ou no aggregate
+> — é ela que vale quando o service é chamado por qualquer borda (Cron incluso).
+
+### Saída também é contrato (DTO)
+
+```typescript
+// src/modules/resources/application/dto.ts
+export const resourceDTOSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  ownerId: z.string(),
+  createdAt: z.string().datetime(),
+})
+export type ResourceDTO = z.infer<typeof resourceDTOSchema>
+```
+
+O service **nunca** devolve entidade, só DTO. O schema de saída serve de `outputSchema`
+na tool MCP e de tipo na UI.
+
+### Na UI (formulário)
+
+```typescript
+// src/ui/components/ResourceForm.tsx
+import { useState } from 'react'
+import { createResourceSchema } from '@/modules/resources'
+import { useResources } from '@/ui/hooks/useResources'
+
+export function ResourceForm() {
+  const { create } = useResources()
+  const [title, setTitle] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setErrors({})
-    
-    try {
-      const validated = createProgramSchema.parse(formData)
-      // Dados válidos, enviar para API
-      createProgram(validated)
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const fieldErrors: Record<string, string> = {}
-        error.errors.forEach(err => {
-          const field = err.path.join('.')
-          fieldErrors[field] = err.message
-        })
-        setErrors(fieldErrors)
-      }
+    const parsed = createResourceSchema.safeParse({ title })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Dados inválidos')
+      return
     }
+    setError(null)
+    if (await create(parsed.data.title)) setTitle('')
   }
-  
+
   return (
     <form onSubmit={handleSubmit}>
-      <input 
-        name="title"
-        value={formData.title}
-        onChange={e => setFormData({ ...formData, title: e.target.value })}
-      />
-      {errors.title && <span className="error">{errors.title}</span>}
-      
-      {/* ... outros campos */}
-      
+      <label htmlFor="title">Título</label>
+      <input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
+      {error && <span role="alert">{error}</span>}
       <button type="submit">Salvar</button>
     </form>
   )
 }
 ```
 
-### Usar em API Route
+> A UI só pode importar **schemas e DTOs** do módulo (código puro, sem servidor). Service,
+> repositórios e bordas ficam no servidor.
+
+### No handler REST
 
 ```typescript
-// src/presentation/app/api/programs/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { createProgramSchema } from '@/shared/validators/programSchemas'
-import { z } from 'zod'
-
-export async function POST(req: NextRequest) {
+// src/modules/resources/interfaces/http/handlers.ts (trecho)
+async POST(req: Request): Promise<Response> {
   try {
-    const body = await req.json()
-    
-    // Validar
-    const dto = createProgramSchema.parse(body)
-    
-    // Processar
-    const program = await createProgram(dto)
-    
-    return NextResponse.json(program, { status: 201 })
+    const actor = await resolveActor(req)
+    const input = createResourceSchema.parse(await req.json())
+    return Response.json(await service.create(actor, input), { status: 201 })
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { 
-          error: 'Dados inválidos',
-          details: error.errors
-        },
-        { status: 400 }
-      )
-    }
-    
-    return NextResponse.json(
-      { error: 'Erro interno' },
-      { status: 500 }
-    )
+    return handleApiError(error, 'api/resources:POST') // ZodError → 400 VALIDATION_ERROR
   }
 }
 ```
 
+Nada de `try/catch` específico para `ZodError` no handler: `handleApiError` já devolve
+`{ error, code: 'VALIDATION_ERROR' }` com a primeira mensagem do schema.
+
+### Na tool MCP
+
+```typescript
+// src/modules/resources/interfaces/mcp/tools.ts (trecho)
+defineTool({
+  name: 'create_resource',
+  description: 'Cria um recurso com o título informado.',
+  input: createResourceSchema,
+  scope: 'resources:write',
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+  flag: 'mcp.resources.write',
+  handler: (actor, input) => service.create(actor, input),
+})
+```
+
+O `defineTool` usa o schema duas vezes: converte-o em **JSON Schema** para o `tools/list`
+(é o que a LLM vê) e faz o `parse` dos `arguments` antes do handler. Input inválido vira
+`isError: true` com a mensagem do schema — acionável para a LLM.
+
 ---
 
-## React Hook Form + Zod (Pós-MVP)
+## React Hook Form + Zod (quando o formulário crescer)
 
-Para formulários complexos, combinar com React Hook Form:
+Para formulários com muitos campos, combine com React Hook Form — o schema continua o
+mesmo do módulo:
 
 ```bash
 npm install react-hook-form @hookform/resolvers
@@ -534,30 +534,20 @@ npm install react-hook-form @hookform/resolvers
 ```typescript
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { createProgramSchema } from '@/shared/validators/programSchemas'
+import { createResourceSchema, type CreateResourceInput } from '@/modules/resources'
 
-export function ProgramForm() {
+export function ResourceForm({ onSubmit }: { onSubmit: (data: CreateResourceInput) => void }) {
   const {
     register,
     handleSubmit,
-    formState: { errors }
-  } = useForm({
-    resolver: zodResolver(createProgramSchema)
-  })
-  
-  const onSubmit = (data) => {
-    // Dados já validados!
-    createProgram(data)
-  }
-  
+    formState: { errors },
+  } = useForm<CreateResourceInput>({ resolver: zodResolver(createResourceSchema) })
+
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
-      <input {...register('title')} />
-      {errors.title && <span>{errors.title.message}</span>}
-      
-      <input type="number" {...register('price_brl', { valueAsNumber: true })} />
-      {errors.price_brl && <span>{errors.price_brl.message}</span>}
-      
+      <label htmlFor="title">Título</label>
+      <input id="title" {...register('title')} />
+      {errors.title && <span role="alert">{errors.title.message}</span>}
       <button type="submit">Salvar</button>
     </form>
   )
@@ -568,14 +558,17 @@ export function ProgramForm() {
 
 ## Dicas e Boas Práticas
 
-### 1. Schemas em Arquivos Separados
+### 1. Schemas por módulo
 
 ```
-src/shared/validators/
-  ├── programSchemas.ts
-  ├── lessonSchemas.ts
-  └── exerciseSchemas.ts
+src/modules/
+  ├── resources/application/schemas.ts
+  ├── billing/application/schemas.ts
+  └── ...
 ```
+
+Um módulo não importa o `schemas.ts` interno de outro: importa pelo `index.ts`
+(`@/modules/billing`).
 
 ### 2. Reutilizar Schemas
 
@@ -608,16 +601,11 @@ const createLessonSchema = z.object({
 })
 ```
 
-### 4. Performance
+### 4. Erros de validação não são bugs
 
-Zod é rápido, mas para arrays grandes use `preprocess`:
-
-```typescript
-const schema = z.preprocess(
-  val => JSON.parse(val), // pré-processar
-  z.array(z.string())     // validar
-)
-```
+`ZodError` é erro **funcional**: vira 400 no REST e `isError: true` no MCP, e **não** vai
+para o log (ver [ADR-009](../adr/009-erros-funcional-vs-tecnico.md)). Escreva as mensagens
+em pt-BR e acionáveis — elas chegam ao usuário e à LLM.
 
 ---
 
@@ -662,7 +650,8 @@ const partialSchema = schema.pick({ name: true })
 
 **Zod é essencial neste projeto para**:
 - ✅ Validar formulários (frontend)
-- ✅ Validar API payloads (backend)
+- ✅ Validar payloads REST e `arguments` de tools MCP (backend) — com o mesmo schema
+- ✅ Publicar o JSON Schema das tools MCP para a LLM
 - ✅ Inferir tipos TypeScript automaticamente
 - ✅ Mensagens de erro customizáveis
 - ✅ Código type-safe e confiável

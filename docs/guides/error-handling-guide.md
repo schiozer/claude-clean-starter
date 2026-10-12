@@ -1,12 +1,7 @@
 # Guia de Tratamento de Erros
 
-**Última Atualização**: 2026-09-06
-**Versão**: 2.0.0
-
-
-> ⚠️ Exemplos ainda no layout antigo (use-cases, `src/presentation/`). O modelo vigente é
-> módulos + `<Ctx>Service` ([ADR-011](../adr/011-service-layer-ddd-modular-e-perfis.md)); este guia
-> será migrado junto com o walking skeleton (entrega 2 da spec da arquitetura agêntica).
+**Última Atualização**: 2026-10-10
+**Versão**: 3.0.0
 
 ---
 
@@ -16,7 +11,8 @@ Este guia estabelece o padrão de erros do starter. Ele é **auto-contido**: tod
 código citado existe em `examples/walking-skeleton/src/shared/`. Os pilares são:
 
 - **Hierarquia enxuta** (`AppError` + subclasses) — `errors.ts`.
-- **Uma fronteira única** que converte erro em resposta HTTP — `handleApiError`.
+- **Uma fronteira por borda** que converte erro no formato dela — `handleApiError`
+  (REST) e o tradutor de erros do servidor MCP (`toToolError`).
 - **Um sink central de log** — `logError` (o único ponto autorizado a chamar
   `console`).
 - **Taxonomia funcional vs. técnico** — decide o que loga e como a UI reage.
@@ -68,13 +64,7 @@ export class UnauthorizedError extends AppError {
     super(message, 'UNAUTHORIZED', 401)
   }
 }
-```
 
-**Como estender.** Precisa de um novo caso de negócio? Crie uma subclasse que fixe
-`code` e `statusCode` — nunca espalhe strings de código pelo app. Exemplo de um
-`ForbiddenError` (403, funcional):
-
-```typescript
 export class ForbiddenError extends AppError {
   constructor(message = 'Acesso negado') {
     super(message, 'FORBIDDEN', 403)
@@ -82,15 +72,28 @@ export class ForbiddenError extends AppError {
 }
 ```
 
-**Onde lançar.** As regras vivem na entidade (`Resource.validate()` lança
-`DomainError`) e no use-case/guard (`requireUser` lança `UnauthorizedError`). A UI e
-a rota **não** replicam essas checagens — elas confiam na fronteira.
+**Como estender.** Precisa de um novo caso de negócio? Crie uma subclasse que fixe
+`code` e `statusCode` — nunca espalhe strings de código pelo app.
+
+**Onde lançar** — cada camada tem o seu erro:
+
+| Onde | Lança | Exemplo |
+|---|---|---|
+| Value Object / aggregate (`domain/`) | `DomainError` | `Title.of('ab')`, `resource.publish()` já publicado |
+| Borda, ao resolver identidade | `UnauthorizedError` (401) | `resolveActor(req)` sem sessão/token válido |
+| Guard no service (`shared/auth`) | `ForbiddenError` (403) | `requireScope(actor, 'resources:write')`, `assertOwnership(actor, ownerId)` |
+| Service, ao buscar por id | `NotFoundError` (404) | recurso inexistente **ou de outro tenant** |
+| Schema Zod na borda | `ZodError` (vira 400) | `createResourceSchema.parse(body)` |
+
+A UI e as bordas **não** replicam essas checagens — elas confiam no service. Não
+diferencie "não existe" de "é de outro tenant" no erro: os dois são `NOT_FOUND`, para não
+vazar a existência de dados alheios.
 
 ---
 
 ## A Fronteira: `handleApiError`
 
-Toda API Route termina o `catch` chamando **uma** função. Ela é a única que sabe
+Todo handler REST termina o `catch` chamando **uma** função. Ela é a única que sabe
 traduzir erro em `Response`, e é a única que decide o que vai para o log.
 
 ```typescript
@@ -122,21 +125,54 @@ de entrada inválida ou regra de negócio — ruído se fossem para o log. Só o
 inesperado (o 500 genuíno) chama `logError`. Isso mantém o log limpo o bastante para
 que cada linha nele seja um bug de verdade.
 
-**Uso na rota** — sempre com um `context` que identifique a origem
-(`'<área>:<método>'`), para que o log diga de onde veio:
+**Uso no handler** — sempre com um `context` que identifique a origem
+(`'<área>:<método>'`), para que o log diga de onde veio. O handler é fino: resolve o
+`actor`, valida, chama o service e deixa qualquer erro cair no `catch`:
 
 ```typescript
-// src/app/api/resources/route.ts
-export async function POST(req: Request): Promise<Response> {
-  try {
-    ensureEnabled()
-    const user = requireUser(await authProvider.getUser(req))
-    const dto = createResourceSchema.parse(await req.json())
-    const resource = await new CreateResourceUseCase(resourceRepository).execute(dto, user.id)
-    return Response.json(resource, { status: 201 })
-  } catch (error) {
-    return handleApiError(error, 'api/resources:POST')
+// src/modules/resources/interfaces/http/handlers.ts
+export const makeResourceHandlers = (service: ResourceService, resolveActor: ResolveActor) => ({
+  async POST(req: Request): Promise<Response> {
+    try {
+      ensureEnabled('resources')
+      const actor = await resolveActor(req) // sem sessão → UnauthorizedError
+      const input = createResourceSchema.parse(await req.json())
+      return Response.json(await service.create(actor, input), { status: 201 })
+    } catch (error) {
+      return handleApiError(error, 'api/resources:POST')
+    }
+  },
+})
+
+// src/app/api/resources/route.ts — só delega (montado em src/composition.ts)
+export const { GET, POST } = resourceHandlers
+```
+
+---
+
+## A Fronteira MCP: `isError` vs. HTTP 401
+
+O servidor MCP (`src/shared/mcp/`) aplica a **mesma taxonomia** em outro formato
+([ADR-012](../adr/012-mcp-como-borda-agentica.md)):
+
+- **Autenticação** (sem token, token inválido/expirado/revogado) → **HTTP 401** com
+  `WWW-Authenticate: Bearer resource_metadata="…"`. Não é um resultado de tool: o cliente
+  precisa (re)autenticar.
+- **Erro funcional** dentro de uma tool (`AppError`, `ZodError`) → resultado com
+  `isError: true` e a mensagem **acionável** do erro — a LLM lê e corrige a chamada
+  ("Título deve ter de 3 a 100 caracteres"). Não loga.
+- **Erro técnico** → `isError: true` com mensagem **genérica** ("Falha temporária, tente
+  novamente"), sem stack trace nem detalhe interno. Loga no sink, como o 500 do REST.
+
+```typescript
+// src/shared/mcp/toToolError.ts
+export function toToolError(error: unknown, context: string): CallToolResult {
+  if (error instanceof ZodError) {
+    return toolError(error.issues[0]?.message ?? 'Dados inválidos', 'VALIDATION_ERROR')
   }
+  if (error instanceof AppError) return toolError(error.message, error.code)
+  logError(context, error)
+  return toolError('Falha temporária, tente novamente.', 'INTERNAL_ERROR')
 }
 ```
 
@@ -189,7 +225,7 @@ No front, o hook lê o `code` para escolher a mensagem — funcional mostra o te
 API, técnico mostra o genérico:
 
 ```typescript
-// src/presentation/hooks/useResources.ts (trecho)
+// src/ui/hooks/useResources.ts (trecho)
 const body = await res.json()
 if (!res.ok) {
   setError(body.code === 'VALIDATION_ERROR' ? body.error : 'Erro. Tente novamente.')
@@ -222,12 +258,18 @@ try {
 
 ### Valide na fronteira com Zod
 
-O `parse` lança `ZodError`, que `handleApiError` já mapeia para 400. Não reimplemente
-validação manual dentro do handler — deixe o schema falar.
+O `parse` lança `ZodError`, que `handleApiError` já mapeia para 400 (e o servidor MCP
+para `isError: true`). Não reimplemente validação manual dentro do handler — deixe o
+schema falar. O **mesmo** schema vale para REST, MCP e UI.
 
 ```typescript
-const dto = createResourceSchema.parse(await req.json())
+const input = createResourceSchema.parse(await req.json())
 ```
+
+### Regra de negócio não mora na borda
+
+Se aparecer um `if` de regra num handler REST ou numa tool MCP, ele pertence ao service
+(ou ao aggregate). Só assim as duas bordas devolvem o mesmo erro para a mesma situação.
 
 ### Um `code` por caso, definido na classe
 
@@ -240,7 +282,8 @@ na subclasse de `AppError` e reutilize.
 ## Testando o Tratamento de Erro
 
 Teste a fronteira diretamente: erro funcional **não loga**; erro técnico **loga com
-contexto**.
+contexto**. Faça o mesmo par de testes para `toToolError` (funcional → mensagem do erro;
+técnico → mensagem genérica + log).
 
 ```typescript
 // tests/unit/handleApiError.test.ts
@@ -276,7 +319,9 @@ describe('handleApiError', () => {
 Antes de commitar código com tratamento de erro:
 
 - [ ] Erros de domínio herdam de `AppError` com `code` e `statusCode` fixos
-- [ ] Toda API Route termina o `catch` em `handleApiError(error, '<contexto>')`
+- [ ] Guards do service lançam `ForbiddenError`; identidade ausente na borda → `UnauthorizedError`
+- [ ] Todo handler REST termina o `catch` em `handleApiError(error, '<contexto>')`
+- [ ] Tools MCP: autenticação → HTTP 401; demais erros → `isError: true` (técnico genérico)
 - [ ] Validação de entrada é Zod na fronteira (deixa o `ZodError` subir)
 - [ ] Nenhum `console.*` no app — só o sink `logError`
 - [ ] Erro funcional não é logado; erro técnico é logado com contexto
@@ -288,6 +333,7 @@ Antes de commitar código com tratamento de erro:
 ## Ver Também
 
 - [ADR-009](../adr/009-erros-funcional-vs-tecnico.md) — a decisão por trás deste guia
+- [ADR-012](../adr/012-mcp-como-borda-agentica.md) — erros na borda MCP
 - [BEST_PRACTICES.md](../../BEST_PRACTICES.md) — seção *Notificações* (visual funcional/técnico)
 - [docs/guides/testing-guide.md](./testing-guide.md) — testes
 - [docs/guides/zod-guide.md](./zod-guide.md) — validação com Zod
