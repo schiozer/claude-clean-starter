@@ -1,6 +1,7 @@
 import { FlatCompat } from '@eslint/eslintrc'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import moduleBoundary from './eslint-rules/module-boundary.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -22,6 +23,14 @@ const eslintConfig = [
       // `console` proibido no app; o único sink autorizado é src/shared/logError.ts
       // (com `eslint-disable-next-line` inline na linha do console).
       'no-console': 'error',
+    },
+  },
+  {
+    // Fronteira de módulo (ADR-011), para alias e imports relativos — ver eslint-rules/.
+    files: ['src/**/*.{ts,tsx}'],
+    plugins: { local: { rules: { 'module-boundary': moduleBoundary } } },
+    rules: {
+      'local/module-boundary': ['error', { srcDir: join(__dirname, 'src') }],
     },
   },
   {

@@ -32,16 +32,16 @@ estão presentes.
 
 ### Decisões tomadas no brainstorming
 
-| # | Decisão |
-|---|---|
-| D1 | Capacidade MCP **configurável por sistema**: o template suporta tools de leitura e escrita; cada tool tem anotações (`readOnlyHint`/`destructiveHint`) e fica atrás de feature toggle (ADR-006). |
-| D2 | Autenticação do MCP: **OAuth via Auth0 (padrão, para ChatGPT) + token pessoal (alternativa)**, ambos atrás de `IAccessTokenVerifier`, produzindo o mesmo `AuthUser`. |
-| D3 | **DDD tático pragmático** organizado por **módulos de contexto** (`src/modules/<ctx>/`); domain events opcionais. |
-| D4 | O novo padrão **substitui** a skill `post-mvp-development` (nova skill `ddd-service-development`). |
-| D5 | O MVP também expõe MCP, com **service layer mínimo** (sem aggregates/repositórios) e a mesma assinatura pública do service. |
-| D6 | **Perfis arquiteturais** declarados no `CLAUDE.md`: `mvp-primeiro` (MVP → completo) e `completo-direto` (projeto pequeno, sem fase MVP: nasce e permanece no completo). |
-| D7 | Borda MCP = **abordagem A**: registro de tools por módulo + endpoint único `/api/mcp` no próprio app (Streamable HTTP stateless). |
-| D8 | Trabalho dividido em **duas entregas**: (1) padrão/documentação; (2) prova em código no walking skeleton. |
+| #   | Decisão                                                                                                                                                                                          |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D1  | Capacidade MCP **configurável por sistema**: o template suporta tools de leitura e escrita; cada tool tem anotações (`readOnlyHint`/`destructiveHint`) e fica atrás de feature toggle (ADR-006). |
+| D2  | Autenticação do MCP: **OAuth via Auth0 (padrão, para ChatGPT) + token pessoal (alternativa)**, ambos atrás de `IAccessTokenVerifier`, produzindo o mesmo `AuthUser`.                             |
+| D3  | **DDD tático pragmático** organizado por **módulos de contexto** (`src/modules/<ctx>/`); domain events opcionais.                                                                                |
+| D4  | O novo padrão **substitui** a skill `post-mvp-development` (nova skill `ddd-service-development`).                                                                                               |
+| D5  | O MVP também expõe MCP, com **service layer mínimo** (sem aggregates/repositórios) e a mesma assinatura pública do service.                                                                      |
+| D6  | **Perfis arquiteturais** declarados no `CLAUDE.md`: `mvp-primeiro` (MVP → completo) e `completo-direto` (projeto pequeno, sem fase MVP: nasce e permanece no completo).                          |
+| D7  | Borda MCP = **abordagem A**: registro de tools por módulo + endpoint único `/api/mcp` no próprio app (Streamable HTTP stateless).                                                                |
+| D8  | Trabalho dividido em **duas entregas**: (1) padrão/documentação; (2) prova em código no walking skeleton.                                                                                        |
 
 ## 2. Não-Objetivos
 
@@ -114,7 +114,7 @@ src/
 
 **Regras de fronteira:**
 
-1. Fora do módulo, importa-se **só** o `index.ts` (forçado por `no-restricted-imports` no ESLint).
+1. Fora do módulo, importa-se **só** o `index.ts` (forçado pela regra ESLint `module-boundary`, para alias e relativos).
 2. Um contexto fala com outro **pelo service** do outro, nunca pelo repositório.
 3. `interfaces/*` não contém regra de negócio nem autorização: valida, chama o service, traduz.
 4. No MVP, `domain/` e `infrastructure/` não existem; o service acessa dados direto.
@@ -124,7 +124,10 @@ src/
 
 ```ts
 export class ResourceService {
-  constructor(private repo: IResourceRepository, private clock: Clock) {}
+  constructor(
+    private repo: IResourceRepository,
+    private clock: Clock
+  ) {}
 
   async list(actor: AuthUser, input: ListResourcesInput): Promise<ResourceDTO[]> {
     requireScope(actor, 'resources:read')
@@ -134,7 +137,10 @@ export class ResourceService {
 
   async create(actor: AuthUser, input: CreateResourceInput): Promise<ResourceDTO> {
     requireScope(actor, 'resources:write')
-    const resource = Resource.create({ ownerId: actor.id, title: Title.of(input.title) }, this.clock)
+    const resource = Resource.create(
+      { ownerId: actor.id, title: Title.of(input.title) },
+      this.clock
+    )
     await this.repo.save(resource)
     return toResourceDTO(resource)
   }
@@ -197,18 +203,18 @@ defineTool({
 
 ### 4.5 Arquivos alterados — Entrega 1 (documentação)
 
-| Arquivo | Mudança |
-|---|---|
-| `docs/adr/011-service-layer-ddd-modular-e-perfis.md` | **Nova.** Service como porta única, DDD tático por módulos, perfis, regras de fronteira. Alternativas: por camada técnica; DDD completo/CQRS. |
-| `docs/adr/012-mcp-como-borda-agentica.md` | **Nova.** MCP como adaptador irmão do REST, Streamable HTTP stateless, OAuth Auth0 por ambiente + PAT, escopos, toggles, auditoria. Alternativas: deployable separado; geração via OpenAPI. |
-| `ARCHITECTURE.md` | Estrutura por módulos; seções "Service Layer", "DDD tático", "Borda agêntica (MCP)"; diagrama REST/MCP/Cron → Service; seção nativa aponta para `modules/`. |
-| `BEST_PRACTICES.md` | Seção "Design de tools MCP"; regras de import entre módulos; "service recebe `actor` primeiro". |
-| `CLAUDE.md` | Campo `Perfil arquitetural`; regra 2 reescrita; árvore atualizada; checklist com "tool MCP com escopo + toggle". |
-| `SKILLS.md` | Pipeline com a skill nova e leitura do perfil. |
-| `.claude/skills/post-mvp-development/` → `.claude/skills/ddd-service-development/` | **Substitui.** Módulo, aggregate, VO, repositório, service, `interfaces/http` + `interfaces/mcp`, testes. |
-| `.claude/skills/mvp-development/SKILL.md` | Service enxuto em `modules/`, MCP desde o dia 1, guarda de perfil, receita de promoção. |
-| `docs/guides/mcp-guide.md` | **Novo.** Conectar ChatGPT/Claude/Cursor ao UAT; configurar Auth0 (API com audience = URL do MCP, registro dinâmico, escopos); gerar PAT. |
-| `README.md` | Uma linha sobre a capacidade MCP. |
+| Arquivo                                                                            | Mudança                                                                                                                                                                                     |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/adr/011-service-layer-ddd-modular-e-perfis.md`                               | **Nova.** Service como porta única, DDD tático por módulos, perfis, regras de fronteira. Alternativas: por camada técnica; DDD completo/CQRS.                                               |
+| `docs/adr/012-mcp-como-borda-agentica.md`                                          | **Nova.** MCP como adaptador irmão do REST, Streamable HTTP stateless, OAuth Auth0 por ambiente + PAT, escopos, toggles, auditoria. Alternativas: deployable separado; geração via OpenAPI. |
+| `ARCHITECTURE.md`                                                                  | Estrutura por módulos; seções "Service Layer", "DDD tático", "Borda agêntica (MCP)"; diagrama REST/MCP/Cron → Service; seção nativa aponta para `modules/`.                                 |
+| `BEST_PRACTICES.md`                                                                | Seção "Design de tools MCP"; regras de import entre módulos; "service recebe `actor` primeiro".                                                                                             |
+| `CLAUDE.md`                                                                        | Campo `Perfil arquitetural`; regra 2 reescrita; árvore atualizada; checklist com "tool MCP com escopo + toggle".                                                                            |
+| `SKILLS.md`                                                                        | Pipeline com a skill nova e leitura do perfil.                                                                                                                                              |
+| `.claude/skills/post-mvp-development/` → `.claude/skills/ddd-service-development/` | **Substitui.** Módulo, aggregate, VO, repositório, service, `interfaces/http` + `interfaces/mcp`, testes.                                                                                   |
+| `.claude/skills/mvp-development/SKILL.md`                                          | Service enxuto em `modules/`, MCP desde o dia 1, guarda de perfil, receita de promoção.                                                                                                     |
+| `docs/guides/mcp-guide.md`                                                         | **Novo.** Conectar ChatGPT/Claude/Cursor ao UAT; configurar Auth0 (API com audience = URL do MCP, registro dinâmico, escopos); gerar PAT.                                                   |
+| `README.md`                                                                        | Uma linha sobre a capacidade MCP.                                                                                                                                                           |
 
 Referências às skills antigas (`post-mvp-development`) em todo o repositório devem ser
 atualizadas (incluindo ADRs e guias que a citem).
@@ -224,7 +230,7 @@ No `examples/walking-skeleton/`:
 - Tools `list_resources` (flag ligada por padrão) e `create_resource` (flag **desligada** por padrão).
 - `Auth0JwtVerifier`, `PersonalTokenVerifier` (repositório in-memory no skeleton) e o
   `StubAuthProvider` atual adaptado para produzir `AuthUser` com escopos no Dev local.
-- Regra `no-restricted-imports` no ESLint do exemplo.
+- Regra ESLint `module-boundary` no exemplo (`eslint-rules/`).
 
 A entrega 2 terá sua própria spec curta de refinamento (se necessário) e seu próprio plano.
 
@@ -276,6 +282,7 @@ manual de links relativos nos arquivos alterados, `rg post-mvp-development` sem 
 fora de histórico, e revisão do usuário.
 
 **Entrega 2:**
+
 - Unit: VOs e aggregate; `ResourceService` (escopo ausente → erro; isolamento por owner;
   DTO sem campos internos); `PersonalTokenVerifier` (hash, expiração, revogação); `defineTool`
   e filtro do registry (flag × escopo).
@@ -288,6 +295,7 @@ fora de histórico, e revisão do usuário.
 ## 8. Critérios de Aceitação
 
 **Entrega 1**
+
 - [x] ADR-011 e ADR-012 criadas a partir do template, com Contexto/Decisão/Consequências/Alternativas.
 - [x] `ARCHITECTURE.md` descreve módulos, Service Layer, DDD tático e borda MCP, com diagrama.
 - [x] `BEST_PRACTICES.md` tem "Design de tools MCP" e regras de fronteira entre módulos.
@@ -298,8 +306,9 @@ fora de histórico, e revisão do usuário.
 - [x] Lint/format da raiz passando; entregue via PR (regra 8).
 
 **Entrega 2**
-- [ ] Walking skeleton migrado para `modules/resources/`; testes existentes adaptados e passando.
-- [ ] `/api/mcp` funcional com `list_resources` e `create_resource` (atrás de flag).
-- [ ] OAuth (Auth0) e PAT funcionando atrás de `IAccessTokenVerifier`.
-- [ ] Testes da §7 passando (`npm test`, `lint`, `type-check` no exemplo).
-- [ ] ChatGPT conectado ao UAT responde "quais são meus recursos?" só com os dados do usuário.
+
+- [x] Walking skeleton migrado para `modules/resources/`; testes existentes adaptados e passando.
+- [x] `/api/mcp` funcional com `list_resources` e `create_resource` (atrás de flag).
+- [x] OAuth (Auth0) e PAT funcionando atrás de `IAccessTokenVerifier`.
+- [x] Testes da §7 passando (`npm test`, `lint`, `type-check` no exemplo).
+- [ ] ChatGPT conectado ao UAT responde "quais são meus recursos?" só com os dados do usuário — verificação manual pós-deploy do UAT (fora do PR).

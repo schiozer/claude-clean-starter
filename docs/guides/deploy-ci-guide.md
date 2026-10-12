@@ -45,8 +45,18 @@ Cada ambiente tem seu conjunto de secrets (ver `.env.local.example`):
   no host, isolados por ambiente. Inclui `DATABASE_URL` (branch Neon do ambiente),
   chaves do tenant Auth0 correspondente e gates como `MAINTENANCE_MODE`.
 
+## Operação por agentes
+
+Deploy e configuração são executados **por runbook**: os procedimentos ficam em
+[`docs/runbooks/`](../runbooks/README.md) e as regras (classes de risco R0–R3, aprovação
+humana por operação, segredos, registro) no
+[ADR-013](../adr/013-governanca-operacional-e-runbooks.md). O merge na `main` (= deploy em
+Prod) é sempre do humano.
+
 ## Quando for criar o ADR do projeto
 
-Registre no ADR do projeto real: host escolhido, gatilhos exatos de deploy,
-required checks, política de rollback (ex.: revert de PR / desligar feature flag)
-e o pipeline nativo, se houver.
+Registre no ADR do projeto real: host escolhido, gatilhos exatos de deploy, required checks
+e o pipeline nativo, se houver. O **como** operar — inclusive o rollback (desligar flag,
+promover deploy anterior, revert por PR) — vive nos runbooks
+([`rollback.md`](../runbooks/rollback.md)): ao adotar, complete os `<preencher>` e ligue o
+`check:runbooks -- --strict` no CI.

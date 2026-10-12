@@ -1,16 +1,29 @@
 import { describe, it, expect } from 'vitest'
-import { Resource } from '@/domain/entities/Resource'
+import { Resource } from '@/modules/resources/domain/Resource'
+import { ResourceId } from '@/modules/resources/domain/ResourceId'
+import { Title } from '@/modules/resources/domain/Title'
 import { DomainError } from '@/shared/errors'
+import { fixedClock } from '../helpers/fixedClock'
 
 describe('Resource', () => {
-  it('cria com título válido', () => {
-    const r = new Resource('id-1', 'Meu título', 'owner-1', new Date())
-    expect(r.title).toBe('Meu título')
+  it('create gera id UUID e usa o relógio injetado', () => {
+    const r = Resource.create({ tenantId: 't1', ownerId: 'ana', title: Title.of('Novo') }, fixedClock)
+    expect(r.id.value).toMatch(/^[0-9a-f-]{36}$/)
+    expect(r.createdAt.toISOString()).toBe('2026-01-01T00:00:00.000Z')
+    expect(r.title.value).toBe('Novo')
   })
-  it('rejeita título curto (< 3)', () => {
-    expect(() => new Resource('id-1', 'ab', 'owner-1', new Date())).toThrow(DomainError)
+
+  it('rehydrate ∘ toSnapshot preserva os dados', () => {
+    const r = Resource.create({ tenantId: 't1', ownerId: 'ana', title: Title.of('Novo') }, fixedClock)
+    expect(Resource.rehydrate(r.toSnapshot()).toSnapshot()).toEqual(r.toSnapshot())
   })
-  it('rejeita título longo (> 100)', () => {
-    expect(() => new Resource('id-1', 'x'.repeat(101), 'owner-1', new Date())).toThrow(DomainError)
+
+  it('rehydrate revalida as invariantes (título inválido no banco → DomainError)', () => {
+    const snap = { ...Resource.create({ tenantId: 't1', ownerId: 'ana', title: Title.of('Novo') }, fixedClock).toSnapshot(), title: 'x' }
+    expect(() => Resource.rehydrate(snap)).toThrow(DomainError)
+  })
+
+  it('ResourceId.of rejeita valor que não é UUID', () => {
+    expect(() => ResourceId.of('nao-uuid')).toThrow(DomainError)
   })
 })

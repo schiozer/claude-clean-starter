@@ -9,6 +9,7 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
+    "check:runbooks": "node scripts/check-runbooks.mjs",
     "format": "prettier --write ."
   },
   "devDependencies": {

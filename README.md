@@ -15,13 +15,15 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 ├── SKILLS.md            # Mapa do pipeline de skills por fase
 ├── .claude/
 │   ├── commands/        # Slash-commands (deploy-*, uat) como templates
-│   └── skills/          # mvp-development, ddd-service-development (gerais)
+│   └── skills/          # mvp-development, ddd-service-development, runbook-execution
 ├── docs/
 │   ├── adr/             # 000-template.md (Architecture Decision Records)
 │   ├── guides/          # zod, testing, error-handling, deploy-ci, mcp
+│   ├── runbooks/        # operação por agentes: deploy, envs, flags, MCP, rollback (ADR-013)
 │   └── superpowers/
 │       ├── specs/        # _TEMPLATE.md
 │       └── plans/        # _TEMPLATE.md
+├── scripts/             # check-runbooks.mjs (npm run check:runbooks)
 ├── hooks/               # check-dependencies, git-freshness (SessionStart)
 ├── eslint.config.mjs    # flat config auto-contido (typescript-eslint)
 ├── tsconfig.json        # TS estrito, sem framework
@@ -38,9 +40,11 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 3. **Preencha a stack concreta** em `CLAUDE.md` e `ARCHITECTURE.md` (banco, auth,
    hospedagem) e registre as decisões como **ADRs** (`docs/adr/`).
 4. **Declare o perfil arquitetural** no topo do `CLAUDE.md` (`mvp-primeiro` ou `completo-direto`).
-5. `npm install` para o tooling; use `npm run lint`, `npm run type-check`,
-   `npm test`, `npm run format`.
-6. Ao adicionar o app — **web** (ex.: Next.js) ou **nativo iOS** (Expo/React
+5. **Complete os runbooks** de `docs/runbooks/` (todo `<preencher>`, data de verificação)
+   e troque o CI para `npm run check:runbooks -- --strict` — ver ADR-013.
+6. `npm install` para o tooling; use `npm run lint`, `npm run type-check`,
+   `npm test`, `npm run check:runbooks`, `npm run format`.
+7. Ao adicionar o app — **web** (ex.: Next.js) ou **nativo iOS** (Expo/React
    Native) — inclua as deps de runtime e estenda os configs (eslint/tsconfig)
    para o framework. Os padrões de app nativo estão em `ARCHITECTURE.md`
    (seção *"Padrões para App Nativo"*) e `BEST_PRACTICES.md`.

@@ -20,22 +20,27 @@ para testar e ao **Prod** só depois do merge.
 > **UAT precisa de URL estável.** Previews por PR mudam de URL, e o `aud` do token precisa conter
 > a URL exata do MCP. Use um alias/domínio fixo para o UAT (ex.: `<projeto>-uat.vercel.app`,
 > apontado para o preview do PR em teste) e configure audience e `MCP_RESOURCE_URL` com ele.
-> Se os previews têm *Deployment Protection*, libere `/api/mcp` e `/.well-known/*` nesse
+> Se os previews têm _Deployment Protection_, libere `/api/mcp` e `/.well-known/*` nesse
 > alias (bypass ou domínio próprio) — senão o ChatGPT é barrado antes de chegar ao MCP.
 
 ## 1. Configurar o Auth0 (por ambiente)
 
-1. **API (resource server)**: Applications → APIs → *Create API*.
-   - *Identifier* (audience) = **URL exata do MCP do ambiente**, ex.:
+1. **API (resource server)**: Applications → APIs → _Create API_.
+   - _Identifier_ (audience) = **URL exata do MCP do ambiente**, ex.:
      `https://<projeto>-uat.vercel.app/api/mcp`. O `Auth0JwtVerifier` rejeita tokens cujo
      `aud` não contenha essa URL (o Auth0 pode emitir `aud` em array, ex.: API + `userinfo`).
-   - *Permissions*: crie os escopos de cada módulo exposto, ex.: `resources:read`,
+   - _Permissions_: crie os escopos de cada módulo exposto, ex.: `resources:read`,
      `resources:write`.
-2. **Registro dinâmico de cliente**: em *Tenant Settings → Advanced*, habilite o *Dynamic
-   Client Registration* (registro OIDC dinâmico). O ChatGPT usa isso para se registrar
+   - _RBAC Settings_: ligue **Enable RBAC** e **Add Permissions in the Access Token**, e
+     atribua as permissões aos usuários via _Roles_. Sem RBAC o Auth0 emite qualquer `scope`
+     que o cliente pedir (inclusive `resources:write`); por isso o `Auth0JwtVerifier` só
+     aceita os escopos que também estão na claim `permissions` — sem essa claim, o token
+     chega **sem escopo** (fail-closed) e nenhuma tool aparece.
+2. **Registro dinâmico de cliente**: em _Tenant Settings → Advanced_, habilite o _Dynamic
+   Client Registration_ (registro OIDC dinâmico). O ChatGPT usa isso para se registrar
    sozinho. **Riscos e cuidados:**
    - o endpoint de registro fica **público** — qualquer um cria clientes no tenant;
-   - clientes dinâmicos são *third-party*: mantenha a **tela de consentimento** obrigatória
+   - clientes dinâmicos são _third-party_: mantenha a **tela de consentimento** obrigatória
      e conceda só os escopos da sua API;
    - só conexões habilitadas em nível de domínio ficam disponíveis para eles (item 3);
    - monitore e limpe periodicamente os clientes registrados (Applications) e alerte sobre
@@ -45,23 +50,29 @@ para testar e ao **Prod** só depois do merge.
 4. **Indicador de recurso**: clientes MCP enviam `resource` (RFC 8707), mas o Auth0
    historicamente espera `audience`. Se ele ignorar `resource`, emite token sem a sua API
    no `aud` e o MCP responde 401 em loop. Ajuste **no Auth0**: habilite no tenant a opção
-   que trata `resource` como `audience` (perfil de compatibilidade do *Resource Parameter*;
-   confira o nome atual na doc) ou, como contorno, defina a *Default Audience* do tenant
+   que trata `resource` como `audience` (perfil de compatibilidade do _Resource Parameter_;
+   confira o nome atual na doc) ou, como contorno, defina a _Default Audience_ do tenant
    como a URL do MCP (afeta todos os clientes do tenant). O campo `resource` em
    `/.well-known/oauth-protected-resource` continua **sempre** igual a `MCP_RESOURCE_URL`.
 5. Variáveis do app (por ambiente, nunca commitadas):
-   `AUTH0_ISSUER_BASE_URL`, `MCP_RESOURCE_URL` (= audience).
+   `AUTH0_ISSUER_BASE_URL`, `MCP_RESOURCE_URL` (= audience). Fora do Dev local as duas precisam
+   ser `https://`; sem `AUTH0_ISSUER_BASE_URL` o MCP aceita só tokens pessoais.
 
 ## 2. Ligar as tools
 
 As tools ficam atrás de flags (ADR-006):
 
-| Flag | Padrão | Efeito |
-|---|---|---|
-| `mcp.<ctx>.read` | ligada | tools de leitura do módulo aparecem |
-| `mcp.<ctx>.write` | **desligada** | tools de escrita aparecem (se o token tiver `<ctx>:write`) |
+| Flag              | Env (skeleton)        | Padrão        | Efeito                                                     |
+| ----------------- | --------------------- | ------------- | ---------------------------------------------------------- |
+| `mcp.<ctx>.read`  | `MCP_RESOURCES_READ`  | ligada        | tools de leitura do módulo aparecem                        |
+| `mcp.<ctx>.write` | `MCP_RESOURCES_WRITE` | **desligada** | tools de escrita aparecem (se o token tiver `<ctx>:write`) |
 
-Ligue a escrita **por ambiente**, conscientemente — comece pelo UAT.
+As flags MCP dependem da flag da feature (no skeleton, `RESOURCES_ENABLED`): com a feature
+desligada nenhuma tool do módulo aparece, mesmo com `MCP_*=on` — o kill switch da feature cobre
+todas as bordas.
+
+Ligue a escrita **por ambiente**, conscientemente — comece pelo UAT. Para demonstrar escrita no
+UAT, ligue `MCP_RESOURCES_WRITE=on` só no ambiente de UAT.
 
 ## 3. Conectar o ChatGPT
 
@@ -71,14 +82,20 @@ Ligue a escrita **por ambiente**, conscientemente — comece pelo UAT.
    autenticação **OAuth**.
 3. O ChatGPT abre o login do Auth0 do UAT → entre com um usuário de teste → consinta os
    escopos.
-4. Num chat novo, habilite o connector e pergunte: *"quais são meus recursos?"*.
+4. Num chat novo, habilite o connector e pergunte: _"quais são meus recursos?"_.
 5. Esperado: a resposta lista **só** os recursos daquele usuário. Tools de escrita só
    aparecem com a flag de escrita ligada e o escopo concedido; o ChatGPT pede confirmação
    antes de executá-las.
 
+> **No walking skeleton o repositório é in-memory** (por instância serverless, zerado a cada
+> cold start): "só os recursos daquele usuário" é trivialmente verdade com um usuário só.
+> Para provar o isolamento de fato no UAT, use **dois usuários de teste**, crie um recurso com
+> cada um (escrita ligada no UAT) e confira que um não vê o do outro — e repita com o
+> repositório real (Neon, ADR-003). Os testes de integração já cobrem o isolamento por ator.
+
 ## 4. Conectar Claude / Cursor
 
-- **Claude (desktop/web)**: adicione um *custom connector* com a mesma URL; o fluxo OAuth é
+- **Claude (desktop/web)**: adicione um _custom connector_ com a mesma URL; o fluxo OAuth é
   o mesmo.
 - **Cursor / scripts**: use um **token pessoal** no header:
 
@@ -104,7 +121,8 @@ Ligue a escrita **por ambiente**, conscientemente — comece pelo UAT.
 
 - Rode o app (`npm run dev`) e use o **MCP Inspector**
   (`npx @modelcontextprotocol/inspector`) apontando para `http://localhost:3000/api/mcp`.
-- No Dev local, o verificador aceita um PAT de desenvolvimento (definido no seed) — não há
+- No Dev local, o verificador aceita um PAT de desenvolvimento (`DEV_PERSONAL_TOKEN`, semeado no boot só com
+  `APP_ENV=development`) — não há
   OAuth real. **Trava fail-closed:** esse PAT e o seed só existem quando uma variável explícita
   marca o Dev local (ex.: `APP_ENV=development`; **ausente = não é Dev**);
   em UAT/Prod o verificador o **recusa** mesmo que alguém o insira no banco, e o seed se
@@ -112,9 +130,10 @@ Ligue a escrita **por ambiente**, conscientemente — comece pelo UAT.
 
 ## Troubleshooting
 
-| Sintoma | Causa provável |
-|---|---|
-| `401` mesmo após login | `aud` do token não contém `MCP_RESOURCE_URL` (audience da API errada) |
-| ChatGPT não consegue se registrar | Registro dinâmico de cliente desabilitado no tenant |
-| Tool não aparece | Flag desligada ou escopo ausente no token |
-| `isError` com "tente novamente" | Erro técnico — veja os logs do ambiente |
+| Sintoma                           | Causa provável                                                        |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `401` mesmo após login            | `aud` do token não contém `MCP_RESOURCE_URL` (audience da API errada) |
+| ChatGPT não consegue se registrar | Registro dinâmico de cliente desabilitado no tenant                   |
+| Tool não aparece                  | Flag desligada ou escopo ausente no token                             |
+| Nenhuma tool aparece com OAuth    | RBAC ou _Add Permissions in the Access Token_ desligado na API        |
+| `isError` com "tente novamente"   | Erro técnico — veja os logs do ambiente                               |

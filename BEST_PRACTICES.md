@@ -92,7 +92,7 @@ function ResourceCard({ resource }: Props) {
 ## Módulos e Service Layer
 
 - **Importe só pelo `index.ts`** de outro módulo (`@/modules/resources`), nunca
-  `@/modules/resources/domain/...` — o ESLint (`no-restricted-imports`) barra.
+  `@/modules/resources/domain/...` — a regra ESLint `module-boundary` barra (alias ou caminho relativo).
 - **Service recebe `actor` primeiro** e chama o guard na 1ª linha:
 
 ```typescript
@@ -293,7 +293,8 @@ Tools são **UX para a LLM**: nome e descrição decidem se ela escolhe a tool c
   `update_resource({ published: true })`.
 - **Saída pequena e paginada**: `limit` ≤ 50 + `cursor`; só os campos úteis; IDs estáveis.
 - **Escopo obrigatório** (`<ctx>:read|write`) e **anotações honestas**: `readOnlyHint: true`
-  só se não muda nada; `destructiveHint: true` se apaga/sobrescreve.
+  só se não muda nada; `destructiveHint: true` se apaga/sobrescreve; `openWorldHint: false` quando
+  a tool só toca dados do próprio sistema.
 - **Escrita nasce com a flag desligada por padrão** (`mcp.<ctx>.write`) e é ligada por
   ambiente, conscientemente (ADR-006).
 - **Nunca** aceite tenant/owner no input da tool — derive do `actor`.

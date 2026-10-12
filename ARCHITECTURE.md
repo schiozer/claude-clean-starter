@@ -24,10 +24,6 @@ Todo projeto declara um **perfil arquitetural** no `CLAUDE.md` — `mvp-primeiro
 **agêntico**: além da UI/REST, expõe um servidor **MCP** que LLMs chamam em nome do
 usuário ([ADR-012](./docs/adr/012-mcp-como-borda-agentica.md)).
 
-> ⚠️ O exemplo em `examples/walking-skeleton/` ainda usa o layout por camada técnica;
-> a migração para `modules/` + MCP é a entrega 2 da spec
-> `docs/superpowers/specs/2026-10-10-arquitetura-agentica-mcp-design.md`.
-
 ---
 
 ## Princípios Arquiteturais
@@ -92,7 +88,7 @@ src/
 
 ### Regras de fronteira
 
-1. Fora do módulo, importa-se **só** `modules/<ctx>/index.ts` (ESLint `no-restricted-imports`).
+1. Fora do módulo, importa-se **só** `modules/<ctx>/index.ts` (regra ESLint `module-boundary` — alias e imports relativos).
    O `index.ts` exporta o service, schemas, DTOs e as **factories das bordas**
    (`make<Ctx>Tools(service)`, `make<Ctx>Handlers(service, resolveActor)`). **Única exceção:**
    `src/composition.ts`, que importa `infrastructure/` para instanciar repositórios, monta os
@@ -112,7 +108,10 @@ O `<Ctx>Service` é a **API pública** do módulo.
 ```typescript
 // src/modules/resources/application/ResourceService.ts
 export class ResourceService {
-  constructor(private repo: IResourceRepository, private clock: Clock) {}
+  constructor(
+    private repo: IResourceRepository,
+    private clock: Clock
+  ) {}
 
   async list(actor: AuthUser, input: ListResourcesInput): Promise<ResourceDTO[]> {
     requireScope(actor, 'resources:read')
@@ -122,7 +121,10 @@ export class ResourceService {
 
   async create(actor: AuthUser, input: CreateResourceInput): Promise<ResourceDTO> {
     requireScope(actor, 'resources:write')
-    const resource = Resource.create({ ownerId: actor.id, title: Title.of(input.title) }, this.clock)
+    const resource = Resource.create(
+      { ownerId: actor.id, title: Title.of(input.title) },
+      this.clock
+    )
     await this.repo.save(resource)
     return toResourceDTO(resource)
   }
@@ -147,13 +149,17 @@ export class Resource extends AggregateRoot {
     private _title: Title,
     private _published: boolean,
     readonly createdAt: Date
-  ) { super() }
+  ) {
+    super()
+  }
 
   static create(props: { ownerId: string; title: Title }, clock: Clock): Resource {
     return new Resource(ResourceId.new(), props.ownerId, props.title, false, clock.now())
   }
 
-  static rehydrate(row: ResourceRow): Resource { /* banco → domínio */ }
+  static rehydrate(row: ResourceRow): Resource {
+    /* banco → domínio */
+  }
 
   publish(): void {
     if (this._published) throw new DomainError('Recurso já publicado')
@@ -182,7 +188,7 @@ export class Resource extends AggregateRoot {
 export const makeResourceHandlers = (service: ResourceService, resolveActor: ResolveActor) => ({
   async POST(req: Request) {
     try {
-      const actor = await resolveActor(req)               // sessão → AuthUser (ou 401)
+      const actor = await resolveActor(req) // sessão → AuthUser (ou 401)
       const input = createResourceSchema.parse(await req.json())
       return json(await service.create(actor, input), 201)
     } catch (error) {
@@ -192,7 +198,7 @@ export const makeResourceHandlers = (service: ResourceService, resolveActor: Res
 })
 
 // src/app/api/resources/route.ts — só delega
-export const { POST } = resourceHandlers                // montado em src/composition.ts
+export const { POST } = resourceHandlers // montado em src/composition.ts
 ```
 
 **MCP** — ver a seção "Borda agêntica (MCP)" abaixo.
@@ -325,7 +331,7 @@ O bundle do app é **público** (qualquer um extrai). Portanto:
 > O `packages/shared` é o coração reaproveitável: schemas Zod e DTOs dos módulos
 > ficam ali e são importados tanto pela UI (validação na borda) quanto pelo backend
 > (validação nos services). Aggregates e services **não** vão para o app — ficam no
-> backend, atrás das bordas REST/MCP (ver *Considerações de Evolução*).
+> backend, atrás das bordas REST/MCP (ver _Considerações de Evolução_).
 
 ### Fluxo de dados
 
@@ -393,14 +399,14 @@ Assim como o template usa **Next.js** como exemplo do lado web, este é um conju
 concreto que instancia bem os padrões nativos acima — cada escolha vira um ADR e
 fica isolada atrás de interfaces (`I*Repository`, `IAuthProvider`):
 
-| Camada | Escolha de exemplo | Papel |
-|---|---|---|
-| App | **Expo** (React Native), iOS; expo-router | Presentation + application-cliente |
-| Banco | **Neon** (Postgres serverless) | Relacional, exponível via MCP |
-| Backend | **Vercel** (funções serverless) + **Vercel Cron** | BFF + jobs agendados |
-| Auth | **Auth0** (Universal Login, JWT) | Identidade atrás de `IAuthProvider` |
-| Authz | **Guards na aplicação** (fail-closed) | Multi-tenant sem depender de RLS |
-| Push | **Expo Notifications** → APNs | Notificações proativas |
+| Camada  | Escolha de exemplo                                | Papel                               |
+| ------- | ------------------------------------------------- | ----------------------------------- |
+| App     | **Expo** (React Native), iOS; expo-router         | Presentation + application-cliente  |
+| Banco   | **Neon** (Postgres serverless)                    | Relacional, exponível via MCP       |
+| Backend | **Vercel** (funções serverless) + **Vercel Cron** | BFF + jobs agendados                |
+| Auth    | **Auth0** (Universal Login, JWT)                  | Identidade atrás de `IAuthProvider` |
+| Authz   | **Guards na aplicação** (fail-closed)             | Multi-tenant sem depender de RLS    |
+| Push    | **Expo Notifications** → APNs                     | Notificações proativas              |
 
 > É um **ponto de partida**, não uma obrigação. Troque qualquer peça pela sua e
 > registre o porquê num ADR.

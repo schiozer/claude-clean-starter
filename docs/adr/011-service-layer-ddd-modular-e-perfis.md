@@ -42,7 +42,7 @@ pequenos não devem ser empurrados para "evoluir depois".
    repositório por aggregate. Domain events são **opcionais** (só com consumidor real).
 
 4. **Regras de fronteira:**
-   1. Fora do módulo importa-se só `modules/<ctx>/index.ts` (ESLint `no-restricted-imports`),
+   1. Fora do módulo importa-se só `modules/<ctx>/index.ts` (regra ESLint `module-boundary` — alias e imports relativos),
       que exporta service, schemas, DTOs e as factories das bordas (`make<Ctx>Tools(service)`).
       Única exceção: `src/composition.ts` (instancia repositórios e monta services e bordas).
    2. Contexto fala com contexto pelo **service**, nunca pelo repositório.
@@ -70,8 +70,6 @@ pequenos não devem ser empurrados para "evoluir depois".
 - ➖ Services podem crescer demais; mitigação: dividir por subcontexto quando passar de
   ~10 métodos públicos ou misturar linguagens de negócio.
 - ➖ Mais um conceito para o time (perfil); mitigação: as skills leem e aplicam o perfil.
-- ➖ O walking skeleton fica no layout antigo até a entrega 2 da spec
-  `2026-10-10-arquitetura-agentica-mcp-design.md`.
 
 ## Alternativas Consideradas
 
