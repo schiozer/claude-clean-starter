@@ -58,12 +58,16 @@ describe('checkRunbook', () => {
   })
 
   it('ambiente inválido ou repetido → erro', () => {
-    expect(checkRunbook(swap('UAT, Prod', 'UAT, Staging')).join()).toContain('Ambientes inválidos: Staging')
+    expect(checkRunbook(swap('UAT, Prod', 'UAT, Staging')).join()).toContain(
+      'Ambientes inválidos: Staging'
+    )
     expect(checkRunbook(swap('UAT, Prod', 'UAT, UAT'))).toContain('Ambientes repetidos')
   })
 
   it('seção ausente → erro', () => {
-    expect(checkRunbook(swap('## Registro\n\nComentário no PR.\n', ''))).toContain('seção ausente: ## Registro')
+    expect(checkRunbook(swap('## Registro\n\nComentário no PR.\n', ''))).toContain(
+      'seção ausente: ## Registro'
+    )
   })
 
   it('seções fora de ordem → erro', () => {
@@ -72,7 +76,9 @@ describe('checkRunbook', () => {
   })
 
   it('seção duplicada → erro de ordem', () => {
-    expect(checkRunbook(VALID + '\n## Objetivo\n\nDe novo.\n').join()).toContain('seções fora de ordem')
+    expect(checkRunbook(VALID + '\n## Objetivo\n\nDe novo.\n').join()).toContain(
+      'seções fora de ordem'
+    )
   })
 
   it('passo sem classe de risco → erro', () => {
@@ -82,9 +88,9 @@ describe('checkRunbook', () => {
   })
 
   it('passo de Passos sem Verificar: → erro', () => {
-    expect(checkRunbook(swap('   Verificar: `gh pr view` mostra o PR aberto.\n', '')).join()).toContain(
-      'passo sem "Verificar:"'
-    )
+    expect(
+      checkRunbook(swap('   Verificar: `gh pr view` mostra o PR aberto.\n', '')).join()
+    ).toContain('passo sem "Verificar:"')
   })
 
   it('[R3] sem "Humano:" → erro', () => {
@@ -94,7 +100,10 @@ describe('checkRunbook', () => {
   })
 
   it('seção de passos vazia → erro', () => {
-    const empty = swap('1. [R2] Promover o deploy anterior.\n   Verificar: a URL de Prod responde 200.\n', 'Nada.\n')
+    const empty = swap(
+      '1. [R2] Promover o deploy anterior.\n   Verificar: a URL de Prod responde 200.\n',
+      'Nada.\n'
+    )
     expect(checkRunbook(empty)).toContain('## Rollback: nenhum passo numerado')
   })
 
@@ -115,7 +124,10 @@ describe('checkRunbook', () => {
   })
 
   it('seção H2 desconhecida → erro (passos nela escapariam da validação)', () => {
-    const extra = swap('## Verificação final', '## Passos (Prod)\n\n1. vercel promote x\n\n## Verificação final')
+    const extra = swap(
+      '## Verificação final',
+      '## Passos (Prod)\n\n1. vercel promote x\n\n## Verificação final'
+    )
     expect(checkRunbook(extra)).toContain('seção desconhecida: ## Passos (Prod)')
   })
 
@@ -132,6 +144,60 @@ describe('checkRunbook', () => {
     expect(checkRunbook(gen, { strict: true })).toContain('linha 3: placeholder <gerado> pendente')
   })
 
+  it('mais de uma classe de risco no mesmo passo → erro', () => {
+    const errors = checkRunbook(swap('1. [R1] Abrir o PR', '1. [R1] [R2] Abrir o PR'))
+    expect(errors.some((e) => e.includes('mais de uma classe de risco'))).toBe(true)
+  })
+
+  it('comando de R3 em passo de classe menor → erro', () => {
+    const errors = checkRunbook(swap('`gh pr create`', '`gh pr merge 12`'))
+    expect(errors.some((e) => e.includes('"gh pr merge" exige [R3] Humano:'))).toBe(true)
+  })
+
+  it('comando de R2 em passo R0/R1 → erro', () => {
+    const errors = checkRunbook(swap('`gh pr create`', '`vercel rollback dpl_1`'))
+    expect(errors.some((e) => e.includes('"vercel rollback" exige no mínimo [R2]'))).toBe(true)
+  })
+
+  it('passo em formato "1)" ou com marcador → erro', () => {
+    const paren = checkRunbook(swap('2. [R3] Humano:', '2) [R3] Humano:'))
+    const bullet = checkRunbook(swap('2. [R3] Humano:', '- [R3] Humano:'))
+    for (const errors of [paren, bullet]) {
+      expect(errors.some((e) => e.includes('## Passos: passo fora do formato "N. [Rn]"'))).toBe(
+        true
+      )
+    }
+  })
+
+  it('cercas ~~~ e de 4 crases escondem o conteúdo', () => {
+    const tilde = swap(
+      '## Verificação final',
+      '~~~\n## Falsa\n1. solto\n~~~\n\n## Verificação final'
+    )
+    const four = swap(
+      '## Verificação final',
+      '````md\n```\n## Falsa\n```\n````\n\n## Verificação final'
+    )
+    expect(checkRunbook(tilde)).toEqual([])
+    expect(checkRunbook(four)).toEqual([])
+  })
+
+  it('estrito rejeita Última verificação no futuro', () => {
+    const errors = checkRunbook(swap('2026-10-01', '2999-01-01'), { strict: true })
+    expect(errors).toContain('Última verificação no futuro: "2999-01-01"')
+  })
+
+  it('estrito rejeita stubs <comando>/<esperado> do template', () => {
+    const md = swap('`gh pr view` mostra o PR aberto.', '<esperado>').replace(
+      '`gh pr create`',
+      '`<comando>`'
+    )
+    const errors = checkRunbook(md, { strict: true })
+    expect(errors.some((e) => e.includes('stub <comando> do template pendente'))).toBe(true)
+    expect(errors.some((e) => e.includes('stub <esperado> do template pendente'))).toBe(true)
+    expect(checkRunbook(md)).toEqual([])
+  })
+
   it('CRLF → mesmas regras', () => {
     expect(checkRunbook(VALID.replace(/\n/g, '\r\n'))).toEqual([])
   })
@@ -139,7 +205,9 @@ describe('checkRunbook', () => {
   it('não-estrito aceita <preencher; estrito rejeita com a linha', () => {
     const ph = swap('time-plataforma', '<preencher: time>')
     expect(checkRunbook(ph)).toEqual([])
-    expect(checkRunbook(ph, { strict: true })).toContain('linha 3: placeholder <preencher> pendente')
+    expect(checkRunbook(ph, { strict: true })).toContain(
+      'linha 3: placeholder <preencher> pendente'
+    )
   })
 
   it.each(['AAAA-MM-DD', '2026-13-45', '2026-02-30', '01/10/2026'])(
@@ -182,7 +250,9 @@ describe('checkCatalog', () => {
   })
 
   it('diretório inexistente → erro', () => {
-    expect(checkCatalog(join(dir, 'nao-existe'))[0]).toContain('diretório de runbooks não encontrado')
+    expect(checkCatalog(join(dir, 'nao-existe'))[0]).toContain(
+      'diretório de runbooks não encontrado'
+    )
   })
 })
 

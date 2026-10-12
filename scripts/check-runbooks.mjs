@@ -30,16 +30,42 @@ const VERIFY_SECTIONS = ['Passos', 'Rollback']
 const ENVIRONMENTS = ['Dev', 'UAT', 'Prod']
 // `<preencher`: entrada do projeto; `<gerado`: saída do bootstrap, gravada após executá-lo.
 const PLACEHOLDERS = ['<preencher', '<gerado']
+// Stubs do _TEMPLATE.md que precisam virar comando/resultado reais.
+const TEMPLATE_STUBS = ['<comando>', '<esperado>']
+// Comandos com classe mínima, independentemente da tag do passo (ADR-013 §2).
+const MIN_CLASS_COMMANDS = [
+  { name: 'gh pr merge', pattern: /gh pr merge/, min: 3 },
+  { name: 'vercel env pull', pattern: /vercel env pull/, min: 3 },
+  { name: 'git push --force', pattern: /git push[^`\n]*(--force|\s-f\b)/, min: 3 },
+  { name: 'vercel rollback', pattern: /vercel rollback/, min: 2 },
+  { name: 'vercel promote', pattern: /vercel promote/, min: 2 },
+  { name: 'vercel deploy --prod', pattern: /vercel deploy[^`\n]*--prod/, min: 2 },
+  { name: 'vercel project rm', pattern: /vercel project rm/, min: 2 },
+  {
+    name: 'neonctl branches delete/restore/reset',
+    pattern: /neonctl branches (delete|restore|reset)/,
+    min: 2,
+  },
+  { name: '--env .env.prod', pattern: /--env \.env\.prod/, min: 2 },
+]
+const FENCE = /^\s*(`{3,}|~{3,})/
 
 function parse(markdown) {
   const meta = {}
   const sections = []
   let current = null
-  let inFence = false
+  let fence = null
   for (const text of markdown.split(/\r?\n/)) {
-    const isFence = text.trimStart().startsWith('```')
-    const code = inFence || isFence
-    if (isFence) inFence = !inFence
+    const marker = FENCE.exec(text)?.[1]
+    const closes =
+      fence &&
+      marker &&
+      marker[0] === fence[0] &&
+      marker.length >= fence.length &&
+      text.trim() === marker
+    const code = Boolean(fence || marker)
+    if (closes) fence = null
+    else if (!fence && marker) fence = marker
     if (!code) {
       const heading = /^## (.+?)\s*$/.exec(text)
       if (heading) {
@@ -114,6 +140,14 @@ function checkSteps(sections, errors) {
   }
   for (const section of sections.filter((s) => STEP_SECTIONS.includes(s.title))) {
     const items = steps(section)
+    const malformed = section.lines.find(
+      ({ text, code }) => !code && /^(\d+\)|[-*+])\s+\[R[0-3]\]/.test(text)
+    )
+    if (malformed) {
+      errors.push(
+        `## ${section.title}: passo fora do formato "N. [Rn]": ${malformed.text.trim().slice(0, 60)}`
+      )
+    }
     if (!items.length) errors.push(`## ${section.title}: nenhum passo numerado`)
     for (const item of items) {
       const label = `## ${section.title} › ${item.head.trim().slice(0, 60)}`
@@ -121,6 +155,14 @@ function checkSteps(sections, errors) {
       if (!tag) {
         errors.push(`${label}: passo sem classe de risco [R0]–[R3]`)
         continue
+      }
+      if ((item.body.match(/\[R[0-3]\]/g) ?? []).length > 1) {
+        errors.push(`${label}: mais de uma classe de risco no passo`)
+      }
+      for (const command of MIN_CLASS_COMMANDS) {
+        if (Number(tag[1]) >= command.min || !command.pattern.test(item.body)) continue
+        const required = command.min === 3 ? '[R3] Humano:' : 'no mínimo [R2]'
+        errors.push(`${label}: "${command.name}" exige ${required}`)
       }
       if (tag[1] === '3' && !/^\d+\.\s+\[R3\] Humano:/.test(item.head)) {
         errors.push(`${label}: passo [R3] deve começar com "[R3] Humano:"`)
@@ -132,6 +174,10 @@ function checkSteps(sections, errors) {
   }
 }
 
+function today() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 function checkStrict(markdown, meta, errors) {
   markdown.split(/\r?\n/).forEach((line, index) => {
     for (const placeholder of PLACEHOLDERS) {
@@ -139,9 +185,14 @@ function checkStrict(markdown, meta, errors) {
         errors.push(`linha ${index + 1}: placeholder ${placeholder}> pendente`)
       }
     }
+    for (const stub of TEMPLATE_STUBS) {
+      if (line.includes(stub)) errors.push(`linha ${index + 1}: stub ${stub} do template pendente`)
+    }
   })
   const date = meta['Última verificação']
-  if (date && !isIsoDate(date)) errors.push(`Última verificação inválida: "${date}" (use AAAA-MM-DD)`)
+  if (date && !isIsoDate(date))
+    errors.push(`Última verificação inválida: "${date}" (use AAAA-MM-DD)`)
+  else if (date && date > today()) errors.push(`Última verificação no futuro: "${date}"`)
 }
 
 export function checkRunbook(markdown, { strict = false } = {}) {
