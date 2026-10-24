@@ -70,7 +70,7 @@ fi
 # Autorreparo [R1]: mutação local reversível. Nunca falha a sessão.
 INSTALLER="$PROJECT_DIR/scripts/install-git-hooks.mjs"
 if command -v node >/dev/null 2>&1 && [ -f "$INSTALLER" ]; then
-  HOOKS_ACTION="$(node "$INSTALLER" 2>/dev/null || true)"
+  HOOKS_ACTION="$(node "$INSTALLER" || true)"
   case "$HOOKS_ACTION" in
     installed | replaced) echo "protect-main: core.hooksPath reaplicado (.githooks)." ;;
   esac

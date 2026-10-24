@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import {
   chmodSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -111,15 +112,46 @@ describe('installGitHooks (git real)', { timeout: 30000 }, () => {
     expect(second.stderr).toBe('')
   })
 
-  it('package.json tem prepare exato e os shims estão 100755 no índice', () => {
-    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-    expect(pkg.scripts.prepare).toBe('node scripts/install-git-hooks.mjs')
-    const staged = execFileSync('git', ['ls-files', '-s', '.githooks'], {
-      cwd: ROOT,
+  it('global-only core.hooksPath → installed, valor local .githooks', () => {
+    const globalCfg = join(tmp, 'global.gitconfig')
+    writeFileSync(globalCfg, '[core]\n\thooksPath = /x\n')
+    process.env.GIT_CONFIG_GLOBAL = globalCfg
+    expect(installGitHooks(repo)).toEqual({ action: 'installed', previous: null })
+    expect(git(repo, 'config', '--local', '--get', 'core.hooksPath').trim()).toBe('.githooks')
+  })
+
+  it('core.hooksPath local vazio → installed', () => {
+    git(repo, 'config', 'core.hooksPath', '')
+    expect(installGitHooks(repo)).toEqual({ action: 'installed', previous: null })
+    expect(hooksPath()).toBe('.githooks')
+  })
+
+  it('sem binário git (PATH vazio) → CLI sai 0 com skipped', () => {
+    const emptyBin = join(tmp, 'empty-bin')
+    mkdirSync(emptyBin)
+    mkdirSync(join(repo, 'scripts'))
+    cpSync(join(ROOT, 'scripts/install-git-hooks.mjs'), join(repo, 'scripts/install-git-hooks.mjs'))
+    const result = spawnSync(process.execPath, [join(repo, 'scripts/install-git-hooks.mjs')], {
+      cwd: repo,
+      env: { ...ENV, PATH: emptyBin },
       encoding: 'utf8',
     })
-    const lines = staged.trim().split('\n')
-    expect(lines).toHaveLength(2)
-    for (const line of lines) expect(line.startsWith('100755')).toBe(true)
+    expect(result.status).toBe(0)
+    expect(result.stdout.trim()).toBe('skipped')
+  })
+
+  it('package.json tem prepare exato', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+    expect(pkg.scripts.prepare).toBe('node scripts/install-git-hooks.mjs')
+  })
+
+  it.skipIf(!existsSync(join(ROOT, '.git')))('shims estão 100755 no índice', () => {
+    for (const shim of ['reference-transaction', 'pre-push']) {
+      const staged = execFileSync('git', ['ls-files', '-s', `.githooks/${shim}`], {
+        cwd: ROOT,
+        encoding: 'utf8',
+      })
+      expect(staged.startsWith('100755')).toBe(true)
+    }
   })
 })

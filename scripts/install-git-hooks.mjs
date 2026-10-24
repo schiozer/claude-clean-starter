@@ -24,8 +24,12 @@ const gitRoot = (dir) => {
   try {
     return realpathSync(git(dir, ['rev-parse', '--show-toplevel']).trim())
   } catch (error) {
-    // git instalado mas fora de repo → status 128; git ausente/quebrado → propaga.
-    if (error && typeof error === 'object' && 'status' in error && error.status === 128) return null
+    // fora de repo → status 128; sem binário git (ENOENT, ex.: Docker slim) → também pula.
+    // Só um git que roda e se comporta mal conta como quebrado (propaga).
+    if (error && typeof error === 'object') {
+      if ('status' in error && error.status === 128) return null
+      if ('code' in error && error.code === 'ENOENT') return null
+    }
     throw error
   }
 }
@@ -43,10 +47,14 @@ const localHooksPath = (dir) => {
 /** @param {string} dir */
 const ensureExecutable = (dir) => {
   for (const shim of SHIMS) {
-    const file = join(dir, HOOKS_PATH, shim)
-    if (!existsSync(file)) continue
-    const mode = statSync(file).mode
-    if ((mode & EXEC_BITS) !== EXEC_BITS) chmodSync(file, 0o755)
+    try {
+      const file = join(dir, HOOKS_PATH, shim)
+      if (!existsSync(file)) continue
+      const mode = statSync(file).mode
+      if ((mode & EXEC_BITS) !== EXEC_BITS) chmodSync(file, 0o755)
+    } catch {
+      // checkout somente leitura / dono diferente: melhor esforço, nunca falha a instalação.
+    }
   }
 }
 
@@ -60,12 +68,14 @@ export function installGitHooks(dir) {
     return { action: 'skipped', previous: null }
   }
 
-  ensureExecutable(root)
-
   const current = localHooksPath(root)
-  if (current === HOOKS_PATH) return { action: 'unchanged', previous: null }
+  if (current === HOOKS_PATH) {
+    ensureExecutable(root)
+    return { action: 'unchanged', previous: null }
+  }
 
   git(root, ['config', '--local', 'core.hooksPath', HOOKS_PATH])
+  ensureExecutable(root)
   if (current === '') return { action: 'installed', previous: null }
   return { action: 'replaced', previous: current }
 }
