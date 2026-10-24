@@ -1,20 +1,33 @@
-// Tokenizador de comandos shell do hook protect-main.
-// Quebra um comando em segmentos (`&&`, `||`, `;`, `|`, `&`, quebra de linha) e tokens,
-// respeitando aspas, `$(…)`, backticks e heredocs. Não executa nem expande nada.
+// Parser de comandos shell do hook protect-main.
+// A partir dos segmentos crus do scanner, desembrulha wrappers (`env`, `timeout`, `xargs`…),
+// shells (`bash -c`, heredoc, here-string) e substituições `$(…)`/backticks, devolvendo os
+// segmentos na ordem em que o shell os executaria. Não executa nem expande nada.
+
+import { scan, scanWords } from './scan.mjs'
 
 /**
  * @typedef {object} Segment
- * @property {string[]} argv Tokens já desembrulhados (sem `VAR=x`, `env`, `command`, `time`, `sudo`).
+ * @property {string[]} argv Tokens já desembrulhados (sem atribuições `VAR=x` nem wrappers).
  * @property {boolean} ambiguous Resultado depende de expansão que não conseguimos resolver.
+ * @property {string[]} scope Caminho de subshells (`( … )`, `$(…)`, `bash -c`) em que roda;
+ *   um `cd` só vale dentro do próprio escopo.
+ * @property {boolean} pipeline Faz parte de um pipeline (`|`): roda num subshell.
+ * @property {boolean} background Termina em `&`: roda num subshell.
+ * @property {boolean} gitEnv Prefixos mudam o repositório/config do git (`GIT_DIR`,
+ *   `GIT_WORK_TREE`, `GIT_CONFIG_*`, `env -C`); atribuição/`export` isolada vem com `argv` vazio.
+ * @property {boolean} opaqueArgs Argumentos completados pela entrada (`xargs`).
+ * @property {boolean} stdinScript Shell que lê o script de um pipe.
  */
 
-/** @typedef {{ text: string, dynamic: boolean }} Token */
+/** @typedef {import('./scan.mjs').Token} Token */
+/** @typedef {import('./scan.mjs').RawSegment} RawSegment */
 
 const MESSAGE_FLAGS = new Set(['-m', '--message', '-F', '--file'])
 const MESSAGE_FLAG_PREFIXES = ['--message=', '--file=']
 const GIT_MESSAGE_SUBCOMMANDS = new Set(['commit', 'merge', 'tag', 'notes', 'stash'])
 const SHELL_OPTIONS_WITH_ARG = new Set(['-o', '+o', '-O', '+O', '--rcfile', '--init-file'])
-const SHELLS = new Set(['bash', 'sh', 'zsh'])
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh'])
+const DECLARATIONS = new Set(['export', 'declare', 'typeset', 'local', 'readonly'])
 const KEYWORDS = new Set([
   '{',
   '}',
@@ -29,270 +42,75 @@ const KEYWORDS = new Set([
   'while',
   'until',
 ])
-const WRAPPERS_WITH_ARG_OPTIONS = {
-  env: ['-u', '-C', '-S'],
-  sudo: ['-u', '-g'],
-  time: [],
-  command: [],
+
+/**
+ * Wrappers que executam o comando seguinte: opções que levam valor separado e quantos
+ * posicionais vêm antes do comando (`timeout <duração> cmd`).
+ * @type {Record<string, { withArg: string[], positionals?: number }>}
+ */
+const WRAPPERS = {
+  env: { withArg: ['-u', '--unset', '-C', '--chdir', '-S', '--split-string'] },
+  sudo: { withArg: ['-u', '-g', '-h', '-p', '-C', '-D', '-r', '-t', '-U', '-T'] },
+  doas: { withArg: ['-u', '-C'] },
+  time: { withArg: ['-f', '--format', '-o', '--output'] },
+  command: { withArg: [] },
+  exec: { withArg: ['-a'] },
+  nohup: { withArg: [] },
+  nice: { withArg: ['-n', '--adjustment'] },
+  timeout: { withArg: ['-s', '--signal', '-k', '--kill-after'], positionals: 1 },
+  stdbuf: { withArg: ['-i', '--input', '-o', '--output', '-e', '--error'] },
+  caffeinate: { withArg: ['-w', '-t'] },
+  ionice: { withArg: ['-c', '--class', '-n', '--classdata', '-p', '--pid', '-P', '-u'] },
+  xargs: {
+    withArg: ['-I', '-L', '-n', '-P', '-s', '-d', '-E', '-a', '--max-args', '--max-procs'],
+  },
 }
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
-const VAR_START = /[A-Za-z_0-9{@*#?!$-]/
+const GIT_ENV_ASSIGNMENT = /^GIT_(CONFIG\w*|DIR|WORK_TREE)=/
+const REDIRECTION = /^\d*[<>]/
+
+const baseName = (text) => text.split('/').pop() ?? ''
 
 /**
- * Lê o corpo dos heredocs pendentes a partir da quebra de linha em `nl`.
- * @param {string} s
- * @param {number} nl índice da quebra de linha que antecede o corpo
- * @param {{ delim: string, strip: boolean, expands: boolean }[]} pending
- * @returns {{ pos: number, dynamic: boolean }} `pos`: fim da linha delimitadora (índice da quebra ou s.length)
+ * Remove wrappers, atribuições e palavras-chave do início.
+ * @param {Token[]} tokens
+ * @returns {{ tokens: Token[], gitEnv: boolean, opaqueArgs: boolean }}
  */
-function skipHeredocBodies(s, nl, pending) {
-  let pos = nl
-  let dynamic = false
-  for (const { delim, strip, expands } of pending) {
-    let start = pos + 1
-    for (;;) {
-      if (start > s.length) {
-        pos = s.length
-        break
-      }
-      const end = s.indexOf('\n', start) === -1 ? s.length : s.indexOf('\n', start)
-      const line = s.slice(start, end)
-      if ((strip ? line.replace(/^\t+/, '') : line) === delim) {
-        pos = end
-        break
-      }
-      if (expands && (line.includes('$(') || line.includes('`'))) dynamic = true
-      if (end === s.length) {
-        pos = end
-        break
-      }
-      start = end + 1
-    }
-  }
-  return { pos, dynamic }
-}
-
-/**
- * Lê a palavra-delimitador de um heredoc em `i` (após `<<` e `-` opcionais).
- * @returns {{ delim: string, expands: boolean, end: number }}
- */
-function readHeredocDelimiter(s, i) {
-  while (s[i] === ' ' || s[i] === '\t') i++
-  let delim = ''
-  let expands = true
-  while (i < s.length && !/[\s;&|()<>]/.test(s[i])) {
-    if (s[i] === "'" || s[i] === '"') {
-      const close = s.indexOf(s[i], i + 1)
-      const stop = close === -1 ? s.length : close
-      delim += s.slice(i + 1, stop)
-      expands = false
-      i = stop + 1
-    } else {
-      if (s[i] === '\\') expands = false
-      else delim += s[i]
-      i++
-    }
-  }
-  return { delim, expands, end: i }
-}
-
-/**
- * Lê `$( … )` em `i` (s[i] === '$', s[i+1] === '('), com aninhamento, aspas e heredocs.
- * @returns {{ raw: string, end: number }} `end`: índice logo após o `)` de fechamento
- */
-function readSubstitution(s, i) {
-  let depth = 1
-  let raw = '$('
-  i += 2
-  const pending = []
-  while (i < s.length) {
-    const c = s[i]
-    if (c === '\\') {
-      raw += s.slice(i, i + 2)
-      i += 2
-      continue
-    }
-    if (c === "'" || c === '"') {
-      let j = i + 1
-      while (j < s.length && s[j] !== c) j += c === '"' && s[j] === '\\' ? 2 : 1
-      raw += s.slice(i, j + 1)
-      i = j + 1
-      continue
-    }
-    if (c === '<' && s[i + 1] === '<' && s[i + 2] !== '<') {
-      let j = i + 2
-      const strip = s[j] === '-'
-      if (strip) j++
-      const { delim, expands, end } = readHeredocDelimiter(s, j)
-      pending.push({ delim, strip, expands })
-      raw += s.slice(i, end)
-      i = end
-      continue
-    }
-    if (c === '\n' && pending.length) {
-      const { pos } = skipHeredocBodies(s, i, pending)
-      pending.length = 0
-      raw += '\n'
-      i = pos + 1
-      continue
-    }
-    if (c === '(') depth++
-    if (c === ')') depth--
-    raw += c
-    i++
-    if (depth === 0) break
-  }
-  return { raw, end: i }
-}
-
-/**
- * Divide o comando em segmentos de tokens crus (ainda sem desembrulhar wrappers).
- * @param {string} s
- * @returns {{ tokens: Token[], dynamicHeredoc: boolean }[]}
- */
-function scan(s) {
-  /** @type {{ tokens: Token[], dynamicHeredoc: boolean }[]} */
-  const segments = []
-  /** @type {Token[]} */
-  let tokens = []
-  let text = ''
-  let started = false
-  let dynamic = false
-  let pending = []
-
-  const endToken = () => {
-    if (started) tokens.push({ text, dynamic })
-    text = ''
-    started = false
-    dynamic = false
-  }
-  const endSegment = () => {
-    endToken()
-    if (tokens.length) segments.push({ tokens, dynamicHeredoc: false })
-    tokens = []
-  }
-  const add = (chunk, isDynamic = false) => {
-    text += chunk
-    started = true
-    if (isDynamic) dynamic = true
-  }
-
-  /** `$…` em contexto sem aspas simples; devolve o novo índice. */
-  const readDollar = (i) => {
-    const next = s[i + 1]
-    if (next === '(') {
-      const { raw, end } = readSubstitution(s, i)
-      add(raw, true)
-      return end
-    }
-    if (next === '{') {
-      const close = s.indexOf('}', i)
-      const end = close === -1 ? s.length : close + 1
-      add(s.slice(i, end), true)
-      return end
-    }
-    if (next !== undefined && VAR_START.test(next)) {
-      add('$', true)
-      return i + 1
-    }
-    add('$')
-    return i + 1
-  }
-
-  const readBacktick = (i) => {
-    let j = i + 1
-    while (j < s.length && s[j] !== '`') j += s[j] === '\\' ? 2 : 1
-    add(s.slice(i, j + 1), true)
-    return j + 1
-  }
-
-  let i = 0
-  while (i < s.length) {
-    const c = s[i]
-    if (c === "'") {
-      const close = s.indexOf("'", i + 1)
-      const stop = close === -1 ? s.length : close
-      add(s.slice(i + 1, stop))
-      i = stop + 1
-    } else if (c === '"') {
-      started = true
-      i++
-      while (i < s.length && s[i] !== '"') {
-        if (s[i] === '\\') {
-          const n = s[i + 1]
-          if (n === '\n') {
-            // continuação de linha
-          } else if (n === '"' || n === '\\' || n === '$' || n === '`') add(n)
-          else add('\\' + (n ?? ''))
-          i += 2
-        } else if (s[i] === '$') i = readDollar(i)
-        else if (s[i] === '`') i = readBacktick(i)
-        else add(s[i++])
-      }
-      i++
-    } else if (c === '\\') {
-      if (s[i + 1] !== '\n' && i + 1 < s.length) add(s[i + 1])
-      i += 2
-    } else if (c === '$' && s[i + 1] === "'") {
-      i++
-    } else if (c === '$') {
-      i = readDollar(i)
-    } else if (c === '`') {
-      i = readBacktick(i)
-    } else if (c === ' ' || c === '\t' || c === '\r') {
-      endToken()
-      i++
-    } else if (c === '\n') {
-      endSegment()
-      if (pending.length) {
-        const { pos, dynamic: bodyDynamic } = skipHeredocBodies(s, i, pending)
-        if (bodyDynamic && segments.length) segments[segments.length - 1].dynamicHeredoc = true
-        pending = []
-        i = pos
-      }
-      i++
-    } else if (c === '#' && !started) {
-      while (i < s.length && s[i] !== '\n') i++
-    } else if (c === '<' && s[i + 1] === '<' && s[i + 2] !== '<') {
-      endToken()
-      let j = i + 2
-      const strip = s[j] === '-'
-      if (strip) j++
-      const { delim, expands, end } = readHeredocDelimiter(s, j)
-      pending.push({ delim, strip, expands })
-      i = end
-    } else if (c === '&' && (s[i - 1] === '>' || s[i - 1] === '<' || s[i + 1] === '>')) {
-      add(c) // redirecionamento (`2>&1`, `&>`), não é separador
-      i++
-    } else if (c === ';' || c === '&' || c === '|' || c === '(' || c === ')') {
-      endSegment()
-      i++
-      if ((c === '&' || c === '|') && s[i] === c) i++
-    } else {
-      add(c)
-      i++
-    }
-  }
-  endSegment()
-  return segments
-}
-
-/** Remove wrappers (`env`, `command`, `time`, `sudo`), atribuições e palavras-chave do início. */
 function stripPrefixes(tokens) {
   let t = tokens
+  let gitEnv = false
+  let opaqueArgs = false
   for (;;) {
-    if (!t.length) return t
+    if (!t.length) return { tokens: t, gitEnv, opaqueArgs }
     const head = t[0].text
-    if (ASSIGNMENT.test(head) || KEYWORDS.has(head)) {
+    const name = baseName(head)
+    if (ASSIGNMENT.test(head)) {
+      gitEnv ||= GIT_ENV_ASSIGNMENT.test(head)
       t = t.slice(1)
-    } else if (head in WRAPPERS_WITH_ARG_OPTIONS) {
-      const takesArg = WRAPPERS_WITH_ARG_OPTIONS[head]
+    } else if (KEYWORDS.has(head)) {
+      t = t.slice(1)
+    } else if (Object.hasOwn(WRAPPERS, name)) {
+      const { withArg, positionals = 0 } = WRAPPERS[name]
+      if (name === 'xargs') opaqueArgs = true
       let k = 1
+      /** @type {Token[]} */
+      let split = []
       while (k < t.length && (t[k].text.startsWith('-') || ASSIGNMENT.test(t[k].text))) {
-        k += takesArg.includes(t[k].text) ? 2 : 1
+        const opt = t[k].text
+        gitEnv ||= GIT_ENV_ASSIGNMENT.test(opt)
+        if (name === 'env' && /^(-C|--chdir)/.test(opt)) gitEnv = true
+        if (name === 'env' && /^(-S|--split-string)/.test(opt)) {
+          const value = opt.includes('=')
+            ? opt.slice(opt.indexOf('=') + 1)
+            : opt.length > 2 && opt.startsWith('-S')
+              ? opt.slice(2)
+              : (t[k + 1]?.text ?? '')
+          split = scanWords(value)
+        }
+        k += withArg.includes(opt) ? 2 : 1
       }
-      t = t.slice(k)
-    } else return t
+      t = [...split, ...t.slice(k + positionals)]
+    } else return { tokens: t, gitEnv, opaqueArgs }
   }
 }
 
@@ -308,7 +126,7 @@ function hasUnresolvedExpansion(tokens, messageFlagsApply) {
 
 /** Subcomando do git (pulando opções globais), ou null se o comando não é git. */
 function gitSubcommand(tokens) {
-  if (tokens[0].text.split('/').pop() !== 'git') return null
+  if (baseName(tokens[0].text) !== 'git') return null
   for (let k = 1; k < tokens.length; k++) {
     const t = tokens[k].text
     if (t === '-C' || t === '-c') k++
@@ -324,24 +142,109 @@ function messageFlagsApply(tokens) {
 }
 
 /**
- * Se o segmento é `bash|sh|zsh [opções] -c "<script>"`, devolve o script.
- * `unresolved`: é um shell com `-c`, mas não conseguimos localizar o script.
- * @returns {{ script: string | null, unresolved: boolean }}
+ * Como o segmento invoca um shell: `script` (via `-c` ou here-string), `unresolved` (`-c` sem
+ * script), `stdin` (lê o script da entrada: heredoc, pipe ou `-s`), `none` (não é shell, ou
+ * roda um arquivo de script — fora do escopo).
+ * @param {Token[]} tokens
+ * @returns {{ kind: 'none' | 'unresolved' | 'stdin' } | { kind: 'script', script: string }}
  */
-function shellScript(tokens) {
-  const none = { script: null, unresolved: false }
-  const name = tokens[0].text.split('/').pop() ?? ''
-  if (!SHELLS.has(name)) return none
+function shellInvocation(tokens) {
+  if (!SHELLS.has(baseName(tokens[0].text))) return { kind: 'none' }
   for (let k = 1; k < tokens.length; k++) {
     const t = tokens[k].text
-    if (!/^[-+]/.test(t)) return none
-    if (SHELL_OPTIONS_WITH_ARG.has(t)) k++
-    else if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(t)) {
-      const script = tokens[k + 1]?.text ?? null
-      return { script, unresolved: script === null }
+    if (t.startsWith('<<<')) {
+      const script = t.length > 3 ? t.slice(3) : tokens[k + 1]?.text
+      return script === undefined ? { kind: 'unresolved' } : { kind: 'script', script }
     }
+    if (REDIRECTION.test(t)) {
+      if (/^\d*[<>]+&?$/.test(t)) k++
+    } else if (/^[-+]/.test(t)) {
+      if (SHELL_OPTIONS_WITH_ARG.has(t)) k++
+      else if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(t)) {
+        const script = tokens[k + 1]?.text
+        return script === undefined ? { kind: 'unresolved' } : { kind: 'script', script }
+      } else if (/^-[a-zA-Z]*s[a-zA-Z]*$/.test(t)) return { kind: 'stdin' }
+    } else return { kind: 'none' }
   }
-  return none
+  return { kind: 'stdin' }
+}
+
+/**
+ * @param {string[]} argv
+ * @param {boolean} ambiguous
+ * @param {Partial<Segment> & { scope: string[] }} rest
+ * @returns {Segment}
+ */
+const makeSegment = (argv, ambiguous, rest) => ({
+  argv,
+  ambiguous,
+  pipeline: false,
+  background: false,
+  gitEnv: false,
+  opaqueArgs: false,
+  stdinScript: false,
+  ...rest,
+})
+
+/**
+ * Segmentos de um script interno (de `bash -c`, heredoc), herdando ambiguidade e prefixos.
+ * @param {string} script
+ * @param {string[]} scope
+ * @param {Segment} outer
+ */
+function innerSegments(script, scope, outer) {
+  return parseScript(script, scope).map((inner) => ({
+    ...inner,
+    ambiguous: inner.ambiguous || outer.ambiguous,
+    gitEnv: inner.gitEnv || outer.gitEnv,
+    opaqueArgs: inner.opaqueArgs || outer.opaqueArgs,
+  }))
+}
+
+/**
+ * @param {string} command
+ * @param {string[]} scope escopo de subshell do script inteiro
+ * @returns {Segment[]}
+ */
+function parseScript(command, scope) {
+  /** @type {Segment[]} */
+  const result = []
+  scan(command).forEach((raw, index) => {
+    const base = [...scope, ...raw.scope]
+    // Substituições rodam antes do comando que as contém, cada uma num subshell.
+    raw.substitutions.forEach((body, n) => {
+      result.push(...parseScript(body, [...base, `c${index}.${n}`]))
+    })
+    const { tokens, gitEnv, opaqueArgs } = stripPrefixes(raw.tokens)
+    if (!tokens.length) {
+      if (gitEnv) result.push(makeSegment([], false, { scope: base, gitEnv }))
+      return
+    }
+    const argv = tokens.map((tok) => tok.text)
+    // Conservador: expansões nos prefixos descartados (`FOO=$(x) git push`) também contam.
+    const ambiguous =
+      raw.dynamicHeredoc ||
+      tokens[0].text === 'eval' ||
+      hasUnresolvedExpansion(raw.tokens, messageFlagsApply(tokens))
+    const segment = makeSegment(argv, ambiguous, {
+      scope: base,
+      pipeline: raw.before === '|' || raw.after === '|',
+      background: raw.after === '&',
+      gitEnv: gitEnv || (DECLARATIONS.has(argv[0]) && argv.some((a) => GIT_ENV_ASSIGNMENT.test(a))),
+      opaqueArgs,
+    })
+    const shell = shellInvocation(tokens)
+    if (shell.kind === 'script') {
+      result.push(...innerSegments(shell.script, [...base, `b${index}`], segment))
+    } else if (shell.kind === 'unresolved') {
+      result.push({ ...segment, ambiguous: true })
+    } else if (shell.kind === 'stdin' && raw.heredocs.length) {
+      result.push(...innerSegments(raw.heredocs.join('\n'), [...base, `h${index}`], segment))
+    } else {
+      result.push({ ...segment, stdinScript: shell.kind === 'stdin' && raw.before === '|' })
+    }
+  })
+  return result
 }
 
 /**
@@ -349,24 +252,5 @@ function shellScript(tokens) {
  * @returns {Segment[]}
  */
 export function parseCommand(command) {
-  /** @type {Segment[]} */
-  const result = []
-  for (const { tokens: raw, dynamicHeredoc } of scan(command)) {
-    const tokens = stripPrefixes(raw)
-    if (!tokens.length) continue
-    // Conservador: expansões nos prefixos descartados (`FOO=$(x) git push`) também contam.
-    const ambiguous =
-      dynamicHeredoc ||
-      tokens[0].text === 'eval' ||
-      hasUnresolvedExpansion(raw, messageFlagsApply(tokens))
-    const { script, unresolved } = shellScript(tokens)
-    if (script === null) {
-      result.push({ argv: tokens.map((tok) => tok.text), ambiguous: ambiguous || unresolved })
-      continue
-    }
-    for (const inner of parseCommand(script)) {
-      result.push({ argv: inner.argv, ambiguous: inner.ambiguous || ambiguous })
-    }
-  }
-  return result
+  return parseScript(command, [])
 }

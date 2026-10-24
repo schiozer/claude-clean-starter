@@ -92,6 +92,27 @@ describe('protect-main run.mjs', () => {
     expect(runHook(payloadFor('git push origin main', plain)).status).toBe(2)
   })
 
+  it('should resolve $CLAUDE_PROJECT_DIR in cd from the environment', () => {
+    commitInitial()
+    const wt = join(tmp, 'wt')
+    git(repo, 'worktree', 'add', '-q', wt, '-b', 'feat/wt')
+    const command = 'cd "$CLAUDE_PROJECT_DIR" && git commit -m x'
+    expect(runHook(payloadFor(command, repo), { ...ENV, CLAUDE_PROJECT_DIR: wt }).status).toBe(0)
+    expect(runHook(payloadFor(command, wt), { ...ENV, CLAUDE_PROJECT_DIR: repo }).status).toBe(2)
+  })
+
+  it('should not depend on the locale of git messages', () => {
+    const plain = join(tmp, 'plain')
+    mkdirSync(plain)
+    const env = { ...ENV, LANG: 'pt_BR.UTF-8', LC_ALL: 'pt_BR.UTF-8', LANGUAGE: 'pt_BR' }
+    expect(runHook(payloadFor('git commit -m x', plain), env).status).toBe(0)
+  })
+
+  it('should block a commit hidden in a command substitution', () => {
+    commitInitial()
+    expect(runHook(payloadFor('x=$(git commit -m x)', repo)).status).toBe(2)
+  })
+
   it('should allow non-Bash tools and payloads without command', () => {
     expect(runHook(JSON.stringify({ tool_name: 'Read', tool_input: {} })).status).toBe(0)
     expect(runHook(JSON.stringify({ tool_name: 'Bash', tool_input: {} })).status).toBe(0)

@@ -4,7 +4,12 @@ import { evaluateCommand, BLOCK_PREFIX } from '../../hooks/protect-main/evaluate
 const BRANCHES: Record<string, string> = { '/repo': 'main', '/repo/wt': 'feat/x' }
 const ALIASES: Record<string, string> = { co: 'commit', sh: '!git push' }
 
-type Opts = { cwd?: string; detached?: boolean; protectedBranches?: string[] }
+type Opts = {
+  cwd?: string
+  detached?: boolean
+  protectedBranches?: string[]
+  env?: Record<string, string>
+}
 
 // Branch do worktree que contém `dir` (o prefixo mais longo), como `git symbolic-ref` faria.
 const fakeBranchOf = (dir: string) => {
@@ -20,6 +25,7 @@ const evaluate = (command: string, opts: Opts = {}) =>
     protectedBranches: opts.protectedBranches ?? ['main'],
     branchOf: (dir: string) => (opts.detached ? null : fakeBranchOf(dir)),
     aliasOf: (_dir: string, name: string) => ALIASES[name] ?? null,
+    env: opts.env,
   })
 
 const ON_FEAT: Opts = { cwd: '/repo/wt' }
@@ -81,6 +87,95 @@ const BLOCKED: [string, Opts?][] = [
   ["git push origin 'refs/heads/*:refs/heads/*'", ON_FEAT],
   ["git push origin '*:*'", ON_FEAT],
   ['gh pr merge 1', { detached: true }],
+  // spec §7: heredoc de mensagem de commit na main
+  ['git commit -m "$(cat <<\'EOF\'\nfeat: x\n\ngit push origin main\nEOF\n)"'],
+  // 1. substituições são avaliadas
+  ['x=$(git push origin main)'],
+  ['x=$(git push origin main)', ON_FEAT],
+  ['out=$(git commit -m x 2>&1); echo "$out"'],
+  ['echo "$(git commit -m x)"'],
+  ['echo `git push origin main`'],
+  ['git commit -m "$(git push origin main)"', ON_FEAT],
+  ['git commit -m "`git push origin main`"', ON_FEAT],
+  ['cat <<EOF > f\n$(git push origin main)\nEOF', ON_FEAT],
+  ['echo ${X:-$(git push origin main)}', ON_FEAT],
+  ['echo $(echo $(git push origin main))', ON_FEAT],
+  // 2. cd em subshell, pipeline ou background não muda o diretório
+  ['(cd .worktrees/fx && npm test) && git commit -m x'],
+  ['(cd wt && npm test) && git commit -m x'],
+  ['(cd wt); git commit -m x'],
+  ['cd wt & git commit -m x'],
+  ['cd wt | cat; git commit -m x'],
+  ['bash -c "cd wt"; git commit -m x'],
+  ['echo $(cd wt) && git commit -m x'],
+  // 3. wrappers
+  ['timeout 60 git push origin main', ON_FEAT],
+  ['timeout -s KILL 60 git push origin main', ON_FEAT],
+  ['nohup git push origin main', ON_FEAT],
+  ['nice -n 5 git commit -m x'],
+  ['exec git commit -m x'],
+  ['echo main | xargs git push origin', ON_FEAT],
+  ['git branch | xargs -n 1 git log', ON_FEAT],
+  ['env -S "git push origin main"', ON_FEAT],
+  ['stdbuf -o L git push origin main', ON_FEAT],
+  ['caffeinate -i git push origin main', ON_FEAT],
+  ['ionice -c 3 git push origin main', ON_FEAT],
+  ['doas -u bob git push origin main', ON_FEAT],
+  ['/usr/bin/env git push origin main', ON_FEAT],
+  ['echo git push origin main', ON_FEAT],
+  ['foo --run git push origin main', ON_FEAT],
+  // 4. scripts via stdin
+  ["bash <<'X'\ngit push origin main\nX", ON_FEAT],
+  ['echo "git push origin main" | bash', ON_FEAT],
+  ['cat <<EOF | sh\ngit push origin main\nEOF', ON_FEAT],
+  ['dash -c "git push origin main"', ON_FEAT],
+  ['ksh -c "git push origin main"', ON_FEAT],
+  ['bash <<< "git push origin main"', ON_FEAT],
+  ['echo "git push origin main" | bash -s', ON_FEAT],
+  // 5. config inline
+  ['git -c alias.p=push p origin main', ON_FEAT],
+  ['git -c "alias.p=!git push origin main" p', ON_FEAT],
+  [
+    'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.p GIT_CONFIG_VALUE_0=push git p origin main',
+    ON_FEAT,
+  ],
+  ['git -c push.default=matching push origin', ON_FEAT],
+  ['git -c remote.origin.push=HEAD:main push', ON_FEAT],
+  ['git --config-env=alias.p=P p origin main', ON_FEAT],
+  ['GIT_DIR=/repo/.git git commit -m x', ON_FEAT],
+  ['env GIT_WORK_TREE=/repo git commit -m x', ON_FEAT],
+  ['env -C /repo git commit -m x', ON_FEAT],
+  ['export GIT_DIR=/repo/.git; git commit -m x', ON_FEAT],
+  ['GIT_DIR=/repo/.git; git commit -m x', ON_FEAT],
+  ['GIT_DIR=x bash -c "git commit -m x"', ON_FEAT],
+  // 6. refspecs
+  ['git push origin feat/x:heads/main', ON_FEAT],
+  ['git push origin heads/main', ON_FEAT],
+  ['git push origin :', ON_FEAT],
+  ['git push origin +:', ON_FEAT],
+  // 7. rotas gh
+  [
+    'gh api graphql -f query=\'mutation{mergePullRequest(input:{pullRequestId:"x"}){clientMutationId}}\'',
+    ON_FEAT,
+  ],
+  ["gh api graphql --raw-field='query=mutation { enablePullRequestAutoMerge }'", ON_FEAT],
+  ["gh api graphql -F query='mutation { updateRef(input: {}) { clientMutationId } }'", ON_FEAT],
+  ['gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc', ON_FEAT],
+  ['gh api repos/o/r/git/refs/heads/main -f sha=abc -F force=true', ON_FEAT],
+  ['gh api --method=DELETE repos/o/r/git/refs/heads/main', ON_FEAT],
+  ['gh api -X PUT repos/o/r/contents/README.md -f message=x -f content=eA==', ON_FEAT],
+  ['gh api -X POST repos/o/r/git/refs -f ref=refs/heads/main -f sha=abc', ON_FEAT],
+  ["x=$(bash <<'X'\ngit push origin main\nX\n)", ON_FEAT],
+  ['bash -lc "cd /repo && git commit -m x"', ON_FEAT],
+  ['gh api --jq .sha repos/o/r/pulls/1/merge -X PUT', ON_FEAT],
+  ["gh alias set m 'pr merge'", ON_FEAT],
+  // 8. nome de comando dinâmico
+  ['G=git; $G push origin main'],
+  ['G=git; $G push origin main', ON_FEAT],
+  ['$CMD push origin main && echo gh', ON_FEAT],
+  // menores: brace expansion e ANSI-C
+  ['git push origin {main,feat/x}', ON_FEAT],
+  ["git push origin $'\\x6dain'", ON_FEAT],
 ]
 
 const ALLOWED: [string, Opts?][] = [
@@ -124,6 +219,43 @@ const ALLOWED: [string, Opts?][] = [
   ['git switch main'],
   ['git reset --hard origin/main'],
   ['git lfs pull'],
+  // guarda de regressão
+  [
+    'git add -A && git commit -m "$(cat <<\'EOF\'\nfeat: x\n\nmain && git push origin main\nEOF\n)" && git push -u origin feat/x',
+    ON_FEAT,
+  ],
+  [
+    'gh pr create --base main --title "t" --body "$(cat <<\'EOF\'\nbody with git push origin main\nEOF\n)"',
+    ON_FEAT,
+  ],
+  ['git push origin --delete feat/old', ON_FEAT],
+  ['(cd .worktrees/fx && npm test)'],
+  ['npm test 2>&1 | tail -5'],
+  ['timeout 60 npm test'],
+  ['bash scripts/x.sh'],
+  ['cd "$CLAUDE_PROJECT_DIR" && git status'],
+  ['git checkout main && git pull && git checkout -b feat/y && git commit -m x'],
+  ['(cd wt && git commit -m x)'],
+  ['cd wt && npm test | tail -5 && git commit -m x'],
+  ['timeout 60 git push origin feat/x', ON_FEAT],
+  ['nice -n 5 git commit -m x', ON_FEAT],
+  ['git push origin feat/x:refs/heads/feat/x', ON_FEAT],
+  ['git -c core.editor=true commit -m x', ON_FEAT],
+  ['gh api graphql -f query="query { viewer { login } }"', ON_FEAT],
+  ['gh alias set co "pr checkout"', ON_FEAT],
+  ["bash <<'X'\nnpm test\nX"],
+  ['cd ~/wt && git commit -m x', { env: { HOME: '/repo' } }],
+  ['cd ~ && cd wt && git commit -m x', { env: { HOME: '/repo' } }],
+  ['cd "$CLAUDE_PROJECT_DIR" && git commit -m x', { env: { CLAUDE_PROJECT_DIR: '/repo/wt' } }],
+  ['cd ${HOME}/wt && git commit -m x', { env: { HOME: '/repo' } }],
+  ['git log --oneline | head -5', ON_FEAT],
+  ['env GIT_DIR=x npm test && git commit -m x', ON_FEAT],
+  ['git ls-files | xargs rg foo', ON_FEAT],
+  ['gh api repos/o/r/pulls -f title=x -f head=feat/x -f base=main', ON_FEAT],
+  ['gh api repos/o/r/contents/README.md', ON_FEAT],
+  ['ls ~/.config/gh && which git', ON_FEAT],
+  ['{ cd wt; } && git commit -m x'],
+  ['git rev-parse HEAD; constructor x; toString y'],
 ]
 
 describe('evaluateCommand', () => {

@@ -10,7 +10,11 @@ import { parseCommand } from './parse.mjs'
  * @property {string[]} protectedBranches Branches que só recebem mudanças via PR.
  * @property {(dir: string) => string | null} branchOf Branch atual em `dir` (null = HEAD destacado / fora de repo).
  * @property {(dir: string, name: string) => string | null} aliasOf Expansão de `alias.<name>` em `dir`.
+ * @property {Record<string, string | undefined>} [env] `HOME` e `CLAUDE_PROJECT_DIR`, para resolver
+ *   `cd ~`, `cd "$HOME/x"` e `cd "$CLAUDE_PROJECT_DIR"`.
  */
+
+/** @typedef {import('./parse.mjs').Segment} Segment */
 
 /** @typedef {{ allowed: true } | { allowed: false, reason: string }} Verdict */
 
@@ -22,6 +26,9 @@ const UNKNOWN = Symbol('unknown')
 
 export const BLOCK_PREFIX =
   'Bloqueado: a `main` só recebe mudanças via PR (CLAUDE.md regra 0, ADR-005). Crie uma branch `tipo/descrição`, faça push e abra o PR; o merge é do humano.'
+
+/** O texto menciona git/gh? Mesmo critério do fail-closed do `run.mjs`. */
+export const MENTIONS_GIT = /\bgit\b|\bgh\b/i
 
 const AMBIGUOUS =
   'Não foi possível verificar o comando; escreva o comando por extenso (sem variáveis, `eval` ou alias com `!`).'
@@ -54,8 +61,21 @@ const WRITE_FAMILY = new Set([
   'checkout',
 ])
 const EXIT_FLAGS = new Set(['--abort', '--quit', '--skip'])
-const GLOBAL_OPTIONS_WITH_ARG = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace'])
+const GLOBAL_OPTIONS_WITH_ARG = new Set([
+  '-C',
+  '-c',
+  '--git-dir',
+  '--work-tree',
+  '--namespace',
+  '--config-env',
+])
+/** Config que muda o destino de um `git push` sem refspec explícito. */
+const PUSH_CONFIG = /^(push\.default|remote\..+\.(push|mirror))$/i
+const GRAPHQL_WRITE =
+  /mergePullRequest|enablePullRequestAutoMerge|updateRef|createCommitOnBranch|mergeBranch/i
+const GH_API_FIELDS = ['-f', '--raw-field', '-F', '--field', '--input']
 const MAX_ALIAS_DEPTH = 5
+const DECLARATIONS = new Set(['export', 'declare', 'typeset', 'local', 'readonly'])
 
 /** Opções (com valor separado) por subcomando, para achar os argumentos posicionais. */
 const OPTIONS_WITH_ARG = {
@@ -65,7 +85,21 @@ const OPTIONS_WITH_ARG = {
   push: ['--repo', '-o', '--push-option', '--receive-pack', '--exec'],
   switch: ['-c', '-C', '--create', '--force-create', '--orphan'],
   checkout: ['-b', '-B', '--orphan'],
-  ghApi: ['-X', '--method', '-H', '--header', '-f', '--raw-field', '-F', '--field', '--input'],
+  ghApi: [
+    '-X',
+    '--method',
+    '-H',
+    '--header',
+    ...GH_API_FIELDS,
+    '-q',
+    '--jq',
+    '-t',
+    '--template',
+    '-p',
+    '--preview',
+    '--hostname',
+    '--cache',
+  ],
   gh: ['-R', '--repo'],
 }
 
@@ -139,11 +173,15 @@ function checkIntegrate(sub, args, branch, protectedBranches) {
   }
 }
 
+/** Refspec `:`/`+:` — push "matching" de todas as branches com o mesmo nome no remoto. */
+const MATCHING = Symbol('matching')
+
 /** Branch de destino de um refspec de push (`HEAD` = branch atual). */
 function pushDestination(refspec, branch) {
   const spec = refspec.replace(/^\+/, '')
   const dest = spec.includes(':') ? spec.slice(spec.indexOf(':') + 1) : spec
-  const name = dest.replace(/^refs\/heads\//, '')
+  if (spec.includes(':') && dest === '') return MATCHING
+  const name = dest.replace(/^(refs\/)?heads\//, '')
   return name === 'HEAD' || name === '@' ? branch : name
 }
 
@@ -159,6 +197,11 @@ function checkPush(args, branch, protectedBranches) {
   for (const refspec of refspecs) {
     const dest = pushDestination(refspec, branch)
     if (dest === UNKNOWN) return block(AMBIGUOUS)
+    if (dest === MATCHING) {
+      return block(
+        '`git push <remoto> :` (matching) envia todas as branches, inclusive as protegidas.'
+      )
+    }
     if (dest !== null && dest.includes('*')) {
       return block(
         '`git push` com refspec glob (`*`) envia várias branches, inclusive as protegidas.'
@@ -171,35 +214,94 @@ function checkPush(args, branch, protectedBranches) {
   return null
 }
 
-/** B8–B9: `gh pr merge` e `gh api …/merge(s)`. Em segmento ambíguo, falha fechado. */
-function checkGh(args, ambiguous) {
-  const [group, action] = positionals(args, [...OPTIONS_WITH_ARG.gh, ...OPTIONS_WITH_ARG.ghApi])
-  if (ambiguous && (isDynamic(group ?? '') || isDynamic(action ?? '') || group === 'api')) {
-    return block(AMBIGUOUS)
+/** Valor de uma opção `gh` (`-X PUT`, `-XPUT`, `--method=PUT`). */
+function optionValues(args, names) {
+  const values = []
+  for (let k = 0; k < args.length; k++) {
+    const a = args[k]
+    if (names.includes(a)) values.push(args[++k] ?? '')
+    else {
+      const long = names.find((n) => n.startsWith('--') && a.startsWith(`${n}=`))
+      const short = names.find((n) => !n.startsWith('--') && a.length > 2 && a.startsWith(n))
+      if (long) values.push(a.slice(long.length + 1))
+      else if (short) values.push(a.slice(short.length))
+    }
   }
-  if (group === 'pr' && action === 'merge') return block('`gh pr merge` é feito pelo humano.')
-  const endpoint = (action ?? '').split('?')[0]
-  if (group === 'api' && /\/merges?\/?$/.test(endpoint)) {
-    return block('`gh api` de merge é feito pelo humano.')
+  return values
+}
+
+/**
+ * `gh api`: merge (B9), mutação GraphQL de merge/ref e escrita REST em ref ou conteúdo da
+ * branch protegida.
+ */
+function checkGhApi(args, endpoint, protectedBranches) {
+  if (/\/merges?\/?$/.test(endpoint)) return block('`gh api` de merge é feito pelo humano.')
+  const fields = optionValues(args, GH_API_FIELDS)
+  if (endpoint === 'graphql') {
+    return fields.some((f) => GRAPHQL_WRITE.test(f))
+      ? block('`gh api graphql` com mutação de merge/ref é feito pelo humano.')
+      : null
+  }
+  const method = optionValues(args, ['-X', '--method']).pop() ?? (fields.length ? 'POST' : 'GET')
+  if (method.toUpperCase() === 'GET') return null
+  const ref = /(?:^|\/)git\/refs\/heads\/(.+?)\/?$/.exec(endpoint)?.[1]
+  const createsRef =
+    /(?:^|\/)git\/refs\/?$/.test(endpoint) &&
+    fields.some((f) => protectedBranches.some((b) => f === `ref=refs/heads/${b}`))
+  if ((ref !== undefined && protectedBranches.includes(ref)) || createsRef) {
+    return block('`gh api` escrevendo direto na ref de uma branch protegida.')
+  }
+  if (/(?:^|\/)contents\//.test(endpoint)) {
+    return block('`gh api …/contents/` grava commits direto na branch.')
   }
   return null
 }
 
-/** Separa opções globais do git do subcomando. */
+/** B8–B9: `gh pr merge`, `gh api` e `gh alias set` de merge. Em segmento ambíguo, falha fechado. */
+function checkGh(args, segment, protectedBranches) {
+  if (segment.opaqueArgs) return block(AMBIGUOUS)
+  const [group, action, ...rest] = positionals(args, [
+    ...OPTIONS_WITH_ARG.gh,
+    ...OPTIONS_WITH_ARG.ghApi,
+  ])
+  if (segment.ambiguous && (isDynamic(group ?? '') || isDynamic(action ?? '') || group === 'api')) {
+    return block(AMBIGUOUS)
+  }
+  if (group === 'pr' && action === 'merge') return block('`gh pr merge` é feito pelo humano.')
+  if (group === 'alias' && action === 'set' && /merge/i.test(rest.slice(1).join(' '))) {
+    return block('`gh alias` de merge: o merge é feito pelo humano.')
+  }
+  if (group === 'api') return checkGhApi(args, (action ?? '').split('?')[0], protectedBranches)
+  return null
+}
+
+/** Separa opções globais do git do subcomando; `configs` são os `-c k=v`. */
 function splitGitArgv(argv) {
   let k = 1
   /** @type {string | null} */
   let chdir = null
   let otherRepo = false
+  let configEnv = false
+  /** @type {string[]} */
+  const configs = []
   for (; k < argv.length; k++) {
     const a = argv[k]
     if (!a.startsWith('-')) break
     const name = a.split('=')[0]
     if (name === '--git-dir' || name === '--work-tree') otherRepo = true
+    if (name === '--config-env') configEnv = true
     if (a === '-C') chdir = argv[k + 1] ?? null
+    if (a === '-c') configs.push(argv[k + 1] ?? '')
     if (GLOBAL_OPTIONS_WITH_ARG.has(a)) k++
   }
-  return { globals: argv.slice(1, k), sub: argv[k], args: argv.slice(k + 1), chdir, otherRepo }
+  const globals = argv.slice(1, k)
+  return { globals, sub: argv[k], args: argv.slice(k + 1), chdir, otherRepo, configEnv, configs }
+}
+
+/** Valor do último `-c <key>=<v>` (chave sem diferenciar maiúsculas), ou undefined. */
+function configValue(configs, key) {
+  const pair = configs.findLast((c) => c.split('=')[0].toLowerCase() === key.toLowerCase())
+  return pair === undefined ? undefined : pair.slice(pair.indexOf('=') + 1)
 }
 
 /**
@@ -223,24 +325,33 @@ function branchAfterSwitch(sub, args, protectedBranches) {
  * Avalia um segmento `git …` e devolve o motivo do bloqueio (ou null).
  * `switch`/`checkout` registram a nova branch em `state.switches`.
  */
-function evaluateGit(argv, ambiguous, state, ctx, depth = 0) {
-  const { globals, sub, args, chdir, otherRepo } = splitGitArgv(argv)
+function evaluateGit(argv, segment, state, ctx, depth = 0) {
+  // `xargs git …`: subcomando e argumentos podem vir da entrada.
+  if (segment.opaqueArgs) return block(AMBIGUOUS)
+  const { globals, sub, args, chdir, otherRepo, configEnv, configs } = splitGitArgv(argv)
   if (sub === undefined) return null
   if (isDynamic(sub)) return block(AMBIGUOUS)
+  // Repositório ou config definidos fora do comando (`GIT_DIR`, `GIT_CONFIG_*`, `--config-env`…).
+  const foreign = otherRepo || configEnv || segment.gitEnv || state.gitEnv
 
   if (!NATIVE_GIT.has(sub)) {
-    const expansion = ctx.aliasOf(state.dir === UNKNOWN ? ctx.cwd : state.dir, sub)
+    const inline = configValue(configs, `alias.${sub}`)
+    if (inline === undefined && foreign) return block(AMBIGUOUS)
+    const expansion = inline ?? ctx.aliasOf(state.dir === UNKNOWN ? ctx.cwd : state.dir, sub)
     if (expansion === null) return null
     if (expansion.trim().startsWith('!') || depth >= MAX_ALIAS_DEPTH) {
       return block(AMBIGUOUS)
     }
     const expanded = parseCommand(expansion)[0]?.argv ?? []
-    return evaluateGit(['git', ...globals, ...expanded, ...args], ambiguous, state, ctx, depth + 1)
+    return evaluateGit(['git', ...globals, ...expanded, ...args], segment, state, ctx, depth + 1)
   }
 
-  if (ambiguous && WRITE_FAMILY.has(sub)) return block(AMBIGUOUS)
+  if (segment.ambiguous && WRITE_FAMILY.has(sub)) return block(AMBIGUOUS)
+  if (sub === 'push' && configs.some((c) => PUSH_CONFIG.test(c.split('=')[0]))) {
+    return block('`git -c push.default`/`remote.<r>.push` muda o destino do `git push`.')
+  }
 
-  const dir = otherRepo ? UNKNOWN : chdir === null ? state.dir : resolveDir(state.dir, chdir)
+  const dir = foreign ? UNKNOWN : chdir === null ? state.dir : resolveDir(state.dir, chdir, ctx.env)
   const branch = branchAt(dir, state, ctx)
   const { protectedBranches } = ctx
 
@@ -256,8 +367,19 @@ function evaluateGit(argv, ambiguous, state, ctx, depth = 0) {
   return null
 }
 
+const HOME_PREFIX = /^(~|\$HOME|\$\{HOME\}|\$CLAUDE_PROJECT_DIR|\$\{CLAUDE_PROJECT_DIR\})(?=\/|$)/
+
+/** Troca `~`, `$HOME` e `$CLAUDE_PROJECT_DIR` no início pelo valor de `env` (se houver). */
+function expandHome(target, env = {}) {
+  const prefix = HOME_PREFIX.exec(target)?.[1]
+  if (prefix === undefined) return target
+  const value = env[prefix === '~' ? 'HOME' : prefix.replace(/[${}]/g, '')]
+  return value ? value + target.slice(prefix.length) : target
+}
+
 /** Diretório após `cd <target>` (relativo ao anterior). */
-function resolveDir(dir, target) {
+function resolveDir(dir, rawTarget, env) {
+  const target = rawTarget === undefined ? undefined : expandHome(rawTarget, env)
   if (target === undefined || isDynamic(target) || /^[~-]/.test(target)) return UNKNOWN
   if (isAbsolute(target)) return resolve(target)
   return dir === UNKNOWN ? UNKNOWN : resolve(dir, target)
@@ -292,29 +414,72 @@ function recordSwitch(dir, branch, state, ctx) {
   state.switches.set(dir, { original, branch })
 }
 
+/** Avalia `argv` se o programa é git ou gh. */
+function evaluateProgram(argv, segment, state, ctx) {
+  const program = baseName(argv[0])
+  if (program === 'git') return evaluateGit(argv, segment, state, ctx)
+  if (program === 'gh') return checkGh(argv.slice(1), segment, ctx.protectedBranches)
+  return null
+}
+
+/** Avalia um segmento; `cd` atualiza `state.dir` (só fora de pipeline/background). */
+function evaluateSegment(segment, command, state, ctx) {
+  const { argv } = segment
+  // `GIT_DIR=x` isolado ou `export GIT_DIR=x` vale para os segmentos seguintes.
+  if (segment.gitEnv && (!argv.length || DECLARATIONS.has(argv[0]))) state.gitEnv = true
+  if (!argv.length) return null
+  if (segment.stdinScript) return MENTIONS_GIT.test(command) ? block(AMBIGUOUS) : null
+  const program = baseName(argv[0])
+  if (program === 'cd' || program === 'pushd' || program === 'popd') {
+    if (segment.pipeline || segment.background) return null
+    state.dir = program === 'popd' ? UNKNOWN : resolveDir(state.dir, argv[1], ctx.env)
+    return null
+  }
+  if (program === 'eval') return MENTIONS_GIT.test(argv.join(' ')) ? block(AMBIGUOUS) : null
+  if (segment.ambiguous && isDynamic(argv[0])) {
+    return MENTIONS_GIT.test(command) ? block(AMBIGUOUS) : null
+  }
+  const reason = evaluateProgram(argv, segment, state, ctx)
+  if (reason !== null || program === 'git' || program === 'gh') return reason
+  // Fallback para wrappers desconhecidos: `foo … git push …` também é avaliado.
+  for (let k = 1; k < argv.length; k++) {
+    if (baseName(argv[k]) !== 'git' && baseName(argv[k]) !== 'gh') continue
+    const inner = evaluateProgram(argv.slice(k), segment, state, ctx)
+    if (inner !== null) return inner
+  }
+  return null
+}
+
+/**
+ * Ajusta a pilha de diretórios ao escopo de subshell do segmento: ao sair de um subshell, o
+ * diretório volta ao de antes dele; ao entrar, herda o atual.
+ * @param {{ id: string, dir: string | typeof UNKNOWN }[]} stack
+ * @param {string[]} scope
+ */
+function enterScope(stack, scope) {
+  let common = 0
+  while (common < scope.length && stack[common + 1]?.id === scope[common]) common++
+  stack.length = common + 1
+  for (const id of scope.slice(common)) stack.push({ id, dir: stack[stack.length - 1].dir })
+}
+
 /**
  * @param {string} command
  * @param {EvalContext} ctx
  * @returns {Verdict}
  */
 export function evaluateCommand(command, ctx) {
-  const state = { dir: resolve(ctx.cwd), switches: new Map() }
-  for (const { argv, ambiguous } of parseCommand(command)) {
-    const program = baseName(argv[0])
-    let reason = null
-    if (program === 'cd' || program === 'pushd') {
-      state.dir = resolveDir(state.dir, argv[1])
-    } else if (program === 'popd') {
-      state.dir = UNKNOWN
-    } else if (program === 'eval') {
-      reason = /\bgit\b|\bgh\b/.test(argv.join(' ')) ? block(AMBIGUOUS) : null
-    } else if (program === 'git') {
-      reason = evaluateGit(argv, ambiguous, state, ctx)
-    } else if (program === 'gh') {
-      reason = checkGh(argv.slice(1), ambiguous)
-    } else if (ambiguous && isDynamic(argv[0]) && /\bgit\b|\bgh\b/i.test(argv[0])) {
-      reason = block(AMBIGUOUS)
-    }
+  const root = resolve(ctx.cwd)
+  /** @type {{ dir: string | typeof UNKNOWN, switches: Map<unknown, unknown>, gitEnv: boolean }} */
+  const state = { dir: root, switches: new Map(), gitEnv: false }
+  /** @type {{ id: string, dir: string | typeof UNKNOWN }[]} */
+  const stack = [{ id: '', dir: root }]
+  for (const segment of parseCommand(command)) {
+    enterScope(stack, segment.scope)
+    const top = stack[stack.length - 1]
+    state.dir = top.dir
+    const reason = evaluateSegment(segment, command, state, ctx)
+    top.dir = state.dir
     if (reason !== null) return { allowed: false, reason }
   }
   return { allowed: true }

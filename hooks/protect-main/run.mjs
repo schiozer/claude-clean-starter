@@ -6,9 +6,11 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { BLOCK_PREFIX, evaluateCommand } from './evaluate.mjs'
+import { BLOCK_PREFIX, MENTIONS_GIT, evaluateCommand } from './evaluate.mjs'
 
 const GIT_TIMEOUT_MS = 5000
+// Mensagens do git em inglês: o reconhecimento de "not a git repository" não depende do idioma.
+const GIT_ENV = { ...process.env, LC_ALL: 'C' }
 
 /**
  * Roda git em `dir`. Retorna a saída (null se vazia); em falha, `onExit(status, stderr)` decide
@@ -21,6 +23,7 @@ function git(dir, args, onExit) {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: GIT_TIMEOUT_MS,
       encoding: 'utf8',
+      env: GIT_ENV,
     }).trim()
     return out === '' ? null : out
   } catch (error) {
@@ -56,6 +59,7 @@ function main(raw) {
     protectedBranches: config.protectedBranches,
     branchOf,
     aliasOf,
+    env: { HOME: process.env.HOME, CLAUDE_PROJECT_DIR: process.env.CLAUDE_PROJECT_DIR },
   })
   if (verdict.allowed) return 0
   console.error(verdict.reason)
@@ -68,7 +72,7 @@ try {
   process.exitCode = main(raw)
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error)
-  if (/\bgit\b|\bgh\b/.test(raw)) {
+  if (MENTIONS_GIT.test(raw)) {
     console.error(
       `${BLOCK_PREFIX} O hook protect-main falhou; não o desligue — corrija o hook. (${message})`
     )
