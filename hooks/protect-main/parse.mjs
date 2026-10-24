@@ -17,6 +17,8 @@ import { scan, scanWords } from './scan.mjs'
  * @property {boolean} gitEnv Prefixos mudam o repositório/config do git (`GIT_DIR`,
  *   `GIT_WORK_TREE`, `GIT_CONFIG_*`, `env -C`); atribuição/`export` isolada vem com `argv` vazio.
  * @property {boolean} hooksEnv Prefixos definem `core.hooksPath` por `GIT_CONFIG_KEY_n`/`GIT_CONFIG_PARAMETERS`.
+ * @property {string[]} redirects Alvos de redirecionamentos de saída reais (`>`, `>>`, `>|`,
+ *   `&>`, `>&`), fora de aspas.
  * @property {boolean} opaqueArgs Argumentos completados pela entrada (`xargs`).
  * @property {boolean} stdinScript Shell (ou `source`) que lê o script de um pipe, de
  *   redirecionamento, de process substitution ou de `/dev/stdin` — não dá para ler o script.
@@ -78,6 +80,7 @@ const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
 const GIT_ENV_ASSIGNMENT = /^GIT_(CONFIG\w*|DIR|WORK_TREE)=/
 const REDIRECTION = /^\d*[<>]/
 const HOOKS_ENV = /^GIT_CONFIG_(KEY_\d+|PARAMETERS)=.*core\.hookspath/i
+const OUTPUT_REDIRECTION = /^(?:\d*|&)>{1,2}[|&]?(.*)$/
 
 /** Nome do programa: sem diretório, sem o `=` do zsh (`=git`) e sem diferenciar maiúsculas (APFS). */
 const baseName = (text) => (text.split('/').pop() ?? '').replace(/^=/, '').toLowerCase()
@@ -85,18 +88,20 @@ const baseName = (text) => (text.split('/').pop() ?? '').replace(/^=/, '').toLow
 /**
  * Remove wrappers, atribuições e palavras-chave do início.
  * @param {Token[]} tokens
- * @returns {{ tokens: Token[], gitEnv: boolean, opaqueArgs: boolean }}
+ * @returns {{ tokens: Token[], gitEnv: boolean, hooksEnv: boolean, opaqueArgs: boolean }}
  */
 function stripPrefixes(tokens) {
   let t = tokens
   let gitEnv = false
+  let hooksEnv = false
   let opaqueArgs = false
   for (;;) {
-    if (!t.length) return { tokens: t, gitEnv, opaqueArgs }
+    if (!t.length) return { tokens: t, gitEnv, hooksEnv, opaqueArgs }
     const head = t[0].text
     const name = baseName(head)
     if (ASSIGNMENT.test(head)) {
       gitEnv ||= GIT_ENV_ASSIGNMENT.test(head)
+      hooksEnv ||= HOOKS_ENV.test(head)
       t = t.slice(1)
     } else if (KEYWORDS.has(head)) {
       t = t.slice(1)
@@ -109,6 +114,7 @@ function stripPrefixes(tokens) {
       while (k < t.length && (t[k].text.startsWith('-') || ASSIGNMENT.test(t[k].text))) {
         const opt = t[k].text
         gitEnv ||= GIT_ENV_ASSIGNMENT.test(opt)
+        hooksEnv ||= HOOKS_ENV.test(opt)
         let consumesNext = withArg.includes(opt)
         if (name === 'env') {
           const option = envOption(opt)
@@ -122,7 +128,7 @@ function stripPrefixes(tokens) {
         k += consumesNext ? 2 : 1
       }
       t = [...split, ...t.slice(k + positionals)]
-    } else return { tokens: t, gitEnv, opaqueArgs }
+    } else return { tokens: t, gitEnv, hooksEnv, opaqueArgs }
   }
 }
 
@@ -226,10 +232,22 @@ const makeSegment = (argv, ambiguous, rest) => ({
   background: false,
   gitEnv: false,
   hooksEnv: false,
+  redirects: [],
   opaqueArgs: false,
   stdinScript: false,
   ...rest,
 })
+
+/** Alvos dos redirecionamentos de saída reais (tokens sem aspas) de um segmento cru. */
+function outputRedirects(tokens) {
+  /** @type {string[]} */
+  const targets = []
+  tokens.forEach((tok, k) => {
+    const match = tok.quoted ? null : OUTPUT_REDIRECTION.exec(tok.text)
+    if (match) targets.push(match[1] === '' ? (tokens[k + 1]?.text ?? '') : match[1])
+  })
+  return targets
+}
 
 /**
  * Segmentos de um script interno (de `bash -c`, heredoc), herdando ambiguidade e prefixos.
@@ -243,6 +261,7 @@ function innerSegments(script, scope, outer) {
     ambiguous: inner.ambiguous || outer.ambiguous,
     gitEnv: inner.gitEnv || outer.gitEnv,
     hooksEnv: inner.hooksEnv || outer.hooksEnv,
+    redirects: [...inner.redirects, ...outer.redirects],
     opaqueArgs: inner.opaqueArgs || outer.opaqueArgs,
   }))
 }
@@ -261,13 +280,17 @@ function parseScript(command, scope) {
     raw.substitutions.forEach((body, n) => {
       result.push(...parseScript(body, [...base, `c${index}.${n}`]))
     })
-    const { tokens, gitEnv, opaqueArgs } = stripPrefixes(raw.tokens)
-    const hooksEnv = raw.tokens.some((tok) => HOOKS_ENV.test(tok.text))
+    const { tokens, gitEnv, hooksEnv: prefixHooksEnv, opaqueArgs } = stripPrefixes(raw.tokens)
     if (!tokens.length) {
-      if (gitEnv || hooksEnv) result.push(makeSegment([], false, { scope: base, gitEnv, hooksEnv }))
+      if (gitEnv || prefixHooksEnv) {
+        result.push(makeSegment([], false, { scope: base, gitEnv, hooksEnv: prefixHooksEnv }))
+      }
       return
     }
     const argv = tokens.map((tok) => tok.text)
+    const hooksEnv =
+      prefixHooksEnv || (DECLARATIONS.has(argv[0]) && argv.some((a) => HOOKS_ENV.test(a)))
+    const redirects = outputRedirects(raw.tokens)
     // Conservador: expansões nos prefixos descartados (`FOO=$(x) git push`) também contam.
     const ambiguous =
       raw.dynamicHeredoc ||
@@ -280,6 +303,7 @@ function parseScript(command, scope) {
       background: raw.after === '&',
       gitEnv: gitEnv || (DECLARATIONS.has(argv[0]) && argv.some((a) => GIT_ENV_ASSIGNMENT.test(a))),
       hooksEnv,
+      redirects,
       opaqueArgs,
     })
     const shell = shellInvocation(tokens)

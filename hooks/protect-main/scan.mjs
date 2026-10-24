@@ -3,7 +3,7 @@
 // linha) e tokens, respeitando aspas, `$(…)`, backticks e heredocs. Não executa nem expande
 // nada: só registra o que precisa ser avaliado (corpos de substituição e de heredoc).
 
-/** @typedef {{ text: string, dynamic: boolean }} Token */
+/** @typedef {{ text: string, dynamic: boolean, quoted: boolean }} Token */
 
 /**
  * @typedef {object} RawSegment
@@ -198,14 +198,16 @@ export function scan(s) {
   let text = ''
   let started = false
   let dynamic = false
+  let quoted = false
   /** @type {Heredoc[]} */
   let pending = []
 
   const endToken = () => {
-    if (started) cur.tokens.push({ text, dynamic })
+    if (started) cur.tokens.push({ text, dynamic, quoted })
     text = ''
     started = false
     dynamic = false
+    quoted = false
   }
   const endSegment = (op) => {
     endToken()
@@ -263,6 +265,7 @@ export function scan(s) {
   let i = 0
   while (i < s.length) {
     const c = s[i]
+    if (c === "'" || c === '"' || c === '\\') quoted = true
     if (c === "'") {
       const close = s.indexOf("'", i + 1)
       const stop = close === -1 ? s.length : close
@@ -288,6 +291,7 @@ export function scan(s) {
       if (s[i + 1] !== '\n' && i + 1 < s.length) add(s[i + 1])
       i += 2
     } else if (c === '$' && s[i + 1] === "'") {
+      quoted = true
       i = readAnsiC(i)
     } else if (c === '$') {
       i = readDollar(i)
@@ -326,6 +330,9 @@ export function scan(s) {
       i = end
     } else if (c === '&' && (s[i - 1] === '>' || s[i - 1] === '<' || s[i + 1] === '>')) {
       add(c) // redirecionamento (`2>&1`, `&>`), não é separador
+      i++
+    } else if (c === '|' && s[i - 1] === '>' && started) {
+      add(c) // `>|` (clobber) é redirecionamento, não pipe
       i++
     } else if (c === '|' && s[i + 1] === '&') {
       endSegment('|') // `|&` = pipe de stdout + stderr

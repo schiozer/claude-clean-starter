@@ -31,7 +31,7 @@ export const BLOCK_PREFIX =
 export const MENTIONS_GIT = /\bgit\b|\bgh\b/i
 
 const LOCK_MOTIVE =
-  'desligar a trava local (`core.hooksPath`/`.githooks/`/`--no-verify`) não é permitido; peça ao humano.'
+  'desligar a trava local (`core.hooksPath`/`include.path`/`.githooks/`/`.git/config`/`--no-verify`) não é permitido; alterar os hooks passa por Edit/Write numa feature branch + PR, e o resto é do humano.'
 
 const AMBIGUOUS =
   'Não foi possível verificar o comando; escreva o comando por extenso (sem variáveis, `eval` ou alias com `!`).'
@@ -189,9 +189,12 @@ function pushDestination(refspec, branch) {
   return name === 'HEAD' || name === '@' ? branch : name
 }
 
+/** `--no-verify` ou abreviação aceita pelo git (`--no-v`…); `-n` é `--dry-run`. */
+const isNoVerify = (a) => a.length >= 6 && '--no-verify'.startsWith(a) && a.startsWith('--no-v')
+
 /** B5–B7: `git push`. */
 function checkPush(args, branch, protectedBranches) {
-  if (args.includes('--no-verify')) return block(LOCK_MOTIVE)
+  if (args.some(isNoVerify)) return block(LOCK_MOTIVE)
   if (args.some((a) => ['--all', '--mirror', '--branches'].includes(a))) {
     return block('`git push --all`/`--mirror` envia todas as branches, inclusive as protegidas.')
   }
@@ -331,8 +334,11 @@ function configValue(configs, key) {
 }
 
 const CONFIG_OPTIONS_WITH_ARG = ['-f', '--file', '--blob', '--type', '--default', '--comment']
-const CONFIG_READS =
-  /^(--get|--get-all|--get-regexp|--get-urlmatch|--unset|--unset-all|-l|--list|--rename-section|--remove-section|-e|--edit)$/
+const CONFIG_READ_FLAGS = '--get|--get-all|--get-regexp|--get-urlmatch|-l|--list|-e|--edit'
+const CONFIG_READ_ONLY = new RegExp(`^(${CONFIG_READ_FLAGS})$`)
+const CONFIG_READS = new RegExp(
+  `^(${CONFIG_READ_FLAGS}|--unset|--unset-all|--rename-section|--remove-section)$`
+)
 const CONFIG_ACTIONS = new Set(['get', 'list', 'unset', 'rename-section', 'remove-section', 'edit'])
 /** Config que muda o que um `git push`/alias faz depois. */
 const REDIRECTING_CONFIG = /^alias\.|^push\.default$|^remote\..+\.(push|mirror)$/i
@@ -348,23 +354,41 @@ function writesRedirectingConfig(args) {
 }
 
 const HOOKS_PATH = /^core\.hookspath$/i
+const INCLUDE_KEY = /^include(if\..+)?\.path$/i
+const LOCK_SECTION = /^(core|include|includeif\b.*)$/i
 const LOCK_VALUE = '.githooks'
+const LOCKING_KEY = /^(core\.hookspath|include(if\..+)?\.path)$/i
+const CONFIG_VERBS = new Set([
+  'get',
+  'list',
+  'edit',
+  'set',
+  'unset',
+  'remove-section',
+  'rename-section',
+])
 
-/** `git config` gravando/removendo `core.hooksPath` (exceto gravar exatamente `.githooks`)? */
-function touchesHooksPath(args) {
-  if (
-    args.some((a) => /^(--get|--get-all|--get-regexp|--get-urlmatch|-l|--list|-e|--edit)$/.test(a))
-  ) {
-    return false
-  }
+/**
+ * `git config` que desliga a trava: grava/remove `core.hooksPath` (exceto gravar exatamente
+ * `.githooks`), grava `include.path`/`includeIf.*.path` ou remove/renomeia a seção `core`.
+ */
+function touchesLockConfig(args) {
+  if (args.some((a) => CONFIG_READ_ONLY.test(a))) return false
   const words = positionals(args, CONFIG_OPTIONS_WITH_ARG)
-  if (words[0] === 'get' || words[0] === 'list' || words[0] === 'edit') return false
-  const rest = words[0] === 'set' || words[0] === 'unset' ? words.slice(1) : words
-  const [key, value] = rest
-  if (key === undefined || !HOOKS_PATH.test(key)) return false
-  const removes = words[0] === 'unset' || args.some((a) => /^--unset(-all)?$/.test(a))
-  if (removes) return true
-  return value !== LOCK_VALUE
+  const verb = CONFIG_VERBS.has(words[0]) ? words[0] : undefined
+  if (verb === 'get' || verb === 'list' || verb === 'edit') return false
+  const [key, value] = verb ? words.slice(1) : words
+  if (key === undefined) return false
+  const sectionOp =
+    verb === 'remove-section' ||
+    verb === 'rename-section' ||
+    args.some((a) => /^--(remove|rename)-section$/.test(a))
+  if (sectionOp) return LOCK_SECTION.test(key)
+  const removes = verb === 'unset' || args.some((a) => /^--unset(-all)?$/.test(a))
+  const writes = verb === 'set' || args.includes('--add') || value !== undefined
+  if (!removes && !writes) return false
+  if (INCLUDE_KEY.test(key)) return true
+  return HOOKS_PATH.test(key) && (removes || value !== LOCK_VALUE)
 }
 
 /**
@@ -410,8 +434,8 @@ function evaluateGit(argv, segment, state, ctx, depth = 0) {
   }
 
   if (segment.ambiguous && WRITE_FAMILY.has(sub)) return block(AMBIGUOUS)
-  if (configs.some((c) => HOOKS_PATH.test(c.split('=')[0]))) return block(LOCK_MOTIVE)
-  if (sub === 'config' && touchesHooksPath(args)) return block(LOCK_MOTIVE)
+  if (configs.some((c) => LOCKING_KEY.test(c.split('=')[0]))) return block(LOCK_MOTIVE)
+  if (sub === 'config' && touchesLockConfig(args)) return block(LOCK_MOTIVE)
   if (sub === 'push' && configs.some((c) => PUSH_CONFIG.test(c.split('=')[0]))) {
     return block('`git -c push.default`/`remote.<r>.push` muda o destino do `git push`.')
   }
@@ -419,6 +443,9 @@ function evaluateGit(argv, segment, state, ctx, depth = 0) {
   const dir = foreign ? UNKNOWN : chdir === null ? state.dir : resolveDir(state.dir, chdir, ctx.env)
   const branch = branchAt(dir, state, ctx)
   const { protectedBranches } = ctx
+  if (['rm', 'mv', 'clean'].includes(sub) && args.some((a) => isProtectedPath(a, dir))) {
+    return block(LOCK_MOTIVE)
+  }
 
   if (sub === 'config' && writesRedirectingConfig(args)) {
     return block(
@@ -492,24 +519,45 @@ function evaluateProgram(argv, segment, state, ctx) {
   return null
 }
 
-/** Caminho em `.githooks` (`.githooks`, `./.githooks/x`, `/abs/.githooks/x`)? */
-const GITHOOKS_PATH = /(^|\/)\.githooks(\/|$)/
-const MUTATING_PROGRAMS = new Set(['rm', 'mv', 'chmod', 'truncate', 'unlink', 'rmdir', 'shred'])
-const REDIRECT_TOKEN = /^\d*>[>|]?(.*)$/
+/** Caminho em `.githooks/` ou o `.git/config` (`./.githooks`, `/abs/.githooks/x`, `.GITHOOKS`). */
+const PROTECTED_PATH = /(^|\/)(\.githooks(\/|$)|\.git\/config$)/i
+const ALL_OPERANDS = new Set(['rm', 'mv', 'chmod', 'truncate', 'unlink', 'rmdir', 'shred', 'tee'])
+const DESTINATION_ONLY = new Set(['cp', 'ln', 'install'])
+const IN_PLACE = /^(-[a-zA-Z]*i|--in-place)/
+const FIND_MUTATIONS = new Set(['-delete', '-exec', '-execdir', '-ok', '-okdir'])
 
-/** Comando que apaga/move/trunca/chmod ou redireciona saída para `.githooks/`? Vale sem `git`. */
-function checkGithooksTouch(argv) {
-  const program = baseName(argv[0])
-  for (let k = 1; k < argv.length; k++) {
-    const redirect = REDIRECT_TOKEN.exec(argv[k])
-    if (redirect) {
-      const target = redirect[1] === '' ? argv[k + 1] : redirect[1]
-      if (target !== undefined && GITHOOKS_PATH.test(target)) return block(LOCK_MOTIVE)
-    } else if (MUTATING_PROGRAMS.has(program) && GITHOOKS_PATH.test(argv[k])) {
-      return block(LOCK_MOTIVE)
-    }
+/** O caminho (relativo a `dir`, quando conhecido) cai em `.githooks/` ou em `.git/config`? */
+function isProtectedPath(raw, dir) {
+  if (raw === undefined || raw === '') return false
+  if (PROTECTED_PATH.test(raw)) return true
+  if (dir === UNKNOWN || isDynamic(raw)) return false
+  return PROTECTED_PATH.test(isAbsolute(raw) ? resolve(raw) : resolve(dir, raw))
+}
+
+/** Argumentos que o programa escreve/apaga/move (melhor esforço léxico). */
+function mutatedOperands(program, args) {
+  if (ALL_OPERANDS.has(program)) return args
+  if (DESTINATION_ONLY.has(program)) {
+    const operands = args.filter((a) => !a.startsWith('-'))
+    const target = args.find((a) => a.startsWith('--target-directory='))?.slice(19)
+    const flagged = args.findIndex((a) => a === '-t')
+    return [operands.at(-1), target, flagged === -1 ? undefined : args[flagged + 1]].filter(
+      (a) => a !== undefined
+    )
   }
-  return null
+  if (program === 'dd') return args.filter((a) => a.startsWith('of=')).map((a) => a.slice(3))
+  if ((program === 'sed' || program === 'perl') && args.some((a) => IN_PLACE.test(a))) return args
+  if (program === 'find' && args.some((a) => FIND_MUTATIONS.has(a))) return args
+  return []
+}
+
+/** Comando que mexe em `.githooks/`/`.git/config` ou redireciona saída para eles? Vale sem `git`. */
+function checkLockedFiles(segment, dir) {
+  const { argv, redirects } = segment
+  if (redirects.some((target) => isProtectedPath(target, dir))) return block(LOCK_MOTIVE)
+  const program = baseName(argv[0])
+  const hit = mutatedOperands(program, argv.slice(1)).some((a) => isProtectedPath(a, dir))
+  return hit ? block(LOCK_MOTIVE) : null
 }
 
 /** Avalia um segmento; `cd` atualiza `state.dir` (só fora de pipeline/background). */
@@ -519,7 +567,7 @@ function evaluateSegment(segment, command, state, ctx) {
   if (segment.gitEnv && (!argv.length || DECLARATIONS.has(argv[0]))) state.gitEnv = true
   if (segment.hooksEnv) return block(LOCK_MOTIVE)
   if (!argv.length) return null
-  const locked = checkGithooksTouch(argv)
+  const locked = checkLockedFiles(segment, state.dir)
   if (locked !== null) return locked
   if (segment.stdinScript) return MENTIONS_GIT.test(command) ? block(AMBIGUOUS) : null
   const program = baseName(argv[0])
@@ -571,13 +619,7 @@ export function evaluateCommand(command, ctx) {
   const state = { dir: root, switches: new Map(), gitEnv: false }
   /** @type {{ id: string, dir: string | typeof UNKNOWN }[]} */
   const stack = [{ id: '', dir: root }]
-  /** `>|` é separado pelo parser em `>` + segmento de pipe: guarda o `>` pendente. */
-  let pendingClobber = false
   for (const segment of parseCommand(command)) {
-    if (pendingClobber && GITHOOKS_PATH.test(segment.argv[0] ?? '')) {
-      return { allowed: false, reason: block(LOCK_MOTIVE) }
-    }
-    pendingClobber = segment.argv.length > 0 && /^\d*>$/.test(segment.argv.at(-1) ?? '')
     enterScope(stack, segment.scope)
     const top = stack[stack.length - 1]
     state.dir = top.dir
