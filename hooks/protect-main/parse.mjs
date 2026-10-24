@@ -12,6 +12,8 @@
 
 const MESSAGE_FLAGS = new Set(['-m', '--message', '-F', '--file'])
 const MESSAGE_FLAG_PREFIXES = ['--message=', '--file=']
+const GIT_MESSAGE_SUBCOMMANDS = new Set(['commit', 'merge', 'tag', 'notes', 'stash'])
+const SHELL_OPTIONS_WITH_ARG = new Set(['-o', '+o', '-O', '+O', '--rcfile', '--init-file'])
 const SHELLS = new Set(['bash', 'sh', 'zsh'])
 const KEYWORDS = new Set([
   '{',
@@ -99,8 +101,9 @@ function readHeredocDelimiter(s, i) {
  * @returns {{ raw: string, end: number }} `end`: índice logo após o `)` de fechamento
  */
 function readSubstitution(s, i) {
-  let depth = 0
-  let raw = ''
+  let depth = 1
+  let raw = '$('
+  i += 2
   const pending = []
   while (i < s.length) {
     const c = s[i]
@@ -294,27 +297,51 @@ function stripPrefixes(tokens) {
 }
 
 /** Há token dinâmico (`$VAR`, `$(…)`, backticks) que não seja valor de `-m`/`--message`/`-F`/`--file`? */
-function hasUnresolvedExpansion(tokens) {
+function hasUnresolvedExpansion(tokens, messageFlagsApply) {
   return tokens.some((tok, k) => {
     if (!tok.dynamic) return false
+    if (!messageFlagsApply) return true
     if (k > 0 && MESSAGE_FLAGS.has(tokens[k - 1].text)) return false
     return !MESSAGE_FLAG_PREFIXES.some((p) => tok.text.startsWith(p))
   })
 }
 
-/**
- * Se o segmento é `bash|sh|zsh [-flags] -c "<script>"`, devolve o script.
- * @returns {string | null}
- */
-function shellScript(tokens) {
-  const name = tokens[0].text.split('/').pop() ?? ''
-  if (!SHELLS.has(name)) return null
+/** Subcomando do git (pulando opções globais), ou null se o comando não é git. */
+function gitSubcommand(tokens) {
+  if (tokens[0].text.split('/').pop() !== 'git') return null
   for (let k = 1; k < tokens.length; k++) {
     const t = tokens[k].text
-    if (!t.startsWith('-')) return null
-    if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(t)) return tokens[k + 1]?.text ?? null
+    if (t === '-C' || t === '-c') k++
+    else if (!t.startsWith('-')) return t
   }
-  return null
+  return ''
+}
+
+/** `-m`/`-F` carregam uma mensagem/arquivo? Em `git checkout -m`/`switch -m` não carregam. */
+function messageFlagsApply(tokens) {
+  const sub = gitSubcommand(tokens)
+  return sub === null || GIT_MESSAGE_SUBCOMMANDS.has(sub)
+}
+
+/**
+ * Se o segmento é `bash|sh|zsh [opções] -c "<script>"`, devolve o script.
+ * `unresolved`: é um shell com `-c`, mas não conseguimos localizar o script.
+ * @returns {{ script: string | null, unresolved: boolean }}
+ */
+function shellScript(tokens) {
+  const none = { script: null, unresolved: false }
+  const name = tokens[0].text.split('/').pop() ?? ''
+  if (!SHELLS.has(name)) return none
+  for (let k = 1; k < tokens.length; k++) {
+    const t = tokens[k].text
+    if (!/^[-+]/.test(t)) return none
+    if (SHELL_OPTIONS_WITH_ARG.has(t)) k++
+    else if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(t)) {
+      const script = tokens[k + 1]?.text ?? null
+      return { script, unresolved: script === null }
+    }
+  }
+  return none
 }
 
 /**
@@ -328,10 +355,13 @@ export function parseCommand(command) {
     const tokens = stripPrefixes(raw)
     if (!tokens.length) continue
     // Conservador: expansões nos prefixos descartados (`FOO=$(x) git push`) também contam.
-    const ambiguous = dynamicHeredoc || tokens[0].text === 'eval' || hasUnresolvedExpansion(raw)
-    const script = shellScript(tokens)
+    const ambiguous =
+      dynamicHeredoc ||
+      tokens[0].text === 'eval' ||
+      hasUnresolvedExpansion(raw, messageFlagsApply(tokens))
+    const { script, unresolved } = shellScript(tokens)
     if (script === null) {
-      result.push({ argv: tokens.map((tok) => tok.text), ambiguous })
+      result.push({ argv: tokens.map((tok) => tok.text), ambiguous: ambiguous || unresolved })
       continue
     }
     for (const inner of parseCommand(script)) {

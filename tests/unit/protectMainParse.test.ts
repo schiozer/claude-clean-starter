@@ -28,11 +28,53 @@ describe('parseCommand', () => {
     const segs = parseCommand(c)
     expect(segs).toHaveLength(1)
     expect(segs[0].argv.slice(0, 3)).toEqual(['git', 'commit', '-m'])
+    expect(segs[0].argv[3]).toBe("$(cat <<'EOF'\n)")
     expect(segs[0].ambiguous).toBe(false)
   })
   it('discards top-level heredoc bodies without generating segments', () => {
     const segs = parseCommand('cat <<-EOF\n\tgit push origin main\n\tEOF\ngit status')
     expect(segs.map((s) => s.argv)).toEqual([['cat'], ['git', 'status']])
+  })
+  it('does not hide a command after a heredoc message containing a quote', () => {
+    const c = 'git commit -m "$(cat <<\'EOF\'\nfix: trata "aspas\nEOF\n)" && git push origin main'
+    const segs = parseCommand(c)
+    expect(segs.map((s) => s.argv.slice(0, 2))).toEqual([
+      ['git', 'commit'],
+      ['git', 'push'],
+    ])
+    expect(segs[1].argv).toEqual(['git', 'push', 'origin', 'main'])
+    expect(segs[1].ambiguous).toBe(false)
+  })
+  it("handles ) and ' inside a heredoc message", () => {
+    const c = "git commit -m \"$(cat <<'EOF'\nfix (x) it's\nEOF\n)\"; git status"
+    expect(argvs(c).map((a) => a.slice(0, 2))).toEqual([
+      ['git', 'commit'],
+      ['git', 'status'],
+    ])
+  })
+  it('keeps a top-level command substitution as one token', () => {
+    const segs = parseCommand('git push origin $(git branch --show-current)')
+    expect(segs).toHaveLength(1)
+    expect(segs[0].argv).toEqual(['git', 'push', 'origin', '$(git branch --show-current)'])
+    expect(segs[0].ambiguous).toBe(true)
+  })
+  it('handles nested command substitution', () => {
+    expect(argvs('echo $(echo $(echo x)) y; ls')).toEqual([
+      ['echo', '$(echo $(echo x))', 'y'],
+      ['ls'],
+    ])
+  })
+  it('unwraps shells with option arguments before -c', () => {
+    expect(argvs('bash -o pipefail -c "git push"')).toEqual([['git', 'push']])
+    expect(argvs('bash +e -O extglob -c "git push"')).toEqual([['git', 'push']])
+  })
+  it('marks a shell -c without a script as ambiguous', () => {
+    expect(parseCommand('bash -c')[0].ambiguous).toBe(true)
+  })
+  it('does not exempt -m for git checkout/switch', () => {
+    expect(parseCommand('git checkout -m $B')[0].ambiguous).toBe(true)
+    expect(parseCommand('git switch -m $B')[0].ambiguous).toBe(true)
+    expect(parseCommand('git -C x commit -m "$X"')[0].ambiguous).toBe(false)
   })
   it('unwraps bash -c recursively', () => {
     expect(argvs('bash -c "git switch main && git push"')).toEqual([
