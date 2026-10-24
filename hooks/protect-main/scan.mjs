@@ -3,7 +3,8 @@
 // linha) e tokens, respeitando aspas, `$(…)`, backticks e heredocs. Não executa nem expande
 // nada: só registra o que precisa ser avaliado (corpos de substituição e de heredoc).
 
-/** @typedef {{ text: string, dynamic: boolean, quoted: boolean }} Token */
+/** @typedef {{ text: string, dynamic: boolean, quoted: boolean, quoteStart: number }} Token */
+// `quoteStart`: tamanho do texto antes da 1ª aspa/escape (-1 = sem aspas).
 
 /**
  * @typedef {object} RawSegment
@@ -199,15 +200,17 @@ export function scan(s) {
   let started = false
   let dynamic = false
   let quoted = false
+  let quoteStart = -1
   /** @type {Heredoc[]} */
   let pending = []
 
   const endToken = () => {
-    if (started) cur.tokens.push({ text, dynamic, quoted })
+    if (started) cur.tokens.push({ text, dynamic, quoted, quoteStart })
     text = ''
     started = false
     dynamic = false
     quoted = false
+    quoteStart = -1
   }
   const endSegment = (op) => {
     endToken()
@@ -262,10 +265,15 @@ export function scan(s) {
     return j + 1
   }
 
+  const markQuoted = () => {
+    quoted = true
+    if (quoteStart === -1) quoteStart = text.length
+  }
+
   let i = 0
   while (i < s.length) {
     const c = s[i]
-    if (c === "'" || c === '"' || c === '\\') quoted = true
+    if (c === "'" || c === '"' || c === '\\') markQuoted()
     if (c === "'") {
       const close = s.indexOf("'", i + 1)
       const stop = close === -1 ? s.length : close
@@ -291,7 +299,7 @@ export function scan(s) {
       if (s[i + 1] !== '\n' && i + 1 < s.length) add(s[i + 1])
       i += 2
     } else if (c === '$' && s[i + 1] === "'") {
-      quoted = true
+      markQuoted()
       i = readAnsiC(i)
     } else if (c === '$') {
       i = readDollar(i)

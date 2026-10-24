@@ -80,7 +80,7 @@ const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
 const GIT_ENV_ASSIGNMENT = /^GIT_(CONFIG\w*|DIR|WORK_TREE)=/
 const REDIRECTION = /^\d*[<>]/
 const HOOKS_ENV = /^GIT_CONFIG_(KEY_\d+|PARAMETERS)=.*core\.hookspath/i
-const OUTPUT_REDIRECTION = /^(?:\d*|&)>{1,2}[|&]?(.*)$/
+const OUTPUT_REDIRECTION = /^(?:\d*|&)>{1,2}[|&]?/
 
 /** Nome do programa: sem diretório, sem o `=` do zsh (`=git`) e sem diferenciar maiúsculas (APFS). */
 const baseName = (text) => (text.split('/').pop() ?? '').replace(/^=/, '').toLowerCase()
@@ -243,8 +243,12 @@ function outputRedirects(tokens) {
   /** @type {string[]} */
   const targets = []
   tokens.forEach((tok, k) => {
-    const match = tok.quoted ? null : OUTPUT_REDIRECTION.exec(tok.text)
-    if (match) targets.push(match[1] === '' ? (tokens[k + 1]?.text ?? '') : match[1])
+    const operator = OUTPUT_REDIRECTION.exec(tok.text)?.[0]
+    // Só vale se o operador está inteiro antes de qualquer aspa/escape (o alvo pode ter aspas).
+    if (operator === undefined || (tok.quoteStart !== -1 && operator.length > tok.quoteStart))
+      return
+    const target = tok.text.slice(operator.length)
+    targets.push(target === '' ? (tokens[k + 1]?.text ?? '') : target)
   })
   return targets
 }
