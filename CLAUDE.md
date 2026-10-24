@@ -51,6 +51,8 @@ Se você está lendo isso, provavelmente sou eu mesmo (Claude) trabalhando no pr
 - O hook `hooks/protect-main` impõe isso (branches protegidas em
   `hooks/protect-main/config.json`); se ele barrar, siga a mensagem — não peça para desligá-lo.
   Ver [ADR-005](./docs/adr/005-trunk-based-development.md).
+- Nunca edite, desative ou contorne `hooks/protect-main` (nem o `.claude/settings.json` que o
+  registra) para passar por um bloqueio.
 
 ### 1. **Superpowers Pipeline é OBRIGATÓRIO para features novas**
 
@@ -87,7 +89,7 @@ Todas as features têm specs em `docs/superpowers/specs/`. Antes de implementar,
 
 Architecture Decision Records em `docs/adr/`. Quando tomar decisão arquitetural importante, crie um ADR a partir de `docs/adr/000-template.md`.
 
-### 5. **Conta git correta ANTES de todo push/merge/PR** ⚠️
+### 5. **Conta git correta ANTES de todo push/merge/PR** ⚠️ (ver regra 0)
 
 Se você trabalha com **múltiplas contas git/gh** na mesma máquina (ex.: pessoal e
 corporativa), a conta ativa **assina o merge** e pode afetar deploys e permissões.

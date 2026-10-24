@@ -43,13 +43,21 @@ deployável. Nada de branches longevas por ambiente.**
 
 - **Lado do agente — hook `hooks/protect-main`** (PreToolUse em Bash, regra 0 do
   `CLAUDE.md`): barra `commit`/`merge`/`rebase` etc. com a `main` como branch atual, push
-  para a `main` (inclusive `--all`, `--mirror` e refspecs por glob), `gh pr merge` e
-  `gh api .../merge`. Falha fechado: se não consegue decidir um comando com `git`/`gh`,
-  bloqueia. Não há chave de desligar; as branches protegidas ficam em
-  `hooks/protect-main/config.json`.
-- **Lado humano — branch protection do GitHub**: PR obrigatório, sem push direto e required
-  checks, ligada no passo 10 de
-  [`bootstrap-ambientes`](../runbooks/bootstrap-ambientes.md) (backstop remoto).
+  para a `main` (inclusive `--all`, `--mirror`, refspecs por glob e matching `:`),
+  `gh pr merge`, `gh api` de merge/ref/conteúdo e `gh alias set` de merge. Avalia também
+  `$(…)`/backticks, subshells, wrappers (`timeout`, `nohup`, `xargs`, `env -S`…), scripts
+  de shell via `-c`, heredoc ou pipe e config inline (`git -c alias.*`, `GIT_CONFIG_*`).
+  Falha fechado: se não consegue decidir um comando com `git`/`gh`, bloqueia. Não há chave
+  de desligar; as branches protegidas ficam em `hooks/protect-main/config.json`.
+- **O hook é uma guarda léxica de melhor esforço** sobre os comandos Bash do agente — não é
+  a garantia. Limites conhecidos: programas que chamam o git por dentro (`node -e`,
+  `npm run`, `make`, scripts em arquivo), clientes HTTP chamando a API do GitHub (`curl`…),
+  aliases do `gh` já existentes e config do repositório já existente (`push.default`,
+  `remote.<r>.push`). Mover refs só localmente (`git branch -f main`, `update-ref`) não é
+  barrado, porque nenhum caminho de push para a `main` passa.
+- **A garantia real é a branch protection do GitHub** (lado humano): PR obrigatório, sem push
+  direto e required checks, ligada no passo 10 de
+  [`bootstrap-ambientes`](../runbooks/bootstrap-ambientes.md).
 
 ## Consequências
 
