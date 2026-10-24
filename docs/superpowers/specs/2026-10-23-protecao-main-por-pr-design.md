@@ -35,7 +35,7 @@ reorienta para branch + PR; (c) o comportamento é coberto por testes no CI.
 
 - Versionamento (SemVer/tags), CHANGELOG, template de PR, estratégia de merge (squash) e
   commitlint — ficam para uma entrega seguinte (ver §9).
-- Restringir o **humano**: o hook só atua sobre comandos que o agente executa (tool Bash do
+- Restringir o **humano** (_Revogado pela spec 2026-10-24: a trava vale também para o humano._): o hook só atua sobre comandos que o agente executa (tool Bash do
   Claude Code). O humano no próprio terminal não é afetado; para ele o backstop é a branch
   protection do GitHub (já prevista no `bootstrap-ambientes.md`, passo 10).
 - Configurar a branch protection deste repositório (é `[R3]`, do humano).

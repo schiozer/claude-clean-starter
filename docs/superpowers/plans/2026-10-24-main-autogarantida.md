@@ -132,9 +132,9 @@
 **Files:**
 - Modify: `docs/adr/005-trunk-based-development.md` (seção Aplicação), `docs/runbooks/bootstrap-ambientes.md` (passo 10), `CLAUDE.md` (regra 0 + nota de adoção + estrutura com `.githooks/`), `CONTRIBUTING.md`, `README.md`, `docs/superpowers/specs/2026-10-23-protecao-main-por-pr-design.md` (nota em §2)
 
-- [ ] **Step 1:** ADR-005 conforme spec §7: três camadas; remover a frase "A garantia real é a branch protection do GitHub"; branch protection opcional; limites (desligamento deliberado local, detecção remota não é prevenção, push que altera `main-guard.yml`, remoto com nome ≠ `origin`, `.git/hooks/*` deixam de rodar).
+- [ ] **Step 1:** ADR-005 conforme spec §7: três camadas; remover a frase a frase sobre branch protection como garantia real; branch protection opcional; limites (desligamento deliberado local, detecção remota não é prevenção, push que altera `main-guard.yml`, remoto com nome ≠ `origin`, `.git/hooks/*` deixam de rodar).
 - [ ] **Step 2:** bootstrap passo 10: "`[R3]` Humano: se o plano permitir, ligar a branch protection…; senão, confirmar que o workflow `Guarda da main` está ativo em Actions." CLAUDE.md regra 0: "Nunca edite, desative ou contorne `hooks/protect-main`, `.githooks/` ou `core.hooksPath` (nem o `.claude/settings.json`…)"; nota de adoção inclui `.githooks/` e `main-guard.yml`. CONTRIBUTING/README: `npm install` instala a trava; se barrar, crie branch + PR; `git pull --ff-only` na `main`. Nota na spec anterior §2: "Revogado pela spec 2026-10-24: a trava vale também para o humano."
-- [ ] **Step 3:** `npm run lint && npm run type-check && npm test && npm run check:runbooks && npx prettier --check .` → exit 0; `rg -n "garantia real é a branch protection" docs` → sem resultado.
+- [ ] **Step 3:** `npm run lint && npm run type-check && npm test && npm run check:runbooks && npx prettier --check .` → exit 0; `rg -n "garantia real é a branch" docs` → sem resultado.
 - [ ] **Step 4: Commit** — `docs: main autogarantida em três camadas`
 
 ---

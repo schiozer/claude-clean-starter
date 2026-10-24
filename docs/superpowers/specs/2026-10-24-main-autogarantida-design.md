@@ -187,7 +187,7 @@ próprio commit — o alarme pode não disparar. Documentar no ADR-005.
 ## 7. Documentação
 
 - `docs/adr/005-trunk-based-development.md`, seção **Aplicação**: três camadas; remover "A
-  garantia real é a branch protection do GitHub"; branch protection vira opcional ("se o plano
+  garantia real" via branch protection do GitHub; branch protection vira opcional ("se o plano
   permitir, ligue também"); limites honestos atualizados (local: desligamento deliberado;
   remoto: detecção, não prevenção; workflow alterado no próprio push).
 - `docs/runbooks/bootstrap-ambientes.md` passo 10: branch protection **se disponível**; senão,

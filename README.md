@@ -24,6 +24,7 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 │       ├── specs/        # _TEMPLATE.md
 │       └── plans/        # _TEMPLATE.md
 ├── scripts/             # check-runbooks.mjs (npm run check:runbooks)
+├── .githooks/           # trava da main (reference-transaction, pre-push), ativada por `npm install`
 ├── hooks/               # check-dependencies, git-freshness (SessionStart); protect-main (PreToolUse)
 ├── eslint.config.mjs    # flat config auto-contido (typescript-eslint)
 ├── tsconfig.json        # TS estrito, sem framework
@@ -47,7 +48,14 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 7. Ao adicionar o app — **web** (ex.: Next.js) ou **nativo iOS** (Expo/React
    Native) — inclua as deps de runtime e estenda os configs (eslint/tsconfig)
    para o framework. Os padrões de app nativo estão em `ARCHITECTURE.md`
-   (seção *"Padrões para App Nativo"*) e `BEST_PRACTICES.md`.
+   (seção _"Padrões para App Nativo"_) e `BEST_PRACTICES.md`.
+
+## Proteção da `main`
+
+`npm install` ativa (via `core.hooksPath=.githooks`) git hooks que recusam commit/merge/rebase
+na `main` local e qualquer push para a `main`; o workflow `Guarda da main` alarma no GitHub se
+um commit chegar sem PR. Se a trava barrar, crie uma branch e abra um PR; para atualizar a
+`main` local use `git pull --ff-only`. Detalhes no ADR-005.
 
 ## O pipeline
 
