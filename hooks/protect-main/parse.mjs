@@ -12,11 +12,13 @@ import { scan, scanWords } from './scan.mjs'
  * @property {string[]} scope Caminho de subshells (`( … )`, `$(…)`, `bash -c`) em que roda;
  *   um `cd` só vale dentro do próprio escopo.
  * @property {boolean} pipeline Faz parte de um pipeline (`|`): roda num subshell.
+ * @property {boolean} pipeTail Último elemento de um pipeline: no zsh roda no shell atual.
  * @property {boolean} background Termina em `&`: roda num subshell.
  * @property {boolean} gitEnv Prefixos mudam o repositório/config do git (`GIT_DIR`,
  *   `GIT_WORK_TREE`, `GIT_CONFIG_*`, `env -C`); atribuição/`export` isolada vem com `argv` vazio.
  * @property {boolean} opaqueArgs Argumentos completados pela entrada (`xargs`).
- * @property {boolean} stdinScript Shell que lê o script de um pipe.
+ * @property {boolean} stdinScript Shell (ou `source`) que lê o script de um pipe, de
+ *   redirecionamento, de process substitution ou de `/dev/stdin` — não dá para ler o script.
  */
 
 /** @typedef {import('./scan.mjs').Token} Token */
@@ -26,7 +28,11 @@ const MESSAGE_FLAGS = new Set(['-m', '--message', '-F', '--file'])
 const MESSAGE_FLAG_PREFIXES = ['--message=', '--file=']
 const GIT_MESSAGE_SUBCOMMANDS = new Set(['commit', 'merge', 'tag', 'notes', 'stash'])
 const SHELL_OPTIONS_WITH_ARG = new Set(['-o', '+o', '-O', '+O', '--rcfile', '--init-file'])
-const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh'])
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh', 'tcsh', 'csh', 'fish'])
+const SOURCES = new Set(['source', '.'])
+/** Caminhos que fazem o shell ler o script da entrada padrão. */
+const STDIN_PATH = /^(\/dev\/stdin|\/dev\/fd\/\d+|\/proc\/self\/fd\/\d+|-)$/
+const INPUT_REDIRECTION = /^\d*<(?![<>&])/
 const DECLARATIONS = new Set(['export', 'declare', 'typeset', 'local', 'readonly'])
 const KEYWORDS = new Set([
   '{',
@@ -54,6 +60,8 @@ const WRAPPERS = {
   doas: { withArg: ['-u', '-C'] },
   time: { withArg: ['-f', '--format', '-o', '--output'] },
   command: { withArg: [] },
+  builtin: { withArg: [] },
+  noglob: { withArg: [] },
   exec: { withArg: ['-a'] },
   nohup: { withArg: [] },
   nice: { withArg: ['-n', '--adjustment'] },
@@ -69,7 +77,8 @@ const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
 const GIT_ENV_ASSIGNMENT = /^GIT_(CONFIG\w*|DIR|WORK_TREE)=/
 const REDIRECTION = /^\d*[<>]/
 
-const baseName = (text) => text.split('/').pop() ?? ''
+/** Nome do programa: sem diretório, sem o `=` do zsh (`=git`) e sem diferenciar maiúsculas (APFS). */
+const baseName = (text) => (text.split('/').pop() ?? '').replace(/^=/, '').toLowerCase()
 
 /**
  * Remove wrappers, atribuições e palavras-chave do início.
@@ -98,20 +107,34 @@ function stripPrefixes(tokens) {
       while (k < t.length && (t[k].text.startsWith('-') || ASSIGNMENT.test(t[k].text))) {
         const opt = t[k].text
         gitEnv ||= GIT_ENV_ASSIGNMENT.test(opt)
-        if (name === 'env' && /^(-C|--chdir)/.test(opt)) gitEnv = true
-        if (name === 'env' && /^(-S|--split-string)/.test(opt)) {
-          const value = opt.includes('=')
-            ? opt.slice(opt.indexOf('=') + 1)
-            : opt.length > 2 && opt.startsWith('-S')
-              ? opt.slice(2)
-              : (t[k + 1]?.text ?? '')
-          split = scanWords(value)
+        let consumesNext = withArg.includes(opt)
+        if (name === 'env') {
+          const option = envOption(opt)
+          if (option) {
+            consumesNext = option.value === undefined
+            const value = option.value ?? t[k + 1]?.text ?? ''
+            if (option.name === 'C') gitEnv = true
+            if (option.name === 'S') split = scanWords(value)
+          }
         }
-        k += withArg.includes(opt) ? 2 : 1
+        k += consumesNext ? 2 : 1
       }
       t = [...split, ...t.slice(k + positionals)]
     } else return { tokens: t, gitEnv, opaqueArgs }
   }
+}
+
+/**
+ * Opção do `env` que leva valor (`-C`, `-S`, `-u`, combinadas como `-vS`, ou longas com `=`).
+ * @returns {{ name: string, value: string | undefined } | null}
+ */
+function envOption(opt) {
+  const long = /^--(chdir|split-string|unset)(?:=(.*))?$/.exec(opt)
+  if (long)
+    return { name: { chdir: 'C', 'split-string': 'S', unset: 'u' }[long[1]] ?? '', value: long[2] }
+  const short = /^-[a-zA-Z]*?([CSu])(.*)$/.exec(opt)
+  if (!short || opt.startsWith('--')) return null
+  return { name: short[1], value: short[2] === '' ? undefined : short[2] }
 }
 
 /** Há token dinâmico (`$VAR`, `$(…)`, backticks) que não seja valor de `-m`/`--message`/`-F`/`--file`? */
@@ -142,31 +165,49 @@ function messageFlagsApply(tokens) {
 }
 
 /**
- * Como o segmento invoca um shell: `script` (via `-c` ou here-string), `unresolved` (`-c` sem
- * script), `stdin` (lê o script da entrada: heredoc, pipe ou `-s`), `none` (não é shell, ou
- * roda um arquivo de script — fora do escopo).
+ * Como o segmento invoca um shell (ou `source`/`.`): `script` (via `-c` ou here-string),
+ * `unresolved` (`-c` sem script), `stdin` (lê o script da entrada: heredoc, pipe, `-s` ou
+ * `/dev/stdin`), `opaque` (script vem de redirecionamento, process substitution ou caminho
+ * dinâmico), `none` (não é shell, ou roda um arquivo de script — fora do escopo).
  * @param {Token[]} tokens
- * @returns {{ kind: 'none' | 'unresolved' | 'stdin' } | { kind: 'script', script: string }}
+ * @returns {{ kind: 'none' | 'unresolved' | 'stdin' | 'opaque' } | { kind: 'script', script: string }}
  */
 function shellInvocation(tokens) {
-  if (!SHELLS.has(baseName(tokens[0].text))) return { kind: 'none' }
+  const name = baseName(tokens[0].text)
+  const sourcing = SOURCES.has(name)
+  if (!sourcing && !SHELLS.has(name)) return { kind: 'none' }
+  let fromStdin = !sourcing
   for (let k = 1; k < tokens.length; k++) {
-    const t = tokens[k].text
+    const tok = tokens[k]
+    const t = tok.text
     if (t.startsWith('<<<')) {
       const script = t.length > 3 ? t.slice(3) : tokens[k + 1]?.text
+      if (!fromStdin) return { kind: 'none' }
       return script === undefined ? { kind: 'unresolved' } : { kind: 'script', script }
     }
+    if (INPUT_REDIRECTION.test(t)) return { kind: 'opaque' }
     if (REDIRECTION.test(t)) {
       if (/^\d*[<>]+&?$/.test(t)) k++
-    } else if (/^[-+]/.test(t)) {
+    } else if (!sourcing && /^[-+]/.test(t) && t !== '-') {
       if (SHELL_OPTIONS_WITH_ARG.has(t)) k++
-      else if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(t)) {
-        const script = tokens[k + 1]?.text
-        return script === undefined ? { kind: 'unresolved' } : { kind: 'script', script }
-      } else if (/^-[a-zA-Z]*s[a-zA-Z]*$/.test(t)) return { kind: 'stdin' }
+      else if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(t)) return commandString(tokens, k + 1)
+      else if (/^-[a-zA-Z]*s[a-zA-Z]*$/.test(t)) return { kind: 'stdin' }
+    } else if (STDIN_PATH.test(t)) {
+      fromStdin = true
+    } else if (tok.dynamic) {
+      return { kind: 'opaque' }
     } else return { kind: 'none' }
   }
-  return { kind: 'stdin' }
+  return fromStdin ? { kind: 'stdin' } : { kind: 'none' }
+}
+
+/** Script de `-c`: o primeiro argumento depois das opções (`bash -c -x "…"`, `bash -c -- "…"`). */
+function commandString(tokens, from) {
+  let k = from
+  while (k < tokens.length && /^[-+]/.test(tokens[k].text) && tokens[k].text !== '--') k++
+  if (tokens[k]?.text === '--') k++
+  const script = tokens[k]?.text
+  return script === undefined ? { kind: 'unresolved' } : { kind: 'script', script }
 }
 
 /**
@@ -179,6 +220,7 @@ const makeSegment = (argv, ambiguous, rest) => ({
   argv,
   ambiguous,
   pipeline: false,
+  pipeTail: false,
   background: false,
   gitEnv: false,
   opaqueArgs: false,
@@ -229,6 +271,7 @@ function parseScript(command, scope) {
     const segment = makeSegment(argv, ambiguous, {
       scope: base,
       pipeline: raw.before === '|' || raw.after === '|',
+      pipeTail: raw.before === '|' && raw.after !== '|',
       background: raw.after === '&',
       gitEnv: gitEnv || (DECLARATIONS.has(argv[0]) && argv.some((a) => GIT_ENV_ASSIGNMENT.test(a))),
       opaqueArgs,
@@ -241,7 +284,8 @@ function parseScript(command, scope) {
     } else if (shell.kind === 'stdin' && raw.heredocs.length) {
       result.push(...innerSegments(raw.heredocs.join('\n'), [...base, `h${index}`], segment))
     } else {
-      result.push({ ...segment, stdinScript: shell.kind === 'stdin' && raw.before === '|' })
+      const stdinScript = shell.kind === 'opaque' || (shell.kind === 'stdin' && raw.before === '|')
+      result.push({ ...segment, stdinScript })
     }
   })
   return result

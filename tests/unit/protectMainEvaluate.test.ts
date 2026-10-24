@@ -176,6 +176,41 @@ const BLOCKED: [string, Opts?][] = [
   // menores: brace expansion e ANSI-C
   ['git push origin {main,feat/x}', ON_FEAT],
   ["git push origin $'\\x6dain'", ON_FEAT],
+  // re-revisão final: zsh roda o último elemento do pipeline no shell atual
+  ['true | cd /repo; git commit -m x', ON_FEAT],
+  // scripts por /dev/stdin, process substitution, redirecionamento e `source`
+  ['bash <(echo "git push origin main")', ON_FEAT],
+  ['bash < <(echo "git push origin main")', ON_FEAT],
+  ['source <(echo "git push origin main")', ON_FEAT],
+  ['. /dev/stdin <<< "git push origin main"', ON_FEAT],
+  ["bash /dev/stdin <<'X'\ngit push origin main\nX", ON_FEAT],
+  ['echo "git push origin main" | bash /dev/stdin', ON_FEAT],
+  ['tcsh -c "git push origin main"', ON_FEAT],
+  ['csh -c "git push origin main"', ON_FEAT],
+  ['fish -c "git push origin main"', ON_FEAT],
+  ['bash -c -x "git push origin main"', ON_FEAT],
+  ['bash -c -- "git push origin main"', ON_FEAT],
+  // config que redireciona push/alias escrita dentro do comando
+  ['git config alias.p push && git p origin main', ON_FEAT],
+  ['git config remote.origin.push HEAD:refs/heads/main; git push', ON_FEAT],
+  ['git config push.default matching', ON_FEAT],
+  ['git config set alias.p push', ON_FEAT],
+  ['git config --add remote.origin.mirror true', ON_FEAT],
+  ['git config --global alias.p "!git push origin main"', ON_FEAT],
+  // nome do programa
+  ['GIT push origin main', ON_FEAT],
+  ['=git push origin main', ON_FEAT],
+  ['builtin cd /repo && git commit -m x', ON_FEAT],
+  // fim das opções e flags combinadas
+  ['git push -- origin main', ON_FEAT],
+  ['git push origin -- main', ON_FEAT],
+  ["env -vS 'git push origin main'", ON_FEAT],
+  ["env -iS 'git push origin main'", ON_FEAT],
+  // proteções da branch e ref codificada
+  ['gh api -X DELETE repos/o/r/branches/main/protection', ON_FEAT],
+  ['gh api -X PUT repos/o/r/branches/main/protection --input p.json', ON_FEAT],
+  ['gh api -X DELETE repos/o/r/rulesets/1', ON_FEAT],
+  ['gh api -X PATCH repos/o/r/git/refs/heads%2Fmain -f sha=abc', ON_FEAT],
 ]
 
 const ALLOWED: [string, Opts?][] = [
@@ -256,6 +291,19 @@ const ALLOWED: [string, Opts?][] = [
   ['ls ~/.config/gh && which git', ON_FEAT],
   ['{ cd wt; } && git commit -m x'],
   ['git rev-parse HEAD; constructor x; toString y'],
+  // re-revisão final
+  ['true | cd wt; git status'],
+  ['fd -e ts | xargs rg -l "git"', ON_FEAT],
+  ["find . -name '*.md' | xargs grep -n gh", ON_FEAT],
+  ['git config --get alias.co', ON_FEAT],
+  ['git config user.email a@b.c', ON_FEAT],
+  ['git config --unset push.default', ON_FEAT],
+  ['git config --get-regexp "^alias\\."', ON_FEAT],
+  ['bash scripts/x.sh', ON_FEAT],
+  ['gh api repos/o/r/branches/main/protection', ON_FEAT],
+  ['git push -- origin feat/x', ON_FEAT],
+  ['fish -c "npm test"', ON_FEAT],
+  ['builtin cd wt && git commit -m x'],
 ]
 
 describe('evaluateCommand', () => {

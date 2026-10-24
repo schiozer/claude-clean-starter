@@ -105,7 +105,8 @@ const OPTIONS_WITH_ARG = {
 
 const block = (motive) => `${BLOCK_PREFIX} ${motive}`
 const isDynamic = (token) => token.includes('$') || token.includes('`')
-const baseName = (token) => token.split('/').pop() ?? ''
+/** Nome do programa: sem diretório, sem o `=` do zsh e sem diferenciar maiúsculas (APFS). */
+const baseName = (token) => (token.split('/').pop() ?? '').replace(/^=/, '').toLowerCase()
 
 /** Argumentos posicionais (sem opções nem seus valores). Para em `--`. */
 function positionals(args, optionsWithArg = []) {
@@ -190,7 +191,13 @@ function checkPush(args, branch, protectedBranches) {
   if (args.some((a) => ['--all', '--mirror', '--branches'].includes(a))) {
     return block('`git push --all`/`--mirror` envia todas as branches, inclusive as protegidas.')
   }
-  const refspecs = positionals(args, OPTIONS_WITH_ARG.push).slice(1)
+  // Depois de `--` tudo é posicional (`git push -- origin main`).
+  const dashes = args.indexOf('--')
+  const refspecs = (
+    dashes === -1
+      ? positionals(args, OPTIONS_WITH_ARG.push)
+      : [...positionals(args.slice(0, dashes), OPTIONS_WITH_ARG.push), ...args.slice(dashes + 1)]
+  ).slice(1)
   if (!refspecs.length) {
     return onProtected(branch, protectedBranches, `\`git push\` na branch \`${String(branch)}\`.`)
   }
@@ -244,6 +251,11 @@ function checkGhApi(args, endpoint, protectedBranches) {
   }
   const method = optionValues(args, ['-X', '--method']).pop() ?? (fields.length ? 'POST' : 'GET')
   if (method.toUpperCase() === 'GET') return null
+  if (/(?:^|\/)branches\/[^/]+\/protection(?:\/|$)|(?:^|\/)rulesets(?:\/|$)/.test(endpoint)) {
+    return block(
+      '`gh api` alterando a proteção da branch: desligar proteções é do humano (`[R3]`).'
+    )
+  }
   const ref = /(?:^|\/)git\/refs\/heads\/(.+?)\/?$/.exec(endpoint)?.[1]
   const createsRef =
     /(?:^|\/)git\/refs\/?$/.test(endpoint) &&
@@ -255,6 +267,16 @@ function checkGhApi(args, endpoint, protectedBranches) {
     return block('`gh api …/contents/` grava commits direto na branch.')
   }
   return null
+}
+
+/** Caminho do `gh api` sem query string e com `%2F` etc. decodificados. */
+function decodeEndpoint(endpoint) {
+  const path = endpoint.split('?')[0]
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
 }
 
 /** B8–B9: `gh pr merge`, `gh api` e `gh alias set` de merge. Em segmento ambíguo, falha fechado. */
@@ -271,7 +293,7 @@ function checkGh(args, segment, protectedBranches) {
   if (group === 'alias' && action === 'set' && /merge/i.test(rest.slice(1).join(' '))) {
     return block('`gh alias` de merge: o merge é feito pelo humano.')
   }
-  if (group === 'api') return checkGhApi(args, (action ?? '').split('?')[0], protectedBranches)
+  if (group === 'api') return checkGhApi(args, decodeEndpoint(action ?? ''), protectedBranches)
   return null
 }
 
@@ -302,6 +324,23 @@ function splitGitArgv(argv) {
 function configValue(configs, key) {
   const pair = configs.findLast((c) => c.split('=')[0].toLowerCase() === key.toLowerCase())
   return pair === undefined ? undefined : pair.slice(pair.indexOf('=') + 1)
+}
+
+const CONFIG_OPTIONS_WITH_ARG = ['-f', '--file', '--blob', '--type', '--default', '--comment']
+const CONFIG_READS =
+  /^(--get|--get-all|--get-regexp|--get-urlmatch|--unset|--unset-all|-l|--list|--rename-section|--remove-section|-e|--edit)$/
+const CONFIG_ACTIONS = new Set(['get', 'list', 'unset', 'rename-section', 'remove-section', 'edit'])
+/** Config que muda o que um `git push`/alias faz depois. */
+const REDIRECTING_CONFIG = /^alias\.|^push\.default$|^remote\..+\.(push|mirror)$/i
+
+/** `git config` gravando alias ou config de push (`git config alias.p push`, `git config set …`)? */
+function writesRedirectingConfig(args) {
+  if (args.some((a) => CONFIG_READS.test(a))) return false
+  const words = positionals(args, CONFIG_OPTIONS_WITH_ARG)
+  if (CONFIG_ACTIONS.has(words[0])) return false
+  const [key, value] = words[0] === 'set' ? words.slice(1) : words
+  const writes = words[0] === 'set' || args.includes('--add') || value !== undefined
+  return writes && key !== undefined && REDIRECTING_CONFIG.test(key)
 }
 
 /**
@@ -355,6 +394,11 @@ function evaluateGit(argv, segment, state, ctx, depth = 0) {
   const branch = branchAt(dir, state, ctx)
   const { protectedBranches } = ctx
 
+  if (sub === 'config' && writesRedirectingConfig(args)) {
+    return block(
+      '`git config` de alias, `push.default` ou `remote.<r>.push|mirror` muda o destino dos próximos comandos; peça ao humano.'
+    )
+  }
   if (sub === 'commit') return checkCommit(branch, protectedBranches)
   if (sub === 'push') return checkPush(args, branch, protectedBranches)
   if (WRITE_FAMILY.has(sub) && sub !== 'switch' && sub !== 'checkout') {
@@ -431,6 +475,8 @@ function evaluateSegment(segment, command, state, ctx) {
   if (segment.stdinScript) return MENTIONS_GIT.test(command) ? block(AMBIGUOUS) : null
   const program = baseName(argv[0])
   if (program === 'cd' || program === 'pushd' || program === 'popd') {
+    // No zsh o último elemento do pipeline roda no shell atual; no bash, num subshell.
+    if (segment.pipeTail && !segment.background) state.dir = UNKNOWN
     if (segment.pipeline || segment.background) return null
     state.dir = program === 'popd' ? UNKNOWN : resolveDir(state.dir, argv[1], ctx.env)
     return null
@@ -444,6 +490,8 @@ function evaluateSegment(segment, command, state, ctx) {
   // Fallback para wrappers desconhecidos: `foo … git push …` também é avaliado.
   for (let k = 1; k < argv.length; k++) {
     if (baseName(argv[k]) !== 'git' && baseName(argv[k]) !== 'gh') continue
+    // `xargs rg -l git`: `git` como último argumento é padrão de busca, não comando.
+    if (segment.opaqueArgs && k === argv.length - 1) continue
     const inner = evaluateProgram(argv.slice(k), segment, state, ctx)
     if (inner !== null) return inner
   }
