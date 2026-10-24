@@ -20,6 +20,9 @@
 > (disciplina de skills, arquitetura, boas práticas), não decisões de um produto
 > específico.
 >
+> **Adoção — `main` protegida**: ao adotar o template, **não remova** a regra 0 nem
+> `hooks/protect-main`.
+>
 > **Adoção — operação** ([ADR-013](./docs/adr/013-governanca-operacional-e-runbooks.md)):
 > antes do primeiro deploy fora do Dev, preencha todo `<preencher>` de `docs/runbooks/`,
 > date a `Última verificação` de cada runbook e troque o passo do CI para
@@ -36,6 +39,18 @@ Se você está lendo isso, provavelmente sou eu mesmo (Claude) trabalhando no pr
 ---
 
 ## ⚠️ REGRAS OBRIGATÓRIAS — LEIA PRIMEIRO ⚠️
+
+### 0. **A `main` só recebe mudanças via PR — INEGOCIÁVEL** ⛔
+
+- A `main` só recebe mudanças via PR. **Sem exceção**, inclusive se o humano pedir.
+- Trabalho terminado = commit em feature branch → push → PR → avisar o humano.
+  **Nunca pergunte** se pode commitar, mergear ou dar push na `main` — essa pergunta é proibida.
+- O merge do PR é sempre do humano (`[R3]`); o agente nunca roda `gh pr merge`.
+- Em `superpowers:finishing-a-development-branch` (ou qualquer skill que ofereça merge local),
+  a única opção válida é **push + PR**.
+- O hook `hooks/protect-main` impõe isso (branches protegidas em
+  `hooks/protect-main/config.json`); se ele barrar, siga a mensagem — não peça para desligá-lo.
+  Ver [ADR-005](./docs/adr/005-trunk-based-development.md).
 
 ### 1. **Superpowers Pipeline é OBRIGATÓRIO para features novas**
 
@@ -111,7 +126,7 @@ crie uma tarefa por item.
 - Escrever testes / código novo → **test-driven-development**.
 - Antes de declarar concluído ou abrir PR → **verification-before-completion**.
 
-### 8. **Toda mudança entra na `main` via PR — SEMPRE** ⚠️
+### 8. **Toda mudança entra na `main` via PR — SEMPRE** ⚠️ (ver regra 0)
 
 Nunca há push direto na trunk. **Qualquer** mudança (código, docs, ADRs) passa por
 uma feature branch curta e um **Pull Request**. Ver
@@ -153,6 +168,7 @@ branch e abertura de PR seguem só as regras 5 e 8 — nenhum outro passo de ope
 ├── .claude/
 │   ├── commands/                  # Slash-commands do projeto (templates)
 │   └── skills/                    # mvp-development, ddd-service-development, runbook-execution
+├── hooks/                         # hooks do Claude Code: check-dependencies, git-freshness, protect-main
 ├── docs/
 │   ├── adr/                       # Architecture Decision Records
 │   ├── guides/                    # Guias técnicos (Zod, Testing, Errors, Deploy/CI, MCP)

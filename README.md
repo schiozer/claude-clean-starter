@@ -24,7 +24,7 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 │       ├── specs/        # _TEMPLATE.md
 │       └── plans/        # _TEMPLATE.md
 ├── scripts/             # check-runbooks.mjs (npm run check:runbooks)
-├── hooks/               # check-dependencies, git-freshness (SessionStart)
+├── hooks/               # check-dependencies, git-freshness (SessionStart); protect-main (PreToolUse)
 ├── eslint.config.mjs    # flat config auto-contido (typescript-eslint)
 ├── tsconfig.json        # TS estrito, sem framework
 ├── vitest.config.ts     # unit/integration
@@ -42,7 +42,7 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 4. **Declare o perfil arquitetural** no topo do `CLAUDE.md` (`mvp-primeiro` ou `completo-direto`).
 5. **Complete os runbooks** de `docs/runbooks/` (todo `<preencher>`, data de verificação)
    e troque o CI para `npm run check:runbooks -- --strict` — ver ADR-013.
-6. `npm install` para o tooling; use `npm run lint`, `npm run type-check`,
+6. **Node ≥ 20** (os hooks em `hooks/` rodam com `node`); `npm install` para o tooling; use `npm run lint`, `npm run type-check`,
    `npm test`, `npm run check:runbooks`, `npm run format`.
 7. Ao adicionar o app — **web** (ex.: Next.js) ou **nativo iOS** (Expo/React
    Native) — inclua as deps de runtime e estenda os configs (eslint/tsconfig)

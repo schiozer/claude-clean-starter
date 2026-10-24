@@ -28,3 +28,9 @@ seu contexto.
 
 Se você usa múltiplas contas git na mesma máquina, confira a conta ativa **antes**
 de qualquer push/merge/PR (ver regra 5 do `CLAUDE.md`).
+
+## Proteção da `main`
+
+A `main` só recebe mudanças via PR (regra 0 do `CLAUDE.md`, ADR-005). O agente é barrado
+pelo hook `hooks/protect-main` ao tentar commitar, dar push ou mergear na `main`; siga a
+mensagem do hook. O merge do PR é sempre do humano.

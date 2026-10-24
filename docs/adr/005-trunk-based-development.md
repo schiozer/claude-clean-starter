@@ -39,6 +39,18 @@ deployável. Nada de branches longevas por ambiente.**
 - A `main` deve passar em type-check, lint e testes antes do merge (ver
   `BEST_PRACTICES.md`).
 
+## Aplicação
+
+- **Lado do agente — hook `hooks/protect-main`** (PreToolUse em Bash, regra 0 do
+  `CLAUDE.md`): barra `commit`/`merge`/`rebase` etc. com a `main` como branch atual, push
+  para a `main` (inclusive `--all`, `--mirror` e refspecs por glob), `gh pr merge` e
+  `gh api .../merge`. Falha fechado: se não consegue decidir um comando com `git`/`gh`,
+  bloqueia. Não há chave de desligar; as branches protegidas ficam em
+  `hooks/protect-main/config.json`.
+- **Lado humano — branch protection do GitHub**: PR obrigatório, sem push direto e required
+  checks, ligada no passo 10 de
+  [`bootstrap-ambientes`](../runbooks/bootstrap-ambientes.md) (backstop remoto).
+
 ## Consequências
 
 **Fica mais fácil**
