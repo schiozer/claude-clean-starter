@@ -20,6 +20,9 @@
 > (disciplina de skills, arquitetura, boas práticas), não decisões de um produto
 > específico.
 >
+> **Adoção — `main` protegida**: ao adotar o template, **não remova** a regra 0, `hooks/protect-main`,
+> `.githooks/` nem o workflow `.github/workflows/main-guard.yml`.
+>
 > **Adoção — operação** ([ADR-013](./docs/adr/013-governanca-operacional-e-runbooks.md)):
 > antes do primeiro deploy fora do Dev, preencha todo `<preencher>` de `docs/runbooks/`,
 > date a `Última verificação` de cada runbook e troque o passo do CI para
@@ -36,6 +39,22 @@ Se você está lendo isso, provavelmente sou eu mesmo (Claude) trabalhando no pr
 ---
 
 ## ⚠️ REGRAS OBRIGATÓRIAS — LEIA PRIMEIRO ⚠️
+
+### 0. **A `main` só recebe mudanças via PR — INEGOCIÁVEL** ⛔
+
+- A `main` só recebe mudanças via PR. **Sem exceção**, inclusive se o humano pedir.
+- Trabalho terminado = commit em feature branch → push → PR → avisar o humano.
+  **Nunca pergunte** se pode commitar, mergear ou dar push na `main` — essa pergunta é proibida.
+- O merge do PR é sempre do humano (`[R3]`); o agente nunca roda `gh pr merge`.
+- Em `superpowers:finishing-a-development-branch` (ou qualquer skill que ofereça merge local),
+  a única opção válida é **push + PR**.
+- A `main` se autogarante em três camadas (ver [ADR-005](./docs/adr/005-trunk-based-development.md)):
+  git hooks versionados em `.githooks/` (valem para todos, instalados por `npm install`),
+  o hook `hooks/protect-main` (agente) e o workflow `Guarda da main` (GitHub, detecção).
+  Branches protegidas em `hooks/protect-main/config.json`; se algo barrar, siga a mensagem —
+  não peça para desligar.
+- Nunca edite, desative ou contorne `hooks/protect-main`, `.githooks/` ou `core.hooksPath` (nem o
+  `.claude/settings.json` que registra o hook) para passar por um bloqueio.
 
 ### 1. **Superpowers Pipeline é OBRIGATÓRIO para features novas**
 
@@ -72,7 +91,7 @@ Todas as features têm specs em `docs/superpowers/specs/`. Antes de implementar,
 
 Architecture Decision Records em `docs/adr/`. Quando tomar decisão arquitetural importante, crie um ADR a partir de `docs/adr/000-template.md`.
 
-### 5. **Conta git correta ANTES de todo push/merge/PR** ⚠️
+### 5. **Conta git correta ANTES de todo push/merge/PR** ⚠️ (ver regra 0)
 
 Se você trabalha com **múltiplas contas git/gh** na mesma máquina (ex.: pessoal e
 corporativa), a conta ativa **assina o merge** e pode afetar deploys e permissões.
@@ -111,7 +130,7 @@ crie uma tarefa por item.
 - Escrever testes / código novo → **test-driven-development**.
 - Antes de declarar concluído ou abrir PR → **verification-before-completion**.
 
-### 8. **Toda mudança entra na `main` via PR — SEMPRE** ⚠️
+### 8. **Toda mudança entra na `main` via PR — SEMPRE** ⚠️ (ver regra 0)
 
 Nunca há push direto na trunk. **Qualquer** mudança (código, docs, ADRs) passa por
 uma feature branch curta e um **Pull Request**. Ver
@@ -153,6 +172,8 @@ branch e abertura de PR seguem só as regras 5 e 8 — nenhum outro passo de ope
 ├── .claude/
 │   ├── commands/                  # Slash-commands do projeto (templates)
 │   └── skills/                    # mvp-development, ddd-service-development, runbook-execution
+├── .githooks/                     # git hooks versionados (reference-transaction, pre-push) — trava da main
+├── hooks/                         # hooks do Claude Code: check-dependencies, git-freshness, protect-main
 ├── docs/
 │   ├── adr/                       # Architecture Decision Records
 │   ├── guides/                    # Guias técnicos (Zod, Testing, Errors, Deploy/CI, MCP)

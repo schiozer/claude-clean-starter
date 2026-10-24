@@ -37,7 +37,7 @@ export default tseslint.config(
   },
   {
     // `any` é idiomático em mocks de teste; console é a saída pretendida de CLIs.
-    files: ['tests/**', 'scripts/**'],
+    files: ['tests/**', 'scripts/**', 'hooks/**'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       'no-console': 'off',
@@ -45,7 +45,7 @@ export default tseslint.config(
   },
   {
     // Scripts `.mjs` rodam no Node (sem tipos do TS para resolver os globais).
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'hooks/**/*.mjs'],
     languageOptions: { globals: { console: 'readonly', process: 'readonly' } },
   }
 )

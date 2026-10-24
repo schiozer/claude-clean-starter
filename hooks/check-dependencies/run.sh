@@ -5,6 +5,7 @@
 #
 # Warns when the `remember` plugin is not installed/enabled. Advisory only —
 # never blocks or fails the session. Always exits 0.
+# Also re-applies core.hooksPath=.githooks (protect-main git hooks) when it drifted.
 # ============================================================================
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,6 +64,16 @@ else
   if [ -f "$INSTALLED_FILE" ] && ! grep -q "$PLUGIN" "$INSTALLED_FILE" 2>/dev/null; then
     warn "the '$PLUGIN' plugin appears to be missing. Install it via /plugin for cross-session memory."
   fi
+fi
+
+# protect-main (camada 1): reaplica core.hooksPath=.githooks e o bit executável dos shims.
+# Autorreparo [R1]: mutação local reversível. Nunca falha a sessão.
+INSTALLER="$PROJECT_DIR/scripts/install-git-hooks.mjs"
+if command -v node >/dev/null 2>&1 && [ -f "$INSTALLER" ]; then
+  HOOKS_ACTION="$(node "$INSTALLER" || true)"
+  case "$HOOKS_ACTION" in
+    installed | replaced) echo "protect-main: core.hooksPath reaplicado (.githooks)." ;;
+  esac
 fi
 
 exit 0

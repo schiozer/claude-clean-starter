@@ -24,7 +24,8 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 │       ├── specs/        # _TEMPLATE.md
 │       └── plans/        # _TEMPLATE.md
 ├── scripts/             # check-runbooks.mjs (npm run check:runbooks)
-├── hooks/               # check-dependencies, git-freshness (SessionStart)
+├── .githooks/           # trava da main (reference-transaction, pre-push), ativada por `npm install`
+├── hooks/               # check-dependencies, git-freshness (SessionStart); protect-main (PreToolUse)
 ├── eslint.config.mjs    # flat config auto-contido (typescript-eslint)
 ├── tsconfig.json        # TS estrito, sem framework
 ├── vitest.config.ts     # unit/integration
@@ -35,19 +36,27 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 
 ## Como usar
 
-1. **Clone/copie** este template para o seu novo projeto e renomeie.
+1. **Clone/copie** este template para o seu novo projeto e renomeie. Num repositório novo,
+   faça `git push -u origin main` logo após o commit inicial; daí em diante a `main` só por PR.
 2. **Instale as skills**: `/plugin install superpowers@claude-plugins-official`.
 3. **Preencha a stack concreta** em `CLAUDE.md` e `ARCHITECTURE.md` (banco, auth,
    hospedagem) e registre as decisões como **ADRs** (`docs/adr/`).
 4. **Declare o perfil arquitetural** no topo do `CLAUDE.md` (`mvp-primeiro` ou `completo-direto`).
 5. **Complete os runbooks** de `docs/runbooks/` (todo `<preencher>`, data de verificação)
    e troque o CI para `npm run check:runbooks -- --strict` — ver ADR-013.
-6. `npm install` para o tooling; use `npm run lint`, `npm run type-check`,
+6. **Node ≥ 20** (os hooks em `hooks/` rodam com `node`); `npm install` para o tooling; use `npm run lint`, `npm run type-check`,
    `npm test`, `npm run check:runbooks`, `npm run format`.
 7. Ao adicionar o app — **web** (ex.: Next.js) ou **nativo iOS** (Expo/React
    Native) — inclua as deps de runtime e estenda os configs (eslint/tsconfig)
    para o framework. Os padrões de app nativo estão em `ARCHITECTURE.md`
-   (seção *"Padrões para App Nativo"*) e `BEST_PRACTICES.md`.
+   (seção _"Padrões para App Nativo"_) e `BEST_PRACTICES.md`.
+
+## Proteção da `main`
+
+`npm install` ativa (via `core.hooksPath=.githooks`) git hooks que recusam commit/merge/rebase
+na `main` local e qualquer push para a `main`; o workflow `Guarda da main` alarma no GitHub se
+um commit chegar sem PR. Se a trava barrar, crie uma branch e abra um PR; para atualizar a
+`main` local use `git pull --ff-only`. Detalhes no ADR-005.
 
 ## O pipeline
 

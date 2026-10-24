@@ -49,6 +49,7 @@ para tudo que vem depois.
 |---|---|---|
 | `superpowers:verification-before-completion` | Superpowers | Checagens antes de declarar concluído ou abrir PR. |
 | `superpowers:requesting-code-review` | Superpowers | Estrutura o pedido de revisão. |
+| `superpowers:finishing-a-development-branch` | Superpowers | Encerra a branch: só **push + PR** é válido (merge local e descartar não são oferecidos) — ver regra 0 do `CLAUDE.md`. |
 
 ### Operação — Deploy e Configuração
 | Skill | Origem | Papel |

@@ -1,0 +1,51 @@
+#!/bin/sh
+# Shim versionado do git hook (reference-transaction e pre-push têm o mesmo conteúdo).
+# Só chama o guard Node (hooks/protect-main/git-guard.mjs) quando alguma linha do stdin toca uma
+# branch protegida (3º campo = refs/heads/<protegida>), para não pesar em toda transação de ref.
+# Fail-closed: linha protegida sem Node no PATH → recusa. Ver spec main-autogarantida §4.
+
+hook=$(basename "$0")
+guard_dir="$(dirname "$0")/../hooks/protect-main"
+
+# >>> extract_protected_branches
+# Nomes de `protectedBranches` do config.json, um por linha (só `sed`/`tr` POSIX).
+extract_protected_branches() {
+  tr -d '\n\r' <"$1" |
+    sed -n 's/.*"protectedBranches"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' |
+    tr ',' '\n' |
+    sed -n 's/^[[:space:]]*"\([^"]*\)"[[:space:]]*$/\1/p'
+}
+# <<< extract_protected_branches
+
+input=$(cat)
+
+# reference-transaction: só o estado `prepared` decide (os outros não podem mais abortar).
+if [ "$hook" = reference-transaction ] && [ "$1" != prepared ]; then exit 0; fi
+
+names=$(extract_protected_branches "$guard_dir/config.json" 2>/dev/null)
+if [ -n "$names" ]; then
+  # Pré-filtro em shell puro (sem awk: o awk do macOS rejeita `-v` com quebra de linha).
+  # Status 0 = alguma linha tem o 3º campo refs/heads/<protegida>; 1 = nenhuma → libera.
+  # Qualquer outro status (falha do pré-filtro) segue para o Node: fail-closed.
+  set -f
+  printf '%s\n' "$input" | {
+    while read -r _ _ ref _; do
+      for name in $names; do
+        [ "$ref" = "refs/heads/$name" ] && exit 0
+      done
+    done
+    exit 1
+  }
+  prefilter=$?
+  set +f
+  [ "$prefilter" -eq 1 ] && exit 0
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  echo 'Bloqueado: a `main` só recebe mudanças via PR (CLAUDE.md regra 0, ADR-005). Crie uma branch `tipo/descrição`, faça push e abra o PR; o merge é do humano.' \
+    "O hook \`$hook\` precisa do Node no PATH para avaliar a mudança numa branch protegida e recusou-a." >&2
+  echo 'Atualizar a `main` local com `git pull` continua permitido.' >&2
+  exit 1
+fi
+
+printf '%s\n' "$input" | node "$guard_dir/git-guard.mjs" "$hook" "$@"

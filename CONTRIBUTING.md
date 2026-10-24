@@ -28,3 +28,13 @@ seu contexto.
 
 Se você usa múltiplas contas git na mesma máquina, confira a conta ativa **antes**
 de qualquer push/merge/PR (ver regra 5 do `CLAUDE.md`).
+
+## Proteção da `main`
+
+A `main` só recebe mudanças via PR (regra 0 do `CLAUDE.md`, ADR-005), para agente **e** humano.
+O `npm install` instala a trava (git hooks de `.githooks/` via `core.hooksPath`); ela recusa
+commit, merge, rebase etc. na `main` local e qualquer push para a `main`. Se barrar, crie uma
+branch (`git switch -c tipo/descrição-curta`), commite, dê push e abra o PR; o merge é sempre do
+humano. Em repositório novo, o primeiro push da `main` (remoto vazio) é liberado; depois, só por PR.
+Para atualizar a `main` local use `git pull --ff-only`. Um workflow no GitHub
+(`Guarda da main`) alarma se algum commit chegar à `main` sem PR.
