@@ -211,6 +211,31 @@ const BLOCKED: [string, Opts?][] = [
   ['gh api -X PUT repos/o/r/branches/main/protection --input p.json', ON_FEAT],
   ['gh api -X DELETE repos/o/r/rulesets/1', ON_FEAT],
   ['gh api -X PATCH repos/o/r/git/refs/heads%2Fmain -f sha=abc', ON_FEAT],
+  // 8. trava local (camada 1): o agente não a desliga
+  ['git config core.hooksPath x', ON_FEAT],
+  ['git config --unset core.hooksPath', ON_FEAT],
+  ['git config --global core.hooksPath /tmp/h', ON_FEAT],
+  ['git config set core.hooksPath x', ON_FEAT],
+  ['git config CORE.HOOKSPATH x', ON_FEAT],
+  ['git config core.hooksPath ./.githooks', ON_FEAT],
+  ['git -c core.hooksPath=/dev/null commit -m x', ON_FEAT],
+  ['git --config-env=core.hooksPath=H commit -m x', ON_FEAT],
+  [
+    'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x',
+    ON_FEAT,
+  ],
+  ['git push --no-verify origin feat/x', ON_FEAT],
+  ['git push origin feat/x --no-verify', ON_FEAT],
+  ['rm .githooks/pre-push', ON_FEAT],
+  ['rm -rf .githooks', ON_FEAT],
+  ['rm -rf ./.githooks/', ON_FEAT],
+  ['rm /repo/.githooks/pre-push', ON_FEAT],
+  ['mv .githooks x', ON_FEAT],
+  ['chmod -x .githooks/reference-transaction', ON_FEAT],
+  ['echo > .githooks/pre-push', ON_FEAT],
+  ['echo >>.githooks/pre-push', ON_FEAT],
+  ['echo >| .githooks/pre-push', ON_FEAT],
+  ['truncate -s 0 .githooks/pre-push', ON_FEAT],
 ]
 
 const ALLOWED: [string, Opts?][] = [
@@ -304,6 +329,14 @@ const ALLOWED: [string, Opts?][] = [
   ['git push -- origin feat/x', ON_FEAT],
   ['fish -c "npm test"', ON_FEAT],
   ['builtin cd wt && git commit -m x'],
+  ['git push -n origin feat/x', ON_FEAT],
+  ['git config core.hooksPath .githooks', ON_FEAT],
+  ['git config --get core.hooksPath', ON_FEAT],
+  ['git config get core.hooksPath', ON_FEAT],
+  ['git config --list', ON_FEAT],
+  ['cat .githooks/pre-push', ON_FEAT],
+  ['git commit --no-verify -m x', ON_FEAT],
+  ['mv x .githooks.bak', ON_FEAT],
 ]
 
 describe('evaluateCommand', () => {

@@ -16,6 +16,7 @@ import { scan, scanWords } from './scan.mjs'
  * @property {boolean} background Termina em `&`: roda num subshell.
  * @property {boolean} gitEnv Prefixos mudam o repositório/config do git (`GIT_DIR`,
  *   `GIT_WORK_TREE`, `GIT_CONFIG_*`, `env -C`); atribuição/`export` isolada vem com `argv` vazio.
+ * @property {boolean} hooksEnv Prefixos definem `core.hooksPath` por `GIT_CONFIG_KEY_n`/`GIT_CONFIG_PARAMETERS`.
  * @property {boolean} opaqueArgs Argumentos completados pela entrada (`xargs`).
  * @property {boolean} stdinScript Shell (ou `source`) que lê o script de um pipe, de
  *   redirecionamento, de process substitution ou de `/dev/stdin` — não dá para ler o script.
@@ -76,6 +77,7 @@ const WRAPPERS = {
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
 const GIT_ENV_ASSIGNMENT = /^GIT_(CONFIG\w*|DIR|WORK_TREE)=/
 const REDIRECTION = /^\d*[<>]/
+const HOOKS_ENV = /^GIT_CONFIG_(KEY_\d+|PARAMETERS)=.*core\.hookspath/i
 
 /** Nome do programa: sem diretório, sem o `=` do zsh (`=git`) e sem diferenciar maiúsculas (APFS). */
 const baseName = (text) => (text.split('/').pop() ?? '').replace(/^=/, '').toLowerCase()
@@ -223,6 +225,7 @@ const makeSegment = (argv, ambiguous, rest) => ({
   pipeTail: false,
   background: false,
   gitEnv: false,
+  hooksEnv: false,
   opaqueArgs: false,
   stdinScript: false,
   ...rest,
@@ -239,6 +242,7 @@ function innerSegments(script, scope, outer) {
     ...inner,
     ambiguous: inner.ambiguous || outer.ambiguous,
     gitEnv: inner.gitEnv || outer.gitEnv,
+    hooksEnv: inner.hooksEnv || outer.hooksEnv,
     opaqueArgs: inner.opaqueArgs || outer.opaqueArgs,
   }))
 }
@@ -258,8 +262,9 @@ function parseScript(command, scope) {
       result.push(...parseScript(body, [...base, `c${index}.${n}`]))
     })
     const { tokens, gitEnv, opaqueArgs } = stripPrefixes(raw.tokens)
+    const hooksEnv = raw.tokens.some((tok) => HOOKS_ENV.test(tok.text))
     if (!tokens.length) {
-      if (gitEnv) result.push(makeSegment([], false, { scope: base, gitEnv }))
+      if (gitEnv || hooksEnv) result.push(makeSegment([], false, { scope: base, gitEnv, hooksEnv }))
       return
     }
     const argv = tokens.map((tok) => tok.text)
@@ -274,6 +279,7 @@ function parseScript(command, scope) {
       pipeTail: raw.before === '|' && raw.after !== '|',
       background: raw.after === '&',
       gitEnv: gitEnv || (DECLARATIONS.has(argv[0]) && argv.some((a) => GIT_ENV_ASSIGNMENT.test(a))),
+      hooksEnv,
       opaqueArgs,
     })
     const shell = shellInvocation(tokens)

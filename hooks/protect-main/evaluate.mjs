@@ -30,6 +30,9 @@ export const BLOCK_PREFIX =
 /** O texto menciona git/gh? Mesmo critério do fail-closed do `run.mjs`. */
 export const MENTIONS_GIT = /\bgit\b|\bgh\b/i
 
+const LOCK_MOTIVE =
+  'desligar a trava local (`core.hooksPath`/`.githooks/`/`--no-verify`) não é permitido; peça ao humano.'
+
 const AMBIGUOUS =
   'Não foi possível verificar o comando; escreva o comando por extenso (sem variáveis, `eval` ou alias com `!`).'
 
@@ -188,6 +191,7 @@ function pushDestination(refspec, branch) {
 
 /** B5–B7: `git push`. */
 function checkPush(args, branch, protectedBranches) {
+  if (args.includes('--no-verify')) return block(LOCK_MOTIVE)
   if (args.some((a) => ['--all', '--mirror', '--branches'].includes(a))) {
     return block('`git push --all`/`--mirror` envia todas as branches, inclusive as protegidas.')
   }
@@ -343,6 +347,26 @@ function writesRedirectingConfig(args) {
   return writes && key !== undefined && REDIRECTING_CONFIG.test(key)
 }
 
+const HOOKS_PATH = /^core\.hookspath$/i
+const LOCK_VALUE = '.githooks'
+
+/** `git config` gravando/removendo `core.hooksPath` (exceto gravar exatamente `.githooks`)? */
+function touchesHooksPath(args) {
+  if (
+    args.some((a) => /^(--get|--get-all|--get-regexp|--get-urlmatch|-l|--list|-e|--edit)$/.test(a))
+  ) {
+    return false
+  }
+  const words = positionals(args, CONFIG_OPTIONS_WITH_ARG)
+  if (words[0] === 'get' || words[0] === 'list' || words[0] === 'edit') return false
+  const rest = words[0] === 'set' || words[0] === 'unset' ? words.slice(1) : words
+  const [key, value] = rest
+  if (key === undefined || !HOOKS_PATH.test(key)) return false
+  const removes = words[0] === 'unset' || args.some((a) => /^--unset(-all)?$/.test(a))
+  if (removes) return true
+  return value !== LOCK_VALUE
+}
+
 /**
  * Branch assumida após `git switch`/`git checkout` (`undefined` = não muda).
  * `git checkout <x>` sem `-b` pode ser caminho ou branch: só é confiável se `<x>` é protegida.
@@ -386,6 +410,8 @@ function evaluateGit(argv, segment, state, ctx, depth = 0) {
   }
 
   if (segment.ambiguous && WRITE_FAMILY.has(sub)) return block(AMBIGUOUS)
+  if (configs.some((c) => HOOKS_PATH.test(c.split('=')[0]))) return block(LOCK_MOTIVE)
+  if (sub === 'config' && touchesHooksPath(args)) return block(LOCK_MOTIVE)
   if (sub === 'push' && configs.some((c) => PUSH_CONFIG.test(c.split('=')[0]))) {
     return block('`git -c push.default`/`remote.<r>.push` muda o destino do `git push`.')
   }
@@ -466,12 +492,35 @@ function evaluateProgram(argv, segment, state, ctx) {
   return null
 }
 
+/** Caminho em `.githooks` (`.githooks`, `./.githooks/x`, `/abs/.githooks/x`)? */
+const GITHOOKS_PATH = /(^|\/)\.githooks(\/|$)/
+const MUTATING_PROGRAMS = new Set(['rm', 'mv', 'chmod', 'truncate', 'unlink', 'rmdir', 'shred'])
+const REDIRECT_TOKEN = /^\d*>[>|]?(.*)$/
+
+/** Comando que apaga/move/trunca/chmod ou redireciona saída para `.githooks/`? Vale sem `git`. */
+function checkGithooksTouch(argv) {
+  const program = baseName(argv[0])
+  for (let k = 1; k < argv.length; k++) {
+    const redirect = REDIRECT_TOKEN.exec(argv[k])
+    if (redirect) {
+      const target = redirect[1] === '' ? argv[k + 1] : redirect[1]
+      if (target !== undefined && GITHOOKS_PATH.test(target)) return block(LOCK_MOTIVE)
+    } else if (MUTATING_PROGRAMS.has(program) && GITHOOKS_PATH.test(argv[k])) {
+      return block(LOCK_MOTIVE)
+    }
+  }
+  return null
+}
+
 /** Avalia um segmento; `cd` atualiza `state.dir` (só fora de pipeline/background). */
 function evaluateSegment(segment, command, state, ctx) {
   const { argv } = segment
   // `GIT_DIR=x` isolado ou `export GIT_DIR=x` vale para os segmentos seguintes.
   if (segment.gitEnv && (!argv.length || DECLARATIONS.has(argv[0]))) state.gitEnv = true
+  if (segment.hooksEnv) return block(LOCK_MOTIVE)
   if (!argv.length) return null
+  const locked = checkGithooksTouch(argv)
+  if (locked !== null) return locked
   if (segment.stdinScript) return MENTIONS_GIT.test(command) ? block(AMBIGUOUS) : null
   const program = baseName(argv[0])
   if (program === 'cd' || program === 'pushd' || program === 'popd') {
@@ -522,7 +571,13 @@ export function evaluateCommand(command, ctx) {
   const state = { dir: root, switches: new Map(), gitEnv: false }
   /** @type {{ id: string, dir: string | typeof UNKNOWN }[]} */
   const stack = [{ id: '', dir: root }]
+  /** `>|` é separado pelo parser em `>` + segmento de pipe: guarda o `>` pendente. */
+  let pendingClobber = false
   for (const segment of parseCommand(command)) {
+    if (pendingClobber && GITHOOKS_PATH.test(segment.argv[0] ?? '')) {
+      return { allowed: false, reason: block(LOCK_MOTIVE) }
+    }
+    pendingClobber = segment.argv.length > 0 && /^\d*>$/.test(segment.argv.at(-1) ?? '')
     enterScope(stack, segment.scope)
     const top = stack[stack.length - 1]
     state.dir = top.dir
