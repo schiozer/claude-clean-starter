@@ -144,7 +144,7 @@ function pushDestination(refspec, branch) {
   const spec = refspec.replace(/^\+/, '')
   const dest = spec.includes(':') ? spec.slice(spec.indexOf(':') + 1) : spec
   const name = dest.replace(/^refs\/heads\//, '')
-  return name === 'HEAD' ? branch : name
+  return name === 'HEAD' || name === '@' ? branch : name
 }
 
 /** B5–B7: `git push`. */
@@ -159,6 +159,11 @@ function checkPush(args, branch, protectedBranches) {
   for (const refspec of refspecs) {
     const dest = pushDestination(refspec, branch)
     if (dest === UNKNOWN) return block(AMBIGUOUS)
+    if (dest !== null && dest.includes('*')) {
+      return block(
+        '`git push` com refspec glob (`*`) envia várias branches, inclusive as protegidas.'
+      )
+    }
     if (dest !== null && protectedBranches.includes(dest)) {
       return block(`\`git push\` com destino na branch protegida \`${dest}\`.`)
     }
@@ -215,40 +220,40 @@ function branchAfterSwitch(sub, args, protectedBranches) {
 }
 
 /**
- * Avalia um segmento `git …`. Devolve o motivo do bloqueio (ou null) e a branch assumida
- * depois dele (`undefined` = não muda).
+ * Avalia um segmento `git …` e devolve o motivo do bloqueio (ou null).
+ * `switch`/`checkout` registram a nova branch em `state.switches`.
  */
 function evaluateGit(argv, ambiguous, state, ctx, depth = 0) {
   const { globals, sub, args, chdir, otherRepo } = splitGitArgv(argv)
-  if (sub === undefined) return { reason: null }
-  if (isDynamic(sub)) return { reason: block(AMBIGUOUS) }
+  if (sub === undefined) return null
+  if (isDynamic(sub)) return block(AMBIGUOUS)
 
   if (!NATIVE_GIT.has(sub)) {
     const expansion = ctx.aliasOf(state.dir === UNKNOWN ? ctx.cwd : state.dir, sub)
-    if (expansion === null) return { reason: null }
+    if (expansion === null) return null
     if (expansion.trim().startsWith('!') || depth >= MAX_ALIAS_DEPTH) {
-      return { reason: block(AMBIGUOUS) }
+      return block(AMBIGUOUS)
     }
     const expanded = parseCommand(expansion)[0]?.argv ?? []
     return evaluateGit(['git', ...globals, ...expanded, ...args], ambiguous, state, ctx, depth + 1)
   }
 
-  if (ambiguous && WRITE_FAMILY.has(sub)) return { reason: block(AMBIGUOUS) }
+  if (ambiguous && WRITE_FAMILY.has(sub)) return block(AMBIGUOUS)
 
-  let branch = state.branch
-  if (otherRepo) branch = UNKNOWN
-  else if (chdir !== null) branch = branchIn(resolveDir(state.dir, chdir), ctx)
+  const dir = otherRepo ? UNKNOWN : chdir === null ? state.dir : resolveDir(state.dir, chdir)
+  const branch = branchAt(dir, state, ctx)
   const { protectedBranches } = ctx
 
-  if (sub === 'commit') return { reason: checkCommit(branch, protectedBranches) }
-  if (sub === 'push') return { reason: checkPush(args, branch, protectedBranches) }
+  if (sub === 'commit') return checkCommit(branch, protectedBranches)
+  if (sub === 'push') return checkPush(args, branch, protectedBranches)
   if (WRITE_FAMILY.has(sub) && sub !== 'switch' && sub !== 'checkout') {
-    return { reason: checkIntegrate(sub, args, branch, protectedBranches) }
+    return checkIntegrate(sub, args, branch, protectedBranches)
   }
-  if ((sub === 'switch' || sub === 'checkout') && chdir === null && !otherRepo) {
-    return { reason: null, branch: branchAfterSwitch(sub, args, protectedBranches) }
+  if (sub === 'switch' || sub === 'checkout') {
+    const next = branchAfterSwitch(sub, args, protectedBranches)
+    if (next !== undefined) recordSwitch(dir, next, state, ctx)
   }
-  return { reason: null }
+  return null
 }
 
 /** Diretório após `cd <target>` (relativo ao anterior). */
@@ -258,8 +263,33 @@ function resolveDir(dir, target) {
   return dir === UNKNOWN ? UNKNOWN : resolve(dir, target)
 }
 
-function branchIn(dir, ctx) {
-  return dir === UNKNOWN ? UNKNOWN : ctx.branchOf(dir)
+/** `a` e `b` são o mesmo diretório, ou um contém o outro? */
+const related = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)
+
+/**
+ * Branch assumida em `dir`, considerando os `switch`/`checkout` já feitos no comando.
+ * Uma troca vale para diretórios relacionados (pai/filho) do mesmo worktree — identificado
+ * pela branch original igual (o git não deixa dois worktrees na mesma branch).
+ */
+function branchAt(dir, state, ctx) {
+  if (dir === UNKNOWN) return UNKNOWN
+  const original = ctx.branchOf(dir)
+  let branch = original
+  for (const [switchedDir, entry] of state.switches) {
+    if (switchedDir === UNKNOWN) {
+      branch = UNKNOWN
+    } else if (related(dir, switchedDir) && entry.original === original) {
+      branch = entry.branch
+    }
+  }
+  return branch
+}
+
+/** Registra a troca de branch feita em `dir` (a mais recente fica por último no Map). */
+function recordSwitch(dir, branch, state, ctx) {
+  const original = dir === UNKNOWN ? UNKNOWN : ctx.branchOf(dir)
+  state.switches.delete(dir)
+  state.switches.set(dir, { original, branch })
 }
 
 /**
@@ -268,22 +298,18 @@ function branchIn(dir, ctx) {
  * @returns {Verdict}
  */
 export function evaluateCommand(command, ctx) {
-  const state = { dir: resolve(ctx.cwd), branch: ctx.branchOf(resolve(ctx.cwd)) }
+  const state = { dir: resolve(ctx.cwd), switches: new Map() }
   for (const { argv, ambiguous } of parseCommand(command)) {
     const program = baseName(argv[0])
     let reason = null
     if (program === 'cd' || program === 'pushd') {
       state.dir = resolveDir(state.dir, argv[1])
-      state.branch = branchIn(state.dir, ctx)
     } else if (program === 'popd') {
       state.dir = UNKNOWN
-      state.branch = UNKNOWN
     } else if (program === 'eval') {
       reason = /\bgit\b|\bgh\b/.test(argv.join(' ')) ? block(AMBIGUOUS) : null
     } else if (program === 'git') {
-      const result = evaluateGit(argv, ambiguous, state, ctx)
-      reason = result.reason
-      if (result.branch !== undefined) state.branch = result.branch
+      reason = evaluateGit(argv, ambiguous, state, ctx)
     } else if (program === 'gh') {
       reason = checkGh(argv.slice(1), ambiguous)
     } else if (ambiguous && isDynamic(argv[0]) && /\bgit\b|\bgh\b/i.test(argv[0])) {

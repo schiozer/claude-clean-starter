@@ -6,11 +6,19 @@ const ALIASES: Record<string, string> = { co: 'commit', sh: '!git push' }
 
 type Opts = { cwd?: string; detached?: boolean; protectedBranches?: string[] }
 
+// Branch do worktree que contém `dir` (o prefixo mais longo), como `git symbolic-ref` faria.
+const fakeBranchOf = (dir: string) => {
+  const root = Object.keys(BRANCHES)
+    .filter((d) => dir === d || dir.startsWith(`${d}/`))
+    .sort((a, b) => b.length - a.length)[0]
+  return root === undefined ? null : BRANCHES[root]
+}
+
 const evaluate = (command: string, opts: Opts = {}) =>
   evaluateCommand(command, {
     cwd: opts.cwd ?? '/repo',
     protectedBranches: opts.protectedBranches ?? ['main'],
-    branchOf: (dir: string) => (opts.detached ? null : (BRANCHES[dir] ?? null)),
+    branchOf: (dir: string) => (opts.detached ? null : fakeBranchOf(dir)),
     aliasOf: (_dir: string, name: string) => ALIASES[name] ?? null,
   })
 
@@ -63,6 +71,15 @@ const BLOCKED: [string, Opts?][] = [
   ['git checkout foo.txt && git commit -m x'],
   ['git push origin release', { ...ON_FEAT, protectedBranches: ['main', 'release'] }],
   ['git push origin main', { detached: true }],
+  ['git switch main && git -C . commit -m x', ON_FEAT],
+  ['git switch main && cd . && git commit -m x', ON_FEAT],
+  ['git -C /repo/wt switch main && git -C /repo/wt commit -m x', ON_FEAT],
+  ['git switch main && cd sub && git commit -m x', ON_FEAT],
+  ['git push origin @'],
+  ['git -C /repo/wt switch -c feat/z && git commit -m x'],
+  ['git push origin @:main', ON_FEAT],
+  ["git push origin 'refs/heads/*:refs/heads/*'", ON_FEAT],
+  ["git push origin '*:*'", ON_FEAT],
   ['gh pr merge 1', { detached: true }],
 ]
 
@@ -88,6 +105,9 @@ const ALLOWED: [string, Opts?][] = [
   ['gh pr view 1'],
   ['gh api repos/o/r/pulls/1'],
   ['git switch -c feat/y && git commit -m x'],
+  ['git checkout -b feat/y && cd . && git commit -m x'],
+  ['git -C /repo switch -c feat/z && git commit -m x', ON_FEAT],
+  ['git push origin @', ON_FEAT],
   ['git checkout -b feat/y && git commit -m x'],
   ['cd wt && git commit -m x'],
   ['git -C /repo/wt commit -m x'],
