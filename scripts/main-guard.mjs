@@ -11,11 +11,14 @@ import { fileURLToPath } from 'node:url'
 const LABEL = 'main-sem-pr'
 const DEFAULT_RETRIES = 3
 const DEFAULT_DELAY_MS = 10000
+const PAGE_SIZE = 100
+// o compare do GitHub limita a 250 commits no total.
+const COMPARE_MAX_PAGES = 3
 const ZERO_SHA = /^0+$/
 const BRANCH_PREFIX = 'refs/heads/'
 
 /**
- * @typedef {{ ref: string, before: string, after: string, forced?: boolean }} PushEvent
+ * @typedef {{ ref: string, before: string, after: string, forced?: boolean, deleted?: boolean }} PushEvent
  * @typedef {{ merged_at: string | null, base: { ref: string } }} PullInfo
  * @typedef {{
  *   compare(base: string, head: string): Promise<string[]>,
@@ -34,23 +37,29 @@ export const readProtectedBranches = (root = process.cwd()) =>
   JSON.parse(readFileSync(resolve(root, 'hooks/protect-main/config.json'), 'utf8'))
     .protectedBranches
 
-/** @param {GuardApi} api @param {string} sha @param {string} branch */
-const hasMergedPr = async (api, sha, branch, retries, delayMs) => {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const pulls = await api.pullsForCommit(sha)
-    if (pulls.some((pr) => pr.merged_at && pr.base.ref === branch)) return true
-    if (attempt < retries) await sleep(delayMs)
+/** Commits ainda sem PR mergeado após `retries` tentativas (uma espera por rodada). */
+const findUnmerged = async (api, commits, branch, retries, delayMs) => {
+  let pending = commits
+  for (let attempt = 1; attempt <= retries && pending.length > 0; attempt++) {
+    const merged = await Promise.all(
+      pending.map(async (sha) => {
+        const pulls = await api.pullsForCommit(sha)
+        return pulls.some((pr) => pr.merged_at && pr.base.ref === branch)
+      })
+    )
+    pending = pending.filter((_, index) => !merged[index])
+    if (pending.length > 0 && attempt < retries) await sleep(delayMs)
   }
-  return false
+  return pending
 }
 
 const buildBody = (event, offending, note) =>
   [
-    `Chegou(aram) à \`${event.ref.slice(BRANCH_PREFIX.length)}\` commit(s) sem PR mergeado associado.`,
+    `Chegaram à \`${event.ref.slice(BRANCH_PREFIX.length)}\` commits sem PR mergeado:`,
     '',
     `Push: \`${event.before}..${event.after}\`${event.forced ? ' (force push)' : ''}`,
     '',
-    'Commits suspeitos:',
+    'Commits:',
     ...offending.map((sha) => `- ${sha}`),
     ...(note ? ['', note] : []),
     '',
@@ -73,13 +82,14 @@ export async function runMainGuard(event, api, opts = {}) {
   if (!event.ref.startsWith(BRANCH_PREFIX)) return { ok: true, offending: [] }
   const branch = event.ref.slice(BRANCH_PREFIX.length)
   if (!protectedBranches.includes(branch)) return { ok: true, offending: [] }
-  if (ZERO_SHA.test(event.before)) return { ok: true, offending: [] }
+  const deleted = event.deleted === true || ZERO_SHA.test(event.after)
+  if (!deleted && ZERO_SHA.test(event.before)) return { ok: true, offending: [] }
 
   let commits = []
   let note = ''
   let failClosed = false
   try {
-    commits = await api.compare(event.before, event.after)
+    if (!deleted) commits = await api.compare(event.before, event.after)
   } catch (error) {
     if (!event.forced && !(error instanceof CompareTruncatedError)) throw error
     failClosed = true
@@ -89,13 +99,14 @@ export async function runMainGuard(event, api, opts = {}) {
   }
 
   let offending = []
-  if (event.forced || failClosed) {
+  if (deleted) {
+    offending = [event.before]
+    note = 'A branch protegida foi removida (delete) sem PR.'
+  } else if (event.forced || failClosed) {
     offending = commits.length > 0 && !failClosed ? commits : [event.after]
     if (event.forced && !note) note = 'O push foi forçado (force push).'
   } else {
-    for (const sha of commits) {
-      if (!(await hasMergedPr(api, sha, branch, retries, delayMs))) offending.push(sha)
-    }
+    offending = await findUnmerged(api, commits, branch, retries, delayMs)
   }
   if (offending.length === 0) return { ok: true, offending }
 
@@ -120,11 +131,13 @@ export function makeGithubApi({
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'main-guard',
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
     })
-    if (!response.ok && !(method === 'POST' && response.status === 422)) {
+    const labelExists = method === 'POST' && path === '/labels' && response.status === 422
+    if (!response.ok && !labelExists) {
       throw new Error(`GitHub API ${method} ${path} falhou: HTTP ${response.status}`)
     }
     return response
@@ -132,12 +145,18 @@ export function makeGithubApi({
 
   return {
     async compare(base, head) {
-      const data = await (await call('GET', `/compare/${base}...${head}?per_page=100`)).json()
-      const shas = data.commits.map((commit) => commit.sha)
-      if (data.total_commits > shas.length) {
-        throw new CompareTruncatedError(
-          `compare retornou ${shas.length} de ${data.total_commits} commits`
-        )
+      const shas = []
+      let total = Infinity
+      for (let page = 1; shas.length < total && page <= COMPARE_MAX_PAGES; page++) {
+        const url = `/compare/${base}...${head}?per_page=${PAGE_SIZE}&page=${page}`
+        const data = await (await call('GET', url)).json()
+        total = data.total_commits
+        const batch = data.commits.map((commit) => commit.sha)
+        if (batch.length === 0) break
+        shas.push(...batch)
+      }
+      if (shas.length < total) {
+        throw new CompareTruncatedError(`compare retornou ${shas.length} de ${total} commits`)
       }
       return shas
     },
@@ -145,10 +164,10 @@ export function makeGithubApi({
       return (await call('GET', `/commits/${sha}/pulls`)).json()
     },
     async findOpenIssue(label) {
-      const issues = await (
-        await call('GET', `/issues?labels=${label}&state=open&per_page=1`)
-      ).json()
-      return issues[0]?.number ?? null
+      const url = `/issues?labels=${encodeURIComponent(label)}&state=open&per_page=${PAGE_SIZE}`
+      const issues = await (await call('GET', url)).json()
+      // a API de issues também lista PRs; só interessa issue de verdade.
+      return issues.find((issue) => !('pull_request' in issue))?.number ?? null
     },
     async createIssue(title, body, label) {
       // 422 = label já existe (ignorado em `call`).
