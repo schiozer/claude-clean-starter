@@ -244,7 +244,6 @@ describe('git hooks .githooks (git real)', { timeout: 30000 }, () => {
   })
 
   describe('shims with several protected branches', () => {
-    const ZERO = '0'.repeat(40)
     const A = 'a'.repeat(40)
     const C = 'c'.repeat(40)
     // `sh` e, quando existir, o `dash` (o `sh` de Debian/Ubuntu).
