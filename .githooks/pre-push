@@ -24,12 +24,21 @@ if [ "$hook" = reference-transaction ] && [ "$1" != prepared ]; then exit 0; fi
 
 names=$(extract_protected_branches "$guard_dir/config.json" 2>/dev/null)
 if [ -n "$names" ]; then
-  # Sai 0 (precisa do guard) se o 3º campo de alguma linha é refs/heads/<protegida>.
-  printf '%s\n' "$input" | awk -v names="$names" '
-    BEGIN { n = split(names, list, "\n"); for (i = 1; i <= n; i++) wanted["refs/heads/" list[i]] = 1 }
-    ($3 in wanted) { found = 1 }
-    END { exit found ? 0 : 1 }
-  ' || exit 0
+  # Pré-filtro em shell puro (sem awk: o awk do macOS rejeita `-v` com quebra de linha).
+  # Status 0 = alguma linha tem o 3º campo refs/heads/<protegida>; 1 = nenhuma → libera.
+  # Qualquer outro status (falha do pré-filtro) segue para o Node: fail-closed.
+  set -f
+  printf '%s\n' "$input" | {
+    while read -r _ _ ref _; do
+      for name in $names; do
+        [ "$ref" = "refs/heads/$name" ] && exit 0
+      done
+    done
+    exit 1
+  }
+  prefilter=$?
+  set +f
+  [ "$prefilter" -eq 1 ] && exit 0
 fi
 
 if ! command -v node >/dev/null 2>&1; then

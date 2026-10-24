@@ -1,8 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { BLOCK_PREFIX } from '../../hooks/protect-main/evaluate.mjs'
 
 const ROOT = resolve(__dirname, '../..')
@@ -173,15 +182,20 @@ describe('git hooks .githooks (git real)', { timeout: 30000 }, () => {
   })
 
   describe('without node on PATH', () => {
-    // PATH com o git (por symlink num diretório próprio) e as ferramentas do sistema, sem node.
+    // Ferramentas que o shim e o git usam; o PATH do teste só tem symlinks para elas, então
+    // o resultado não depende de onde o host instala o node (ex.: /usr/bin/node em Linux).
+    const SHIM_TOOLS = ['git', 'sh', 'cat', 'basename', 'dirname', 'tr', 'sed']
+
     const pathWithoutNode = () => {
       const bin = join(tmp, 'bin')
       mkdirSync(bin)
-      const gitBinary = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim()
-      symlinkSync(realpathSync(gitBinary), join(bin, 'git'))
-      const dirs = [bin, '/usr/bin', '/bin']
-      expect(dirs.some((dir) => existsSync(join(dir, 'node')))).toBe(false)
-      return { ...ENV, PATH: dirs.join(delimiter) }
+      for (const tool of SHIM_TOOLS) {
+        const found = execFileSync('sh', ['-c', 'command -v "$1"', 'sh', tool], {
+          encoding: 'utf8',
+        })
+        symlinkSync(realpathSync(found.trim()), join(bin, tool))
+      }
+      return { ...ENV, PATH: bin }
     }
 
     it('should allow a commit on a feature branch', () => {
@@ -193,6 +207,61 @@ describe('git hooks .githooks (git real)', { timeout: 30000 }, () => {
     it('should refuse a commit on main', () => {
       const env = pathWithoutNode()
       expectRefused(run(repo, 'git', ['commit', '--allow-empty', '-m', 'x'], env))
+    })
+  })
+
+  describe('shims with several protected branches', () => {
+    const ZERO = '0'.repeat(40)
+    const A = 'a'.repeat(40)
+    const C = 'c'.repeat(40)
+    // `sh` e, quando existir, o `dash` (o `sh` de Debian/Ubuntu).
+    const SHELLS = ['sh', ...(existsSync('/bin/dash') ? ['/bin/dash'] : [])]
+
+    // Cópia do layout `.githooks/` + `hooks/protect-main/` com config de duas branches.
+    const layoutWithBranches = (branches: string[]) => {
+      const layout = join(tmp, 'layout')
+      cpSync(HOOKS_PATH, join(layout, '.githooks'), { recursive: true })
+      cpSync(join(ROOT, 'hooks/protect-main'), join(layout, 'hooks/protect-main'), {
+        recursive: true,
+      })
+      writeFileSync(
+        join(layout, 'hooks/protect-main/config.json'),
+        JSON.stringify({ protectedBranches: branches })
+      )
+      return join(layout, '.githooks')
+    }
+
+    const runShim = (shell: string, shim: string, args: string[], input: string) => {
+      const result = spawnSync(shell, [shim, ...args], {
+        cwd: repo,
+        input,
+        encoding: 'utf8',
+        env: ENV,
+      })
+      return { status: result.status, stderr: result.stderr }
+    }
+
+    const inputFor = (hook: string, branch: string) =>
+      hook === 'pre-push'
+        ? `refs/heads/feat ${C} refs/heads/${branch} ${ZERO}\n`
+        : `${A} ${C} refs/heads/${branch}\n`
+    const argsFor = (hook: string) => (hook === 'pre-push' ? ['origin', 'url'] : ['prepared'])
+
+    const cases = SHELLS.flatMap((shell) =>
+      ['reference-transaction', 'pre-push'].flatMap((hook) =>
+        ['main', 'release'].map((branch) => [shell, hook, branch])
+      )
+    )
+
+    it.each(cases)('should refuse under %s in %s for refs/heads/%s', (shell, hook, branch) => {
+      const hooks = layoutWithBranches(['main', 'release'])
+      expectRefused(runShim(shell, join(hooks, hook), argsFor(hook), inputFor(hook, branch)))
+    })
+
+    it.each(SHELLS)('should allow a feature branch line under %s', (shell) => {
+      const hooks = layoutWithBranches(['main', 'release'])
+      const input = `${A} ${C} refs/heads/feat/x\n`
+      expectAllowed(runShim(shell, join(hooks, 'reference-transaction'), ['prepared'], input))
     })
   })
 })
