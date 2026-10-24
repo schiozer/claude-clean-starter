@@ -10,22 +10,38 @@ import { BLOCK_PREFIX, evaluateCommand } from './evaluate.mjs'
 
 const GIT_TIMEOUT_MS = 5000
 
-function git(dir, args) {
+/**
+ * Roda git em `dir`. Retorna a saída (null se vazia); em falha, `onExit(status, stderr)` decide
+ * se é um estado esperado (retorna null) ou erro real (retorna false → relança, fail-closed).
+ */
+function git(dir, args, onExit) {
   if (!existsSync(dir)) return null
   try {
     const out = execFileSync('git', ['-C', dir, ...args], {
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
       timeout: GIT_TIMEOUT_MS,
       encoding: 'utf8',
     }).trim()
     return out === '' ? null : out
-  } catch {
-    return null
+  } catch (error) {
+    // ENOENT (git ausente), timeout e sinais não têm `status` numérico: relança.
+    if (typeof error.status === 'number' && !error.signal) {
+      if (onExit(error.status, String(error.stderr ?? ''))) return null
+    }
+    throw error
   }
 }
 
-const branchOf = (dir) => git(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD'])
-const aliasOf = (dir, name) => git(dir, ['config', '--get', `alias.${name}`])
+// null só para HEAD destacado (status 1) ou diretório fora de repositório (128).
+const branchOf = (dir) =>
+  git(
+    dir,
+    ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+    (status, stderr) => status === 1 || (status === 128 && /not a git repository/i.test(stderr))
+  )
+// `config --get` sai com 1 quando a chave não existe.
+const aliasOf = (dir, name) =>
+  git(dir, ['config', '--get', `alias.${name}`], (status) => status === 1)
 
 function main(raw) {
   const payload = JSON.parse(raw)
