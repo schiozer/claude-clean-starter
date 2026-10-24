@@ -50,11 +50,14 @@ agente e humano. Spec: `docs/superpowers/specs/2026-10-24-main-autogarantida-des
   ativados por `core.hooksPath=.githooks`.
   - `reference-transaction` recusa mudar `refs/heads/main`, exceto: apagar a branch, alinhá-la
     a `origin/main` (`git pull --ff-only`, `git reset --hard origin/main`,
-    `git fetch origin main:main`) ou o commit inicial enquanto não existe `origin/main`.
+    `git fetch origin main:main`), regravar a ref sem mudar o valor (`git pack-refs`, `git gc`,
+    `git maintenance`) ou o commit inicial enquanto não existe `origin/main`.
     Barra `commit`, `merge`, `rebase`, `reset`, `branch -f`, `update-ref` etc., venham de onde
     vierem (`npm run`, `make`, `node -e`, scripts) e sem ser pulado por `--no-verify`.
   - `pre-push` recusa qualquer push com destino `refs/heads/main` (inclui `--all`,
-    `--mirror`, glob e `push.default=matching`).
+    `--mirror`, glob e `push.default=matching`), exceto **criá-la** num remoto que ainda não a
+    tem (repositório novo e vazio: faça `git push -u origin main` logo após o commit inicial).
+    Atualizar, forçar ou apagar continua recusado.
   - Fail-closed: sem Node disponível, a operação sobre a `main` é recusada.
   - Instalação: `scripts/install-git-hooks.mjs` pelo `prepare` do npm (todo `npm install`) e
     reaplicação no SessionStart (`hooks/check-dependencies/run.sh`, com aviso
@@ -73,7 +76,7 @@ agente e humano. Spec: `docs/superpowers/specs/2026-10-24-main-autogarantida-des
   camadas).
 - **Camada 3 — workflow `Guarda da main` (GitHub, detecção).** `.github/workflows/main-guard.yml`
   com `scripts/main-guard.mjs`: em push na `main`, cada commit de `before..after` precisa de um
-  PR mergeado com base `main` (`commits/{sha}/pulls`, até 3 tentativas a cada ~10 s). `forced`,
+  PR mergeado com base `main` (`commits/{sha}/pulls`, até 3 tentativas, ~20 s no total). `forced`,
   branch apagada ou compare truncado (>250 commits) sempre alarmam. Alarme = job vermelho e
   issue com o rótulo `main-sem-pr` (ou comentário na issue aberta). Não reverte nada.
 - **Branch protection do GitHub é opcional.** Se o plano permitir (repositório público ou
@@ -86,14 +89,18 @@ agente e humano. Spec: `docs/superpowers/specs/2026-10-24-main-autogarantida-des
   `--no-verify` no push, apagar `.githooks/`, editar `~/.gitconfig`, `rm -rf .git`,
   interpretadores escrevendo arquivos, caminhos em variáveis). Localmente é impossível
   impedir; a camada 3 detecta.
-- **Remoto com nome diferente de `origin`**: só o commit inicial passa; atualizar a `main`
-  existente fica recusado (lado seguro).
+- **Sem `origin/main`** (remoto com outro nome, ou antes do primeiro push): a recusa só vale
+  para atualizações com valor antigo não zerado. Passam o commit inicial e também atualizações
+  forçadas (`git branch -f main X`, `git update-ref refs/heads/main X`), pois o git as reporta
+  com valor antigo zerado. O efeito é só local: o `pre-push` e a camada 3 seguem valendo.
 - **`.git/hooks/*` locais deixam de rodar** (efeito do `core.hooksPath`).
 - **A camada 3 é detecção, não prevenção.** Um push direto que altere `main-guard.yml`,
   `scripts/main-guard.mjs` ou `hooks/protect-main/config.json` roda a versão do próprio commit
   e pode desarmar o alarme.
-- Uma transação `git update-ref --stdin` que também forje `refs/remotes/origin/main` no mesmo
-  lote passa localmente (o `pre-push` e a camada 3 ainda barram/detectam).
+- Forjar `refs/remotes/origin/main` e depois alinhar a `main` a ele passa localmente, seja num
+  único lote `git update-ref --stdin` ou em comandos separados (`git update-ref
+refs/remotes/origin/main X`, depois `git update-ref refs/heads/main X`). O `pre-push` ainda
+  barra e a camada 3 detecta.
 
 ## Consequências
 

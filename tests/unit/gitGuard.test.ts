@@ -19,10 +19,16 @@ const C = 'c'.repeat(40)
 
 type RefUpdate = { oldSha: string; newSha: string; ref: string }
 
-const refTx = (lines: RefUpdate[], origin: Record<string, string>, protectedBranches = ['main']) =>
+const refTx = (
+  lines: RefUpdate[],
+  origin: Record<string, string>,
+  protectedBranches = ['main'],
+  local: Record<string, string> = {}
+) =>
   checkRefTransaction(lines, {
     protectedBranches,
     originSha: (branch: string) => origin[branch] ?? null,
+    localSha: (branch: string) => local[branch] ?? null,
   })
 
 const push = (remoteRef: string, localSha = C) => ({
@@ -51,6 +57,11 @@ describe('git-guard checkRefTransaction', () => {
     expect(reason).toMatch(/git pull --ff-only|git reset --hard origin\/main/)
   })
 
+  it('should refuse a rewrite that differs from the current local value', () => {
+    const lines = [{ oldSha: ZERO, newSha: C, ref: 'refs/heads/main' }]
+    expect(refTx(lines, { main: B }, ['main'], { main: A })).not.toBeNull()
+  })
+
   it('should refuse an extra protected branch', () => {
     const lines = [{ oldSha: A, newSha: C, ref: 'refs/heads/release' }]
     expect(refTx(lines, {}, ['main', 'release'])).not.toBeNull()
@@ -73,6 +84,11 @@ describe('git-guard checkRefTransaction', () => {
   ])('should allow: %s', (_name, lines, origin) => {
     expect(refTx(lines, origin)).toBeNull()
   })
+
+  it('should allow a no-op rewrite of main (pack-refs, gc) while behind origin', () => {
+    const lines = [{ oldSha: ZERO, newSha: A, ref: 'refs/heads/main' }]
+    expect(refTx(lines, { main: B }, ['main'], { main: A })).toBeNull()
+  })
 })
 
 describe('git-guard checkPrePush', () => {
@@ -85,6 +101,21 @@ describe('git-guard checkPrePush', () => {
     expect(reason?.startsWith(BLOCK_PREFIX)).toBe(true)
     expect(reason?.endsWith(FINAL_LINE)).toBe(true)
     expect(reason).toContain('refs/heads/main')
+  })
+
+  it('should allow creating main on a remote that does not have it', () => {
+    const create = { ...push('refs/heads/main'), remoteSha: ZERO }
+    expect(checkPrePush([create], ['main'])).toBeNull()
+  })
+
+  it('should refuse deleting main even when the remote sha is zero', () => {
+    const del = { ...push('refs/heads/main', ZERO), remoteSha: ZERO }
+    expect(checkPrePush([del], ['main'])).not.toBeNull()
+  })
+
+  it('should refuse a creation of main mixed with an update of another protected branch', () => {
+    const lines = [{ ...push('refs/heads/main'), remoteSha: ZERO }, push('refs/heads/release')]
+    expect(checkPrePush(lines, ['main', 'release'])).not.toBeNull()
   })
 
   it('should allow push of a feature branch', () => {

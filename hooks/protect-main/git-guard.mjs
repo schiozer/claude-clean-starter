@@ -20,6 +20,8 @@ import { BLOCK_PREFIX } from './evaluate.mjs'
  * @property {string[]} protectedBranches Branches que só recebem mudanças via PR.
  * @property {(branch: string) => string | null} originSha Valor de `refs/remotes/origin/<branch>`
  *   no repositório (null = não existe).
+ * @property {(branch: string) => string | null} localSha Valor atual de `refs/heads/<branch>`
+ *   (null = não existe).
  */
 
 const ZERO_SHA = /^0+$/
@@ -33,6 +35,7 @@ const isZero = (sha) => ZERO_SHA.test(sha)
 /**
  * Decide uma transação de refs no estado `prepared`. Para cada linha de `refs/heads/<protegida>`:
  * apagar → permite; novo valor = `origin/<protegida>` (da mesma transação ou do repositório) →
+ * permite; novo valor = valor local atual (regravação sem mudança, ex.: `git pack-refs`/`gc`) →
  * permite; criação sem `origin/<protegida>` (repo novo) → permite; qualquer outro → recusa.
  * @param {RefUpdate[]} lines
  * @param {RefTransactionContext} ctx
@@ -48,6 +51,7 @@ export function checkRefTransaction(lines, ctx) {
       const origin = sameTransaction.get(originRef) ?? ctx.originSha(branch)
       if (origin !== null && line.newSha === origin) continue
       if (isZero(line.oldSha) && origin === null) continue
+      if (line.newSha === ctx.localSha(branch)) continue
       return (
         `${BLOCK_PREFIX} O hook \`reference-transaction\` recusou mudar \`${heads(branch)}\` ` +
         `localmente: ela só pode ser alinhada a \`${REMOTE}/${branch}\`. Para atualizá-la, use ` +
@@ -59,15 +63,17 @@ export function checkRefTransaction(lines, ctx) {
 }
 
 /**
- * Recusa o push se qualquer destino é `refs/heads/<protegida>` (criar, atualizar, forçar ou
- * apagar). O git já resolveu `--all`, `--mirror`, globs e `push.default` antes do hook.
+ * Recusa o push se qualquer destino é `refs/heads/<protegida>` (atualizar, forçar ou apagar),
+ * exceto criá-la num remoto que ainda não a tem (`remoteSha` zerado; bootstrap de repo vazio).
+ * O git já resolveu `--all`, `--mirror`, globs e `push.default` antes do hook.
  * @param {PushUpdate[]} lines
  * @param {string[]} protectedBranches
  * @returns {string | null}
  */
 export function checkPrePush(lines, protectedBranches) {
   const blocked = new Set(protectedBranches.map(heads))
-  const hit = lines.find((line) => blocked.has(line.remoteRef))
+  const isCreation = (line) => isZero(line.remoteSha) && !isZero(line.localSha)
+  const hit = lines.find((line) => blocked.has(line.remoteRef) && !isCreation(line))
   if (!hit) return null
   return `${BLOCK_PREFIX} O push para \`${hit.remoteRef}\` foi recusado pelo hook \`pre-push\`.\n${FINAL_LINE}`
 }
@@ -81,19 +87,22 @@ const fieldsOf = (raw) =>
     .map((line) => line.split(/\s+/))
 
 // `rev-parse --verify --quiet` sai com 1 (sem saída) quando a ref não existe; o resto relança.
-function originSha(branch) {
+function revParse(ref) {
   try {
-    const out = execFileSync(
-      'git',
-      ['rev-parse', '--verify', '--quiet', `refs/remotes/${REMOTE}/${branch}`],
-      { stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS, encoding: 'utf8' }
-    ).trim()
+    const out = execFileSync('git', ['rev-parse', '--verify', '--quiet', ref], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: GIT_TIMEOUT_MS,
+      encoding: 'utf8',
+    }).trim()
     return out === '' ? null : out
   } catch (error) {
     if (error.status === 1 && !error.signal) return null
     throw error
   }
 }
+
+const originSha = (branch) => revParse(`refs/remotes/${REMOTE}/${branch}`)
+const localSha = (branch) => revParse(heads(branch))
 
 function readProtectedBranches() {
   const configPath = join(dirname(fileURLToPath(import.meta.url)), 'config.json')
@@ -111,7 +120,7 @@ function evaluateHook([hook, state], raw) {
   if (hook === 'reference-transaction') {
     if (state !== 'prepared') return null
     const updates = lines.map(([oldSha, newSha, ref]) => ({ oldSha, newSha, ref }))
-    return checkRefTransaction(updates, { protectedBranches, originSha })
+    return checkRefTransaction(updates, { protectedBranches, originSha, localSha })
   }
   if (hook === 'pre-push') {
     const updates = lines.map(([localRef, localSha, remoteRef, remoteSha]) => ({

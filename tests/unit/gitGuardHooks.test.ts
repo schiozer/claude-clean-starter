@@ -156,6 +156,39 @@ describe('git hooks .githooks (git real)', { timeout: 30000 }, () => {
     })
   })
 
+  describe('reference-transaction no-op rewrites (pack-refs, gc)', () => {
+    beforeEach(() => {
+      featWithCommit()
+      advanceRemoteMain()
+      git(repo, 'fetch', '-q', 'origin')
+    })
+
+    it('should allow git pack-refs --all while main is behind origin/main', () => {
+      expectAllowed(tryGit(repo, 'pack-refs', '--all'))
+    })
+
+    it('should allow git gc while main is behind origin/main', () => {
+      expectAllowed(tryGit(repo, 'gc', '-q'))
+    })
+  })
+
+  describe('bootstrapping main on an empty remote', () => {
+    it('should allow the first push of main and refuse the next one', () => {
+      const emptyBare = join(tmp, 'empty.git')
+      const fresh = join(tmp, 'fresh-boot')
+      git(tmp, 'init', '-q', '--bare', '-b', 'main', emptyBare)
+      git(tmp, 'init', '-q', '-b', 'main', fresh)
+      configureUser(fresh)
+      git(fresh, 'config', 'core.hooksPath', HOOKS_PATH)
+      git(fresh, 'remote', 'add', 'origin', emptyBare)
+      expectAllowed(tryGit(fresh, 'commit', '--allow-empty', '-m', 'init'))
+      expectAllowed(tryGit(fresh, 'push', '-q', '-u', 'origin', 'main'))
+      expectAllowed(tryGit(fresh, 'switch', '-q', '-c', 'feat'))
+      expectAllowed(tryGit(fresh, 'commit', '--allow-empty', '-m', 'feat'))
+      expectRefused(tryGit(fresh, 'push', 'origin', 'HEAD:main'))
+    })
+  })
+
   describe('pre-push from a feature branch', () => {
     beforeEach(featWithCommit)
 
@@ -243,7 +276,7 @@ describe('git hooks .githooks (git real)', { timeout: 30000 }, () => {
 
     const inputFor = (hook: string, branch: string) =>
       hook === 'pre-push'
-        ? `refs/heads/feat ${C} refs/heads/${branch} ${ZERO}\n`
+        ? `refs/heads/feat ${C} refs/heads/${branch} ${A}\n`
         : `${A} ${C} refs/heads/${branch}\n`
     const argsFor = (hook: string) => (hook === 'pre-push' ? ['origin', 'url'] : ['prepared'])
 

@@ -36,7 +36,8 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 
 ## Como usar
 
-1. **Clone/copie** este template para o seu novo projeto e renomeie.
+1. **Clone/copie** este template para o seu novo projeto e renomeie. Num repositório novo,
+   faça `git push -u origin main` logo após o commit inicial; daí em diante a `main` só por PR.
 2. **Instale as skills**: `/plugin install superpowers@claude-plugins-official`.
 3. **Preencha a stack concreta** em `CLAUDE.md` e `ARCHITECTURE.md` (banco, auth,
    hospedagem) e registre as decisões como **ADRs** (`docs/adr/`).

@@ -9,6 +9,10 @@ permissions:
   pull-requests: read
   issues: write
 
+concurrency:
+  group: main-guard-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   guard:
     name: Commit na main sem PR
