@@ -113,7 +113,12 @@ export async function runMainGuard(event, api, opts = {}) {
   const body = buildBody(event, offending, note)
   const existing = await api.findOpenIssue(LABEL)
   if (existing) await api.comment(existing, body)
-  else await api.createIssue(`Commit na main sem PR: ${event.after.slice(0, 7)}`, body, LABEL)
+  else
+    await api.createIssue(
+      `Commit na main sem PR: ${(deleted ? event.before : event.after).slice(0, 7)}`,
+      body,
+      LABEL
+    )
   return { ok: false, offending }
 }
 
@@ -150,6 +155,9 @@ export function makeGithubApi({
       for (let page = 1; shas.length < total && page <= COMPARE_MAX_PAGES; page++) {
         const url = `/compare/${base}...${head}?per_page=${PAGE_SIZE}&page=${page}`
         const data = await (await call('GET', url)).json()
+        if (!Number.isInteger(data.total_commits)) {
+          throw new CompareTruncatedError('compare sem total_commits válido')
+        }
         total = data.total_commits
         const batch = data.commits.map((commit) => commit.sha)
         if (batch.length === 0) break

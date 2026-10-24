@@ -119,7 +119,11 @@ describe('runMainGuard — delete, retries e corpo', () => {
     const result = await runMainGuard(event({ after: ZERO, deleted: true }), api, opts)
     expect(result).toEqual({ ok: false, offending: [BEFORE] })
     expect(api.compare).not.toHaveBeenCalled()
-    expect(api.createIssue).toHaveBeenCalled()
+    expect(api.createIssue).toHaveBeenCalledWith(
+      `Commit na main sem PR: ${BEFORE.slice(0, 7)}`,
+      expect.any(String),
+      'main-sem-pr'
+    )
   })
 
   it('after zerado sem flag deleted também alarma', async () => {
@@ -208,6 +212,14 @@ describe('makeGithubApi', () => {
     expect(result).toEqual({ ok: false, offending: [AFTER] })
     const post = fetchFn.mock.calls.find(([u]) => u.endsWith('/issues'))
     expect(String(post?.[1].body)).toContain('compare retornou')
+  })
+
+  it('total_commits ausente é fail-closed', async () => {
+    const { fetchFn } = makeFetch((url) =>
+      url.includes('/compare/') ? json({ commits: [{ sha: SHA }] }) : json([])
+    )
+    const result = await runMainGuard(event(), githubApi(fetchFn), opts)
+    expect(result).toEqual({ ok: false, offending: [AFTER] })
   })
 
   it('erro de compare sem force propaga', async () => {
