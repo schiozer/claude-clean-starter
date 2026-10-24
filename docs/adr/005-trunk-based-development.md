@@ -72,10 +72,10 @@ agente e humano. Spec: `docs/superpowers/specs/2026-10-24-main-autogarantida-des
   as branches protegidas ficam em `hooks/protect-main/config.json` (fonte única das três
   camadas).
 - **Camada 3 — workflow `Guarda da main` (GitHub, detecção).** `.github/workflows/main-guard.yml`
-  - `scripts/main-guard.mjs`: em push na `main`, cada commit de `before..after` precisa de um
-    PR mergeado com base `main` (`commits/{sha}/pulls`, até 3 tentativas em ~10 s). `forced`,
-    branch apagada ou compare truncado (>250 commits) sempre alarmam. Alarme = job vermelho +
-    issue com o rótulo `main-sem-pr` (ou comentário na issue aberta). Não reverte nada.
+  com `scripts/main-guard.mjs`: em push na `main`, cada commit de `before..after` precisa de um
+  PR mergeado com base `main` (`commits/{sha}/pulls`, até 3 tentativas a cada ~10 s). `forced`,
+  branch apagada ou compare truncado (>250 commits) sempre alarmam. Alarme = job vermelho e
+  issue com o rótulo `main-sem-pr` (ou comentário na issue aberta). Não reverte nada.
 - **Branch protection do GitHub é opcional.** Se o plano permitir (repositório público ou
   plano pago), ligue também (passo 10 de
   [`bootstrap-ambientes`](../runbooks/bootstrap-ambientes.md)): é a garantia mais forte.
