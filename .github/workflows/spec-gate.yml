@@ -31,7 +31,9 @@ jobs:
       - name: Gerar o diff do PR
         run: |
           mkdir -p .spec-gate
-          git diff "origin/${{ github.base_ref }}...HEAD" > .spec-gate/diff.patch
+          git diff "origin/$BASE_REF...HEAD" > .spec-gate/diff.patch
+        env:
+          BASE_REF: ${{ github.base_ref }}
 
       - name: Preparar a análise
         id: prepare
@@ -52,6 +54,7 @@ jobs:
           claude_args: >-
             --model ${{ vars.SPEC_GATE_MODEL || 'claude-sonnet-5-5' }}
             --allowedTools Read,Grep,Glob
+            --disallowedTools Bash,Write,Edit,WebFetch,WebSearch
             --json-schema '${{ steps.prepare.outputs.schema }}'
 
       - name: Publicar o resultado
