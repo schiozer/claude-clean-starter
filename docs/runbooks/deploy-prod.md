@@ -14,6 +14,7 @@ confere, acompanha o deploy e faz o smoke test.
 ## Pré-condições
 
 - PR passou pelo [deploy-uat.md](./deploy-uat.md) e o **humano aprovou o UAT** (registrado no PR).
+- Gates verdes (`PR gate`, e `Spec × código` se `SPEC_GATE=on`) e UAT **marcado pelo humano** no PR (o agente nunca o marca).
 - Migração aditiva, se houver, **já aplicada em Prod antes do merge** ([ADR-008](../adr/008-migracoes-sql-versionadas-driver-http.md), [migracao-banco.md](./migracao-banco.md)).
 - Envs/flags de Prod já configuradas; features novas entram **desligadas** em Prod ([ADR-006](../adr/006-processo-de-feature-e-feature-toggle.md)).
 
@@ -56,4 +57,4 @@ confere, acompanha o deploy e faz o smoke test.
 
 Comentário no PR mergeado (`gh pr comment <n> --body-file <arquivo>`): runbook +
 `Última verificação`, merge feito pelo humano (quem/quando), deploy de Prod, smoke test,
-resultado final (`ok` | `rollback` | `interrompido`).
+tag `vX.Y.Z` gerada pelo workflow de release (`gh release view --repo <preencher: owner/repo>`), resultado final (`ok` | `rollback` | `interrompido`).

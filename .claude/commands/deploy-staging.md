@@ -17,4 +17,7 @@ Use a skill `runbook-execution` com
 scope Vercel), checagens locais, push da branch, PR, preview, alias do UAT e smoke test.
 Ao final, informe ao usuário a URL do UAT.
 
+O PR usa o template (`.github/pull_request_template.md`) com o **UAT desmarcado**: o agente avisa
+que o UAT está pendente e **nunca o marca** (só o humano, após testar).
+
 **NÃO** faz merge — o merge é o gatilho de produção e é do humano (ver `deploy-prod`).

@@ -17,5 +17,8 @@ description: Executa checklist de UAT e guia os testes do ambiente de staging
 5. Registrar bugs encontrados como issues.
 6. Atualizar o status ao final.
 
+> O UAT do PR (checkbox no template) é marcado **só pelo humano**. O agente guia os testes,
+> avisa que o UAT está pendente e nunca o marca, nem editando o corpo do PR.
+
 URL de UAT: usar a URL de UAT gerada pelo **PR** (abrir/atualizar PR dispara o
 deploy em UAT — ver [ADR-002](../../docs/adr/002-estrategia-de-ambientes.md)).

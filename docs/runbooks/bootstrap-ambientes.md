@@ -48,7 +48,9 @@ runbook, e o agente as grava aqui e nos demais runbooks via PR ao final.
    Verificar: `vercel alias ls --scope <preencher: team Vercel>` mostra o alias → `<preview-url>`.
 9. [R3] Humano: configurar a _Deployment Protection_ da Vercel para o alias do UAT ser acessível no aceite e pelo ChatGPT (exceção para o alias, ou _Protection Bypass_ — ao menos `/api/mcp` e `/.well-known/*`).
    Verificar: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: alias UAT>/` → `200` e `curl -si -X POST https://<preencher: alias UAT>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'` encontra o header do app.
-10. [R3] Humano: se o plano permitir, ligar a branch protection da `main` (PR obrigatório, sem push direto, required checks `Test & Lint (root)` e `Walking Skeleton (example)` ou os jobs equivalentes do projeto); senão, confirmar que o workflow `Guarda da main` está ativo em Actions.
+10. [R3] Humano: em Settings → General → Pull Requests, deixar só "Allow squash merging" com "Default to pull request title" (o título do PR vira a mensagem do commit e a fonte da versão, [ADR-014](../adr/014-release-management.md)).
+    Verificar: `gh api repos/<preencher: owner/repo> --jq '.allow_squash_merge, .allow_merge_commit, .allow_rebase_merge, .squash_merge_commit_title'` → `true false false PR_TITLE`.
+11. [R3] Humano: se o plano permitir, ligar a branch protection da `main` (PR obrigatório, sem push direto, required checks `Test & Lint (root)`, `Walking Skeleton (example)` e `PR gate` — e `Spec × código` se `SPEC_GATE=on` — ou os jobs equivalentes do projeto); senão, confirmar que o workflow `Guarda da main` está ativo em Actions.
     Verificar: `gh api repos/<preencher: owner/repo>/branches/main/protection --jq '.required_status_checks.contexts'` lista os checks; sem branch protection, `gh workflow list --repo <preencher: owner/repo>` mostra `Guarda da main` como `active`.
 
 ## Verificação final
