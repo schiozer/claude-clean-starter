@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { makeGithubApi, runMainGuard } from '../../scripts/main-guard.mjs'
 
@@ -399,11 +399,8 @@ describe('config e workflows', () => {
     for (const name of config.requiredChecks) expect(jobNames).toContain(name)
   })
 
-  // o job "Spec × código" nasce na Task 3; até lá o workflow não existe.
-  it.skipIf(!existsSync(resolve(workflowsDir, 'spec-gate.yml')))(
-    'specGateCheck é nome de job de um workflow',
-    () => expect(jobNames).toContain(config.specGateCheck)
-  )
+  it('specGateCheck é nome de job de um workflow', () =>
+    expect(jobNames).toContain(config.specGateCheck))
 
   it('main-guard.yml tem checks: read e SPEC_GATE', () => {
     const yml = readFileSync(resolve(workflowsDir, 'main-guard.yml'), 'utf8')
