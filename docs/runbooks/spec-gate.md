@@ -36,7 +36,7 @@ atrás de toggle permanente: desligado (`SPEC_GATE` ausente) não tem custo, nã
    Verificar: `gh variable list --repo <preencher: owner/repo>` mostra `SPEC_GATE` = `on`.
 4. [R1] Opcional, trocar o modelo (default `claude-sonnet-5-5`): `gh variable set SPEC_GATE_MODEL --body <modelo> --repo <preencher: owner/repo>`.
    Verificar: `gh variable list --repo <preencher: owner/repo>` mostra `SPEC_GATE_MODEL`.
-5. [R1] Re-rodar o check nos PRs que já estavam abertos ao ligar (ligar não dispara o gate neles): `gh run rerun <run-id>` ou push/edição da linha `Spec:` no PR.
+5. [R1] Re-rodar o check nos PRs que já estavam abertos ao ligar (ligar não dispara o gate neles): `gh run list --workflow spec-gate.yml --branch <branch>` para achar o `<run-id>` e `gh run rerun <run-id>` ou push/edição da linha `Spec:` no PR.
    Verificar: `gh pr checks <n>` mostra `Spec × código` no PR.
 6. [R1] Conferir em um PR de teste (com `Spec:` válida e tabela preenchida).
    Verificar: o check `Spec × código` aparece e há um comentário do `github-actions[bot]` com o resultado e o sha analisado.

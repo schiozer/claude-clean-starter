@@ -284,9 +284,8 @@ Ver [BEST_PRACTICES.md](./BEST_PRACTICES.md) completo.
 
 ## 🧪 Workflow de Desenvolvimento
 
-1. Receber tarefa → 2. Carregar skill apropriada → 3. Ler ARCHITECTURE.md,
-   BEST_PRACTICES.md e a spec → 4. Implementar (TDD) → 5. Testar (`npm test`) →
-2. Commitar com mensagem clara → 7. Atualizar tarefas.
+Receber tarefa → carregar skill apropriada → ler ARCHITECTURE.md, BEST_PRACTICES.md e a spec →
+implementar (TDD) → testar (`npm test`) → commitar com mensagem clara → atualizar tarefas.
 
 ---
 
