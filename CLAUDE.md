@@ -25,7 +25,9 @@
 >
 > **Adoção — release** ([ADR-014](./docs/adr/014-release-management.md)): **não remova** `pr-gate.yml`
 > nem `release.yml`; decida o `SPEC_GATE` (gate opcional com Claude) pelo runbook
-> [`spec-gate.md`](./docs/runbooks/spec-gate.md).
+> [`spec-gate.md`](./docs/runbooks/spec-gate.md). Ao renomear/remover jobs de CI (ex.:
+> `Walking Skeleton (example)`), atualize `requiredChecks` em `hooks/protect-main/config.json`,
+> senão todo merge alarma na `Guarda da main`.
 >
 > **Adoção — operação** ([ADR-013](./docs/adr/013-governanca-operacional-e-runbooks.md)):
 > antes do primeiro deploy fora do Dev, preencha todo `<preencher>` de `docs/runbooks/`,

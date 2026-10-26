@@ -272,7 +272,7 @@ it('should create resource for the actor', async () => {
 ## Git
 
 **Commits** — `tipo(escopo): mensagem`. Tipos: `feat`, `fix`, `refactor`, `docs`,
-`style`, `test`, `chore`. Imperativo, minúsculo, sem ponto, ≤72 chars.
+`style`, `test`, `chore`, `ci`, `perf`, `build`, `revert`. Imperativo, minúsculo, sem ponto, ≤72 chars.
 
 ```
 feat(resources): add create resource use case

@@ -45,11 +45,12 @@ atrás de toggle permanente: desligado (`SPEC_GATE` ausente) não tem custo, nã
 
 - `gh variable list` mostra `SPEC_GATE=on`; o secret existe; o PR de teste tem o check e o comentário.
 - Modos esperados do check: `na` (spec `n/a` aceita), `analyze` (Claude rodou), `reuse` (corpo editado sem mudar `Spec:`/tabela e sha igual ao do comentário), `no-key` (sem chave, ou PR de fork sem secrets: vermelho), `invalid` (linha `Spec:` ausente/inválida, caminho fora de `docs/superpowers/specs`, symlink, não `.md` ou ilegível: vermelho). Saída vazia do Claude ou falha ao preparar também ficam vermelhas.
-- O diff é truncado em 150 mil caracteres; o Claude só lê (Read/Grep/Glob).
+- O prompt inteiro (spec + diff + tabela + instruções) tem limite de 100 000 bytes UTF-8: o diff é
+  cortado primeiro (depois a spec), com aviso; o Claude só lê (Read/Grep/Glob).
 
 ## Rollback
 
-1. [R1] Desligar o gate: `gh variable delete SPEC_GATE --repo <preencher: owner/repo>`.
+1. [R3] Humano: desligar o gate (desligar uma proteção é do humano — regra 10 do `CLAUDE.md`): `gh variable delete SPEC_GATE --repo <preencher: owner/repo>`.
    Verificar: `gh variable list --repo <preencher: owner/repo>` não lista mais `SPEC_GATE`.
 2. [R3] Humano: revogar a chave no console da Anthropic e apagar o secret `ANTHROPIC_API_KEY` se não for mais usada.
    Verificar: `gh secret list --repo <preencher: owner/repo>` não lista o secret.

@@ -26,9 +26,14 @@ Environment. O agente e o humano usam a **mesma conta git/gh** do projeto (regra
   `anthropics/claude-code-action` fixada por SHA de commit (v1.0.262); atualizar é trocar o SHA
   por PR. Modelo default `claude-sonnet-5-5`, trocável por `SPEC_GATE_MODEL`. Claude restrito a
   Read/Grep/Glob (Bash/Write/Edit/WebFetch/WebSearch negados); entradas não confiáveis cercadas
-  por nonce por execução; diff truncado em 150 mil caracteres.
+  por nonce por execução; prompt inteiro limitado a 100 000 bytes UTF-8 (corta o diff, depois a
+  spec). As actions first-party (`actions/checkout`, `actions/setup-node`) ficam fixadas por tag,
+  como no `ci.yml`; só a action do Claude, de terceiro e com acesso à chave, é fixada por SHA —
+  escolha consciente.
 - **`Guarda da main` estendida**: no merge, alarma (issue/rótulo `merge-sem-gates`) se faltou
-  `PR gate`, `Spec × código` (quando `SPEC_GATE=on`) ou UAT marcado.
+  algum check de CI exigido (`requiredChecks` em `hooks/protect-main/config.json`, que inclui o
+  `PR gate`), `Spec × código` (quando `SPEC_GATE=on`) ou UAT marcado, ou se o merge não foi
+  squash (merge commit com 2 pais alarma). Checks ainda rodando são aguardados por até 5 min.
 - **Squash obrigatório**: o título do PR é a mensagem do commit e a **fonte da versão**
   (a release lê o título do PR, pois o humano pode editar a mensagem no merge).
 - **SemVer por merge** (`scripts/release.mjs`, `release.yml`): tag anotada + GitHub Release a
@@ -56,12 +61,16 @@ Environment. O agente e o humano usam a **mesma conta git/gh** do projeto (regra
 3. **Workflows rodam o código do próprio PR.** Quem tem escrita pode reescrever um gate dentro do
    PR. A `Guarda da main` no merge e a revisão humana são a retaguarda; endurecer com
    `pull_request_target`/workflows da base é alternativa futura. PRs de fork não recebem
-   secrets: o gate com Claude fica vermelho (`no-key`).
+   secrets: o gate com Claude fica vermelho (`no-key`). Um prompt injection no diff pode levar o
+   Claude a ler arquivos do runner (ex.: `/proc/*/environ`) e ecoá-los no comentário; aceito
+   porque só quem tem escrita dispara o gate, e esse já pode reescrever o próprio workflow.
 4. **Concorrência da release.** O GitHub mantém só uma execução pendente por grupo de
    concorrência: com 3+ merges em sequência rápida, uma execução intermediária pode ser
-   cancelada e aquele merge fica sem tag. Recuperar: re-rodar o workflow ou `gh release create`.
-   Se a tag foi criada mas a Release falhou, o re-run diz "nada a fazer": criar a Release à mão
-   com `gh release create vX.Y.Z`.
+   cancelada e aquele merge fica sem tag. Re-rodar depois essa execução do meio calcula a versão
+   a partir das tags atuais e pode sair **fora de ordem** (maior que a de um merge posterior).
+   Recuperar com versão explícita (`gh release create vX.Y.Z --target <sha>`) ou aceitar o salto e
+   registrá-lo na Release. Se a tag foi criada mas a Release falhou, o re-run detecta a Release
+   ausente e a cria para a tag existente.
 5. **Gate com Claude é probabilístico**: vermelho só para critério `fora`, divergência
    bloqueante ou falha técnica; o resto é aviso, para evitar falso positivo que todos ignoram.
 
