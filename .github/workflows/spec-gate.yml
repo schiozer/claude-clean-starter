@@ -1,0 +1,67 @@
+name: Spec × código
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: spec-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  spec-gate:
+    name: Spec × código
+    if: vars.SPEC_GATE == 'on'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Gerar o diff do PR
+        run: |
+          mkdir -p .spec-gate
+          git diff "origin/$BASE_REF...HEAD" > .spec-gate/diff.patch
+        env:
+          BASE_REF: ${{ github.base_ref }}
+
+      - name: Preparar a análise
+        id: prepare
+        run: node scripts/spec-gate.mjs prepare
+        env:
+          HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Conferir a spec com o Claude
+        id: claude
+        if: steps.prepare.outputs.mode == 'analyze'
+        uses: anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13 # v1.0.262
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: ${{ steps.prepare.outputs.prompt }}
+          claude_args: >-
+            --model ${{ vars.SPEC_GATE_MODEL || 'claude-sonnet-5-5' }}
+            --allowedTools Read,Grep,Glob
+            --disallowedTools Bash,Write,Edit,WebFetch,WebSearch
+            --json-schema '${{ steps.prepare.outputs.schema }}'
+
+      - name: Publicar o resultado
+        if: always()
+        run: node scripts/spec-gate.mjs report
+        env:
+          MODE: ${{ steps.prepare.outputs.mode }}
+          STRUCTURED_OUTPUT: ${{ steps.claude.outputs.structured_output }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}

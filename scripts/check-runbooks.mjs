@@ -13,6 +13,7 @@ export const REQUIRED_RUNBOOKS = [
   'segredos-e-env.md',
   'feature-flags.md',
   'mcp-habilitar-e-conectar.md',
+  'spec-gate.md',
 ]
 export const SECTIONS = [
   'Objetivo',

@@ -211,6 +211,15 @@ const BLOCKED: [string, Opts?][] = [
   ['gh api -X PUT repos/o/r/branches/main/protection --input p.json', ON_FEAT],
   ['gh api -X DELETE repos/o/r/rulesets/1', ON_FEAT],
   ['gh api -X PATCH repos/o/r/git/refs/heads%2Fmain -f sha=abc', ON_FEAT],
+  // 7b. marcar o UAT no PR é do humano ([R3])
+  ['gh pr edit 3 --body "… - [x] UAT aprovado"', ON_FEAT],
+  ['gh pr create --title "fix: x" --body "- [X] uat não se aplica — docs"', ON_FEAT],
+  ["gh api -X PATCH repos/o/r/pulls/3 -f body='- [x] UAT aprovado'", ON_FEAT],
+  [
+    'gh api graphql -f query=\'mutation { updatePullRequest(input: {body: "- [x] UAT aprovado"}) { clientMutationId } }\'',
+    ON_FEAT,
+  ],
+  ['gh pr edit 3 --body="- [x] UAT aprovado"', ON_FEAT],
   // 8. trava local (camada 1): o agente não a desliga
   ['git config core.hooksPath x', ON_FEAT],
   ['git config --unset core.hooksPath', ON_FEAT],
@@ -302,6 +311,9 @@ const ALLOWED: [string, Opts?][] = [
   ['gh pr create --fill'],
   ['gh pr view 1'],
   ['gh api repos/o/r/pulls/1'],
+  ['gh pr create --title "fix: x" --body "- [ ] UAT aprovado"', ON_FEAT],
+  ['gh pr view 3', ON_FEAT],
+  ['gh pr edit 3 --title "fix: y"', ON_FEAT],
   ['git switch -c feat/y && git commit -m x'],
   ['git checkout -b feat/y && cd . && git commit -m x'],
   ['git -C /repo switch -c feat/z && git commit -m x', ON_FEAT],

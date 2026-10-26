@@ -24,6 +24,13 @@ seu contexto.
 - [ ] Sem `console.log`/`debugger`; sem segredos versionados
 - [ ] Documentação/ADR atualizados quando a decisão for relevante
 
+## Template de PR e releases
+
+Use o template do PR (`Spec:`, tabela `Spec × código`, checklist). O UAT é marcado só pelo humano.
+O merge é _squash_ e o **título do PR** (`tipo(escopo): mensagem`) define a versão; as Releases do
+GitHub são o CHANGELOG. O gate opcional com Claude depende de `SPEC_GATE` (runbook `spec-gate.md`).
+Ver ADR-014.
+
 ## Conta git
 
 Se você usa múltiplas contas git na mesma máquina, confira a conta ativa **antes**

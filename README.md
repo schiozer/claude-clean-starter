@@ -58,6 +58,13 @@ na `main` local e qualquer push para a `main`; o workflow `Guarda da main` alarm
 um commit chegar sem PR. Se a trava barrar, crie uma branch e abra um PR; para atualizar a
 `main` local use `git pull --ff-only`. Detalhes no ADR-005.
 
+## Releases e gates de PR
+
+O PR usa `.github/pull_request_template.md` (`Spec:`, tabela `Spec × código`, UAT marcado só pelo
+humano), validado pelo `PR gate`. O merge é _squash_; o título do PR define a versão SemVer, e a
+cada merge sai uma tag `vX.Y.Z` e uma GitHub Release (o CHANGELOG). O gate opcional `Spec × código`
+com Claude liga com `SPEC_GATE` (runbook `docs/runbooks/spec-gate.md`). Ver ADR-014.
+
 ## O pipeline
 
 ```

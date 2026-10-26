@@ -12,25 +12,26 @@ passo a passo, com classe de risco e verificação em cada passo. Regras em
 
 ## Catálogo
 
-| Runbook | Quando usar |
-| --- | --- |
-| [bootstrap-ambientes.md](./bootstrap-ambientes.md) | Uma vez por projeto: criar Vercel, Neon, Auth0, envs, alias UAT, proteção da `main` |
-| [deploy-uat.md](./deploy-uat.md) | Levar uma branch ao UAT (push + PR → preview) e fazer o smoke test |
-| [deploy-prod.md](./deploy-prod.md) | Promover um PR aprovado no UAT para Prod (o **merge é do humano**) |
-| [rollback.md](./rollback.md) | Incidente: desligar flag, promover deploy anterior, revert por PR |
-| [migracao-banco.md](./migracao-banco.md) | Aplicar migração SQL (ADR-008) em preview/UAT/Prod |
-| [segredos-e-env.md](./segredos-e-env.md) | Criar/alterar env não-secreta; criar/rotacionar segredo |
-| [feature-flags.md](./feature-flags.md) | Ligar/desligar flags por ambiente (incl. kill switch e escrita MCP) |
-| [mcp-habilitar-e-conectar.md](./mcp-habilitar-e-conectar.md) | Configurar Auth0 para o MCP e conectar o ChatGPT |
+| Runbook                                                      | Quando usar                                                                                  |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| [bootstrap-ambientes.md](./bootstrap-ambientes.md)           | Uma vez por projeto: criar Vercel, Neon, Auth0, envs, alias UAT, proteção da `main`          |
+| [deploy-uat.md](./deploy-uat.md)                             | Levar uma branch ao UAT (push + PR → preview) e fazer o smoke test                           |
+| [deploy-prod.md](./deploy-prod.md)                           | Promover um PR aprovado no UAT para Prod (o **merge é do humano**)                           |
+| [rollback.md](./rollback.md)                                 | Incidente: desligar flag, promover deploy anterior, revert por PR                            |
+| [migracao-banco.md](./migracao-banco.md)                     | Aplicar migração SQL (ADR-008) em preview/UAT/Prod                                           |
+| [segredos-e-env.md](./segredos-e-env.md)                     | Criar/alterar env não-secreta; criar/rotacionar segredo                                      |
+| [feature-flags.md](./feature-flags.md)                       | Ligar/desligar flags por ambiente (incl. kill switch e escrita MCP)                          |
+| [mcp-habilitar-e-conectar.md](./mcp-habilitar-e-conectar.md) | Configurar Auth0 para o MCP e conectar o ChatGPT                                             |
+| [spec-gate.md](./spec-gate.md)                               | Ligar/desligar o gate opcional `Spec × código` com Claude (`SPEC_GATE`, `ANTHROPIC_API_KEY`) |
 
 ## Classes de risco (resumo)
 
-| Classe | Gate |
-| --- | --- |
-| `[R0]` leitura | livre |
-| `[R1]` mutação reversível fora de Prod | agente executa e registra |
-| `[R2]` Prod, segredo, destrutivo, escrita MCP | aprovação humana explícita **por operação** |
-| `[R3]` merge na `main`, ler segredo, desligar proteções | proibido ao agente — `[R3] Humano: …` |
+| Classe                                                  | Gate                                        |
+| ------------------------------------------------------- | ------------------------------------------- |
+| `[R0]` leitura                                          | livre                                       |
+| `[R1]` mutação reversível fora de Prod                  | agente executa e registra                   |
+| `[R2]` Prod, segredo, destrutivo, escrita MCP           | aprovação humana explícita **por operação** |
+| `[R3]` merge na `main`, ler segredo, desligar proteções | proibido ao agente — `[R3] Humano: …`       |
 
 R1 contra Prod vira R2; runbook com `Última verificação` > 90 dias eleva todo passo não-R0 a
 R2; na dúvida, vale a classe mais alta.

@@ -286,6 +286,9 @@ function decodeEndpoint(endpoint) {
   }
 }
 
+/** Marcação do checkbox de UAT (`- [x] UAT …`) numa descrição de PR. */
+const UAT_TICKED = /\[x\]\s*uat\b/i
+
 /** B8–B9: `gh pr merge`, `gh api` e `gh alias set` de merge. Em segmento ambíguo, falha fechado. */
 function checkGh(args, segment, protectedBranches) {
   if (segment.opaqueArgs) return block(AMBIGUOUS)
@@ -299,6 +302,10 @@ function checkGh(args, segment, protectedBranches) {
   if (group === 'pr' && action === 'merge') return block('`gh pr merge` é feito pelo humano.')
   if (group === 'alias' && action === 'set' && /merge/i.test(rest.slice(1).join(' '))) {
     return block('`gh alias` de merge: o merge é feito pelo humano.')
+  }
+  const editsPrBody = group === 'pr' && (action === 'create' || action === 'edit')
+  if ((editsPrBody || group === 'api') && args.some((a) => UAT_TICKED.test(a))) {
+    return block('Marcar o UAT no PR é do humano (`[R3]`), depois de testar.')
   }
   if (group === 'api') return checkGhApi(args, decodeEndpoint(action ?? ''), protectedBranches)
   return null

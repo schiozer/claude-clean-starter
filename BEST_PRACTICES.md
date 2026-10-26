@@ -10,6 +10,7 @@ garante consistência, manutenibilidade, qualidade e colaboração.
 ## Princípios Fundamentais
 
 ### 1. Clean Code
+
 - Nomes significativos e auto-explicativos
 - Funções pequenas: fazer uma coisa, fazer bem
 - Código auto-documentado (evitar comentários óbvios)
@@ -25,6 +26,7 @@ garante consistência, manutenibilidade, qualidade e colaboração.
 ## Convenções de Nomenclatura
 
 **camelCase** para variáveis, funções e métodos:
+
 ```typescript
 const userResources = []
 function createResource() {}
@@ -32,12 +34,14 @@ const isPublished = true
 ```
 
 Nomes descritivos e booleanos com prefixo (`is`, `has`, `can`, `should`):
+
 ```typescript
 const completedItemsCount = 5
 const canDelete = true
 ```
 
 **PascalCase** para classes, interfaces, types e componentes:
+
 ```typescript
 class ResourceService {}
 interface IResourceRepository {}
@@ -49,6 +53,7 @@ function ResourceCard() {}
 funções, hooks e módulos sem classe em camelCase (`useResources.ts`, `schemas.ts`, `tools.ts`).
 
 **SCREAMING_SNAKE_CASE** para constantes globais:
+
 ```typescript
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 const DEFAULT_TIMEOUT = 30000
@@ -59,6 +64,7 @@ const DEFAULT_TIMEOUT = 30000
 ## Estrutura de Código
 
 **Funções — uma responsabilidade:**
+
 ```typescript
 function calculateProgress(completed: number, total: number): number {
   if (total === 0) return 0
@@ -69,6 +75,7 @@ function calculateProgress(completed: number, total: number): number {
 **Parâmetros**: máximo 3; mais que isso, use objeto.
 
 **Early return** para evitar aninhamento:
+
 ```typescript
 function canPublish(resource: Resource): boolean {
   if (!resource.items.length) return false
@@ -80,6 +87,7 @@ function canPublish(resource: Resource): boolean {
 **Classes** — princípio da responsabilidade única (validador ≠ repositório ≠ e-mail).
 
 **Componentes React** — pequenos, com a lógica extraída para hooks:
+
 ```typescript
 function ResourceCard({ resource }: Props) {
   const { handleEdit, handleDelete } = useResourceActions(resource.id)
@@ -121,11 +129,13 @@ Ver [ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md).
 ## TypeScript
 
 - **Tipar sempre.** Evitar `any` — use `unknown` + validação (Zod):
+
 ```typescript
 function processData(data: unknown): Resource {
   return resourceSchema.parse(data)
 }
 ```
+
 - `interface` para objetos extensíveis; `type` para união/interseção/aliases.
 
 ---
@@ -133,6 +143,7 @@ function processData(data: unknown): Resource {
 ## Async/Await
 
 Sempre `try/catch`; evite cadeias de `.then()`:
+
 ```typescript
 async function fetchResource(id: string): Promise<Resource> {
   try {
@@ -153,6 +164,7 @@ async function fetchResource(id: string): Promise<Resource> {
 Ver [docs/guides/error-handling-guide.md](./docs/guides/error-handling-guide.md).
 
 **Hierarquia de erros:**
+
 ```typescript
 export class AppError extends Error {
   constructor(
@@ -166,13 +178,22 @@ export class AppError extends Error {
   }
 }
 export class ValidationError extends AppError {
-  constructor(message: string, public field?: string) { super(message, 'VALIDATION_ERROR', 400) }
+  constructor(
+    message: string,
+    public field?: string
+  ) {
+    super(message, 'VALIDATION_ERROR', 400)
+  }
 }
 export class NotFoundError extends AppError {
-  constructor(resource: string) { super(`${resource} não encontrado`, 'NOT_FOUND', 404) }
+  constructor(resource: string) {
+    super(`${resource} não encontrado`, 'NOT_FOUND', 404)
+  }
 }
 export class UnauthorizedError extends AppError {
-  constructor(message = 'Não autorizado') { super(message, 'UNAUTHORIZED', 401) }
+  constructor(message = 'Não autorizado') {
+    super(message, 'UNAUTHORIZED', 401)
+  }
 }
 ```
 
@@ -232,6 +253,7 @@ Ver [docs/guides/testing-guide.md](./docs/guides/testing-guide.md).
 
 Estrutura: `tests/{unit,integration,e2e}`. Nomes descrevem comportamento.
 Padrão **AAA** (Arrange, Act, Assert):
+
 ```typescript
 it('should create resource for the actor', async () => {
   const repo = new InMemoryResourceRepository()
@@ -250,7 +272,8 @@ it('should create resource for the actor', async () => {
 ## Git
 
 **Commits** — `tipo(escopo): mensagem`. Tipos: `feat`, `fix`, `refactor`, `docs`,
-`style`, `test`, `chore`. Imperativo, minúsculo, sem ponto, ≤72 chars.
+`style`, `test`, `chore`, `ci`, `perf`, `build`, `revert`. Imperativo, minúsculo, sem ponto, ≤72 chars.
+
 ```
 feat(resources): add create resource use case
 fix(items): correct order_index on reorder
@@ -262,6 +285,11 @@ uma única trunk (`main`), sempre deployável. Feature branches **curtas**
 **Sem branches longevas por ambiente** (`develop`/`staging`/`production`); trabalho
 incompleto fica atrás de **feature flags**. A promoção entre ambientes é por commit
 da trunk (ver [ADR-002](./docs/adr/002-estrategia-de-ambientes.md)).
+
+**Squash e versão** ([ADR-014](./docs/adr/014-release-management.md)): só _squash merge_; o
+**título do PR** é a mensagem do commit na `main` e a fonte da versão (`!`/`BREAKING CHANGE` →
+major, `feat` → minor, demais → patch). A versão vive na **tag** `vX.Y.Z` (uma por merge) e as
+Releases do GitHub são o CHANGELOG; não edite `version` do `package.json` nem crie `CHANGELOG.md`.
 
 **Pull Requests** — **toda mudança entra na `main` via PR, SEMPRE (sem push
 direto na trunk)** — ver [ADR-005](./docs/adr/005-trunk-based-development.md).
@@ -314,7 +342,7 @@ defineTool({
 })
 
 // ❌ genérica, sem escopo de tarefa, aceita ownerId
-defineTool({ name: 'update', description: 'Atualiza', input: z.any(), /* ... */ })
+defineTool({ name: 'update', description: 'Atualiza', input: z.any() /* ... */ })
 ```
 
 Ver [ADR-012](./docs/adr/012-mcp-como-borda-agentica.md).

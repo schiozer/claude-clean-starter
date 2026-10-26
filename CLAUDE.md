@@ -23,6 +23,12 @@
 > **Adoção — `main` protegida**: ao adotar o template, **não remova** a regra 0, `hooks/protect-main`,
 > `.githooks/` nem o workflow `.github/workflows/main-guard.yml`.
 >
+> **Adoção — release** ([ADR-014](./docs/adr/014-release-management.md)): **não remova** `pr-gate.yml`
+> nem `release.yml`; decida o `SPEC_GATE` (gate opcional com Claude) pelo runbook
+> [`spec-gate.md`](./docs/runbooks/spec-gate.md). Ao renomear/remover jobs de CI (ex.:
+> `Walking Skeleton (example)`), atualize `requiredChecks` em `hooks/protect-main/config.json`,
+> senão todo merge alarma na `Guarda da main`.
+>
 > **Adoção — operação** ([ADR-013](./docs/adr/013-governanca-operacional-e-runbooks.md)):
 > antes do primeiro deploy fora do Dev, preencha todo `<preencher>` de `docs/runbooks/`,
 > date a `Última verificação` de cada runbook e troque o passo do CI para
@@ -53,6 +59,9 @@ Se você está lendo isso, provavelmente sou eu mesmo (Claude) trabalhando no pr
   o hook `hooks/protect-main` (agente) e o workflow `Guarda da main` (GitHub, detecção).
   Branches protegidas em `hooks/protect-main/config.json`; se algo barrar, siga a mensagem —
   não peça para desligar.
+- A entrega inclui o template de PR preenchido (`.github/pull_request_template.md`) e a conferência
+  local spec × código (leia a spec e o diff, preencha a tabela, aponte o que ficou `parcial`/`fora`)
+  **antes** de `gh pr create`/atualizar o PR — ver [ADR-014](./docs/adr/014-release-management.md).
 - Nunca edite, desative ou contorne `hooks/protect-main`, `.githooks/` ou `core.hooksPath` (nem o
   `.claude/settings.json` que registra o hook) para passar por um bloqueio.
 
@@ -161,7 +170,8 @@ branch e abertura de PR seguem só as regras 5 e 8 — nenhum outro passo de ope
 - `[R0]` leitura → livre.
 - `[R1]` mutação reversível fora de Prod → executo e registro.
 - `[R2]` Prod, segredo, destrutivo, escrita MCP → aprovação humana explícita **por operação**.
-- `[R3]` merge na `main`, ler/imprimir segredo, desligar proteções → **nunca**; entrego ao humano.
+- `[R3]` merge na `main`, ler/imprimir segredo, desligar proteções, **marcar o UAT no PR** (nem ao
+  abrir, nem editando o corpo) → **nunca**; entrego ao humano e aviso que o UAT está pendente.
 
 ---
 
@@ -276,9 +286,8 @@ Ver [BEST_PRACTICES.md](./BEST_PRACTICES.md) completo.
 
 ## 🧪 Workflow de Desenvolvimento
 
-1. Receber tarefa → 2. Carregar skill apropriada → 3. Ler ARCHITECTURE.md,
-BEST_PRACTICES.md e a spec → 4. Implementar (TDD) → 5. Testar (`npm test`) →
-6. Commitar com mensagem clara → 7. Atualizar tarefas.
+Receber tarefa → carregar skill apropriada → ler ARCHITECTURE.md, BEST_PRACTICES.md e a spec →
+implementar (TDD) → testar (`npm test`) → commitar com mensagem clara → atualizar tarefas.
 
 ---
 
