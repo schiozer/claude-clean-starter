@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  checks: read
   issues: write
 
 concurrency:
@@ -28,3 +29,4 @@ jobs:
         run: node scripts/main-guard.mjs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPEC_GATE: ${{ vars.SPEC_GATE }}

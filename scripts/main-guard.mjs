@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 // Guarda da main (camada 3, spec main-autogarantida §6): num push para uma branch protegida,
 // verifica se cada commit novo veio de um PR mergeado; senão abre/atualiza uma issue de alarme
-// e falha o job. Não reverte nada — a decisão é do humano, via PR.
+// e falha o job. Também alarma merges que pularam os gates de saúde (checks obrigatórios, UAT,
+// squash) — spec 2026-10-25 release-management §4.5. Não reverte nada — a decisão é do humano.
 
 import { readFileSync, realpathSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { makeGithubClient } from './github-api.mjs'
+import { parseUat } from './pr-gate.mjs'
 
 const LABEL = 'main-sem-pr'
+const GATES_LABEL = 'merge-sem-gates'
 const DEFAULT_RETRIES = 3
 const DEFAULT_DELAY_MS = 10000
 const PAGE_SIZE = 100
@@ -19,10 +23,16 @@ const BRANCH_PREFIX = 'refs/heads/'
 
 /**
  * @typedef {{ ref: string, before: string, after: string, forced?: boolean, deleted?: boolean }} PushEvent
- * @typedef {{ merged_at: string | null, base: { ref: string } }} PullInfo
+ * @typedef {{
+ *   number: number, title: string, body: string | null, merged_at: string | null,
+ *   base: { ref: string }, head: { sha: string },
+ * }} PullInfo
+ * @typedef {{ name: string, status: string, conclusion: string | null }} CheckRun
  * @typedef {{
  *   compare(base: string, head: string): Promise<string[]>,
  *   pullsForCommit(sha: string): Promise<PullInfo[]>,
+ *   checkRuns(sha: string): Promise<CheckRun[]>,
+ *   commitParents(sha: string): Promise<string[]>,
  *   findOpenIssue(label: string): Promise<number | null>,
  *   createIssue(title: string, body: string, label: string): Promise<void>,
  *   comment(issue: number, body: string): Promise<void>,
@@ -32,25 +42,76 @@ const BRANCH_PREFIX = 'refs/heads/'
 /** Lançado por `compare` quando a lista de commits veio truncada (fail-closed). */
 export class CompareTruncatedError extends Error {}
 
-/** protectedBranches do checkout (`hooks/protect-main/config.json`). */
-export const readProtectedBranches = (root = process.cwd()) =>
+const readConfig = (root = process.cwd()) =>
   JSON.parse(readFileSync(resolve(root, 'hooks/protect-main/config.json'), 'utf8'))
-    .protectedBranches
 
-/** Commits ainda sem PR mergeado após `retries` tentativas (uma espera por rodada). */
+/** protectedBranches do checkout (`hooks/protect-main/config.json`). */
+export const readProtectedBranches = (root = process.cwd()) => readConfig(root).protectedBranches
+
+/**
+ * Commits ainda sem PR mergeado após `retries` tentativas (uma espera por rodada) e os PRs
+ * mergeados encontrados, deduplicados por número (com os commits da main de cada um).
+ */
 const findUnmerged = async (api, commits, branch, retries, delayMs) => {
   let pending = commits
+  const pulls = new Map()
   for (let attempt = 1; attempt <= retries && pending.length > 0; attempt++) {
-    const merged = await Promise.all(
+    const found = await Promise.all(
       pending.map(async (sha) => {
-        const pulls = await api.pullsForCommit(sha)
-        return pulls.some((pr) => pr.merged_at && pr.base.ref === branch)
+        const prs = await api.pullsForCommit(sha)
+        return prs.find((pr) => pr.merged_at && pr.base.ref === branch) ?? null
       })
     )
-    pending = pending.filter((_, index) => !merged[index])
+    found.forEach((pr, index) => {
+      if (!pr) return
+      const entry = pulls.get(pr.number) ?? { pr, shas: [] }
+      entry.shas.push(pending[index])
+      pulls.set(pr.number, entry)
+    })
+    pending = pending.filter((_, index) => !found[index])
     if (pending.length > 0 && attempt < retries) await sleep(delayMs)
   }
-  return pending
+  return { pending, pulls: [...pulls.values()] }
+}
+
+/**
+ * Itens faltando (pt-BR) de um PR mergeado; lista vazia = todos os gates cumpridos.
+ * @param {PullInfo} pr
+ * @param {{ checkRuns: CheckRun[], parents: string[], requiredChecks: string[] }} ctx
+ * @returns {string[]}
+ */
+export function evaluateGates(pr, { checkRuns, parents, requiredChecks }) {
+  const missing = []
+  for (const name of requiredChecks) {
+    const run = checkRuns.filter((check) => check.name === name).at(-1)
+    if (!run) missing.push(`check "${name}" ausente`)
+    else if (run.status !== 'completed' || run.conclusion !== 'success') {
+      missing.push(`check "${name}" com conclusão ${run.conclusion ?? run.status}`)
+    }
+  }
+  const uat = parseUat(pr.body ?? '')
+  if (uat.approved && uat.notApplicable) missing.push('duas opções de UAT marcadas')
+  else if (uat.notApplicable && !uat.reason) missing.push('UAT "não se aplica" sem motivo')
+  else if (!uat.approved && !uat.notApplicable) missing.push('UAT não marcado')
+  if (parents.length > 1) missing.push('merge commit (2 pais): use squash')
+  return missing
+}
+
+/** Avalia os gates de um PR relendo checks/pais a cada rodada (checks podem chegar atrasados). */
+const gateFailureFor = async (api, { pr, shas }, requiredChecks, retries, delayMs) => {
+  let missing = []
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const checkRuns = await api.checkRuns(pr.head.sha)
+    const parents = []
+    for (const sha of shas) {
+      const found = await api.commitParents(sha)
+      if (found.length > parents.length) parents.splice(0, parents.length, ...found)
+    }
+    missing = evaluateGates(pr, { checkRuns, parents, requiredChecks })
+    if (missing.length === 0) return null
+    if (attempt < retries) await sleep(delayMs)
+  }
+  return { pr: pr.number, sha: shas[0], missing }
 }
 
 const buildBody = (event, offending, note) =>
@@ -68,22 +129,57 @@ const buildBody = (event, offending, note) =>
       'revisar e, se necessário, reverter via PR.',
   ].join('\n')
 
+const buildGatesBody = (failure, branch, specGateCheck) =>
+  [
+    `O PR #${failure.pr} foi mergeado na \`${branch}\` (commit ${failure.sha}) sem cumprir os gates:`,
+    '',
+    ...failure.missing.map((item) => `- ${item}`),
+    ...(specGateCheck && failure.missing.some((item) => item.includes(`"${specGateCheck}"`))
+      ? [
+          '',
+          `Se \`SPEC_GATE\` foi ligado com o PR aberto, o check "${specGateCheck}" pode não ter ` +
+            'rodado nele: re-rode o check no PR antes do próximo merge.',
+        ]
+      : []),
+    '',
+    'Nada foi revertido automaticamente: um humano deve revisar e, se necessário, corrigir via PR.',
+  ].join('\n')
+
+const raise = async (api, label, title, body) => {
+  const existing = await api.findOpenIssue(label)
+  if (existing) await api.comment(existing, body)
+  else await api.createIssue(title, body, label)
+}
+
 /**
  * @param {PushEvent} event
  * @param {GuardApi} api
- * @param {{ retries?: number, delayMs?: number, protectedBranches?: string[] }} [opts]
- * @returns {Promise<{ ok: boolean, offending: string[] }>}
+ * @param {{
+ *   retries?: number, delayMs?: number, protectedBranches?: string[],
+ *   requiredChecks?: string[], specGate?: boolean,
+ * }} [opts]
+ * @returns {Promise<{
+ *   ok: boolean, offending: string[],
+ *   gateFailures: { pr: number, sha: string, missing: string[] }[],
+ * }>}
  */
 export async function runMainGuard(event, api, opts = {}) {
   const retries = opts.retries ?? DEFAULT_RETRIES
   const delayMs = opts.delayMs ?? DEFAULT_DELAY_MS
-  const protectedBranches = opts.protectedBranches ?? readProtectedBranches()
+  const config = readConfig()
+  const protectedBranches = opts.protectedBranches ?? config.protectedBranches
+  const specGate = opts.specGate ?? process.env.SPEC_GATE === 'on'
+  const requiredChecks = [
+    ...(opts.requiredChecks ?? config.requiredChecks ?? []),
+    ...(specGate && config.specGateCheck ? [config.specGateCheck] : []),
+  ]
+  const clean = { ok: true, offending: [], gateFailures: [] }
 
-  if (!event.ref.startsWith(BRANCH_PREFIX)) return { ok: true, offending: [] }
+  if (!event.ref.startsWith(BRANCH_PREFIX)) return clean
   const branch = event.ref.slice(BRANCH_PREFIX.length)
-  if (!protectedBranches.includes(branch)) return { ok: true, offending: [] }
+  if (!protectedBranches.includes(branch)) return clean
   const deleted = event.deleted === true || ZERO_SHA.test(event.after)
-  if (!deleted && ZERO_SHA.test(event.before)) return { ok: true, offending: [] }
+  if (!deleted && ZERO_SHA.test(event.before)) return clean
 
   let commits = []
   let note = ''
@@ -99,6 +195,7 @@ export async function runMainGuard(event, api, opts = {}) {
   }
 
   let offending = []
+  let pulls = []
   if (deleted) {
     offending = [event.before]
     note = 'A branch protegida foi removida (delete) sem PR.'
@@ -106,47 +203,42 @@ export async function runMainGuard(event, api, opts = {}) {
     offending = commits.length > 0 && !failClosed ? commits : [event.after]
     if (event.forced && !note) note = 'O push foi forçado (force push).'
   } else {
-    offending = await findUnmerged(api, commits, branch, retries, delayMs)
+    ;({ pending: offending, pulls } = await findUnmerged(api, commits, branch, retries, delayMs))
   }
-  if (offending.length === 0) return { ok: true, offending }
 
-  const body = buildBody(event, offending, note)
-  const existing = await api.findOpenIssue(LABEL)
-  if (existing) await api.comment(existing, body)
-  else
-    await api.createIssue(
+  if (offending.length > 0) {
+    await raise(
+      api,
+      LABEL,
       `Commit na main sem PR: ${(deleted ? event.before : event.after).slice(0, 7)}`,
-      body,
-      LABEL
+      buildBody(event, offending, note)
     )
-  return { ok: false, offending }
+  }
+
+  const gateFailures = []
+  for (const entry of pulls) {
+    const failure = await gateFailureFor(api, entry, requiredChecks, retries, delayMs)
+    if (!failure) continue
+    gateFailures.push(failure)
+    await raise(
+      api,
+      GATES_LABEL,
+      `Merge sem gates: #${failure.pr} (${failure.sha.slice(0, 7)})`,
+      buildGatesBody(failure, branch, specGate ? config.specGateCheck : undefined)
+    )
+  }
+  return { ok: offending.length === 0 && gateFailures.length === 0, offending, gateFailures }
 }
 
 /** GuardApi sobre a REST do GitHub (fetch nativo). */
-export function makeGithubApi({
-  token,
-  repository,
-  apiUrl = 'https://api.github.com',
-  fetchFn = globalThis.fetch,
-}) {
-  const call = async (method, path, body) => {
-    const response = await fetchFn(`${apiUrl}/repos/${repository}${path}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'main-guard',
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    })
-    const labelExists = method === 'POST' && path === '/labels' && response.status === 422
-    if (!response.ok && !labelExists) {
-      throw new Error(`GitHub API ${method} ${path} falhou: HTTP ${response.status}`)
-    }
-    return response
-  }
+export function makeGithubApi({ token, repository, apiUrl, fetchFn }) {
+  const { call, paginate } = makeGithubClient({
+    token,
+    repository,
+    apiUrl,
+    fetchFn,
+    userAgent: 'main-guard',
+  })
 
   return {
     async compare(base, head) {
@@ -154,7 +246,7 @@ export function makeGithubApi({
       let total = Infinity
       for (let page = 1; shas.length < total && page <= COMPARE_MAX_PAGES; page++) {
         const url = `/compare/${base}...${head}?per_page=${PAGE_SIZE}&page=${page}`
-        const data = await (await call('GET', url)).json()
+        const data = await call('GET', url)
         if (!Number.isInteger(data.total_commits)) {
           throw new CompareTruncatedError('compare sem total_commits válido')
         }
@@ -169,17 +261,26 @@ export function makeGithubApi({
       return shas
     },
     async pullsForCommit(sha) {
-      return (await call('GET', `/commits/${sha}/pulls`)).json()
+      return call('GET', `/commits/${sha}/pulls`)
+    },
+    async checkRuns(sha) {
+      return paginate(`/commits/${sha}/check-runs?filter=latest`, (page) => page.check_runs)
+    },
+    async commitParents(sha) {
+      return (await call('GET', `/commits/${sha}`)).parents.map((parent) => parent.sha)
     },
     async findOpenIssue(label) {
       const url = `/issues?labels=${encodeURIComponent(label)}&state=open&per_page=${PAGE_SIZE}`
-      const issues = await (await call('GET', url)).json()
+      const issues = await call('GET', url)
       // a API de issues também lista PRs; só interessa issue de verdade.
       return issues.find((issue) => !('pull_request' in issue))?.number ?? null
     },
     async createIssue(title, body, label) {
-      // 422 = label já existe (ignorado em `call`).
-      await call('POST', '/labels', { name: label, color: 'b60205' })
+      try {
+        await call('POST', '/labels', { name: label, color: 'b60205' })
+      } catch (error) {
+        if (error.status !== 422) throw error // 422 = label já existe
+      }
       await call('POST', '/issues', { title, body, labels: [label] })
     },
     async comment(issue, body) {
@@ -202,11 +303,16 @@ if (isMain) {
       repository: GITHUB_REPOSITORY,
       apiUrl: GITHUB_API_URL || undefined,
     })
-    const { ok, offending } = await runMainGuard(event, api)
+    const { ok, offending, gateFailures } = await runMainGuard(event, api)
     if (ok) {
-      process.stdout.write('main-guard: todos os commits vieram de PR mergeado.\n')
+      process.stdout.write('main-guard: todos os commits vieram de PR mergeado, com gates ok.\n')
     } else {
-      process.stderr.write(`main-guard: commit(s) na main sem PR:\n${offending.join('\n')}\n`)
+      if (offending.length > 0) {
+        process.stderr.write(`main-guard: commit(s) na main sem PR:\n${offending.join('\n')}\n`)
+      }
+      for (const { pr, missing } of gateFailures) {
+        process.stderr.write(`main-guard: PR #${pr} sem gates:\n- ${missing.join('\n- ')}\n`)
+      }
       process.exit(1)
     }
   } catch (error) {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { makeGithubApi, runMainGuard } from '../../scripts/main-guard.mjs'
 
@@ -9,11 +9,27 @@ const AFTER = 'a'.repeat(40)
 const BEFORE = 'b'.repeat(40)
 const SHA = 'c'.repeat(40)
 
-const merged = (ref = 'main') => ({ merged_at: '2026-01-01T00:00:00Z', base: { ref } })
+const HEAD = 'd'.repeat(40)
+const UAT_OK = '- [x] UAT aprovado\n- [ ] UAT não se aplica — '
+const REQUIRED = ['Test & Lint (root)', 'Walking Skeleton (example)', 'PR gate']
+
+const merged = (ref = 'main', body = UAT_OK) => ({
+  number: 7,
+  title: 'feat(x): y',
+  body,
+  merged_at: '2026-01-01T00:00:00Z',
+  base: { ref },
+  head: { sha: HEAD },
+})
+
+const runs = (names = REQUIRED, conclusion: string | null = 'success', status = 'completed') =>
+  names.map((name) => ({ name, status, conclusion }))
 
 const makeApi = (overrides: Record<string, unknown> = {}) => ({
   compare: vi.fn(async () => [SHA]),
   pullsForCommit: vi.fn(async () => [merged()]),
+  checkRuns: vi.fn(async () => runs()),
+  commitParents: vi.fn(async () => ['p'.repeat(40)]),
   findOpenIssue: vi.fn(async () => null),
   createIssue: vi.fn(async () => undefined),
   comment: vi.fn(async () => undefined),
@@ -28,20 +44,26 @@ const event = (extra = {}) => ({
   ...extra,
 })
 
-const opts = { retries: 3, delayMs: 0, protectedBranches: ['main'] }
+const opts = {
+  retries: 3,
+  delayMs: 0,
+  protectedBranches: ['main'],
+  requiredChecks: REQUIRED,
+  specGate: false,
+}
 
 describe('runMainGuard', () => {
   it('ok quando o commit tem PR mergeado na main', async () => {
     const api = makeApi()
     const result = await runMainGuard(event(), api, opts)
-    expect(result).toEqual({ ok: true, offending: [] })
+    expect(result).toEqual({ ok: true, offending: [], gateFailures: [] })
     expect(api.createIssue).not.toHaveBeenCalled()
   })
 
   it('alarma e abre issue com o label quando não há PR', async () => {
     const api = makeApi({ pullsForCommit: vi.fn(async () => []) })
     const result = await runMainGuard(event(), api, opts)
-    expect(result).toEqual({ ok: false, offending: [SHA] })
+    expect(result).toEqual({ ok: false, offending: [SHA], gateFailures: [] })
     expect(api.pullsForCommit).toHaveBeenCalledTimes(3)
     expect(api.createIssue).toHaveBeenCalledWith(
       `Commit na main sem PR: ${AFTER.slice(0, 7)}`,
@@ -52,7 +74,7 @@ describe('runMainGuard', () => {
 
   it('PR não mergeado conta como sem PR', async () => {
     const api = makeApi({
-      pullsForCommit: vi.fn(async () => [{ merged_at: null, base: { ref: 'main' } }]),
+      pullsForCommit: vi.fn(async () => [{ ...merged(), merged_at: null }]),
     })
     expect((await runMainGuard(event(), api, opts)).ok).toBe(false)
   })
@@ -72,7 +94,7 @@ describe('runMainGuard', () => {
   it('forced:true alarma mesmo com PRs', async () => {
     const api = makeApi()
     const result = await runMainGuard(event({ forced: true }), api, opts)
-    expect(result).toEqual({ ok: false, offending: [SHA] })
+    expect(result).toEqual({ ok: false, offending: [SHA], gateFailures: [] })
     expect(api.createIssue).toHaveBeenCalled()
   })
 
@@ -83,7 +105,7 @@ describe('runMainGuard', () => {
       }),
     })
     const result = await runMainGuard(event({ forced: true }), api, opts)
-    expect(result).toEqual({ ok: false, offending: [AFTER] })
+    expect(result).toEqual({ ok: false, offending: [AFTER], gateFailures: [] })
   })
 
   it('issue aberta existente recebe comentário, sem criar outra', async () => {
@@ -117,7 +139,7 @@ describe('runMainGuard — delete, retries e corpo', () => {
   it('delete da branch protegida alarma com [before] sem compare', async () => {
     const api = makeApi()
     const result = await runMainGuard(event({ after: ZERO, deleted: true }), api, opts)
-    expect(result).toEqual({ ok: false, offending: [BEFORE] })
+    expect(result).toEqual({ ok: false, offending: [BEFORE], gateFailures: [] })
     expect(api.compare).not.toHaveBeenCalled()
     expect(api.createIssue).toHaveBeenCalledWith(
       `Commit na main sem PR: ${BEFORE.slice(0, 7)}`,
@@ -128,7 +150,7 @@ describe('runMainGuard — delete, retries e corpo', () => {
 
   it('after zerado sem flag deleted também alarma', async () => {
     const result = await runMainGuard(event({ after: ZERO }), makeApi(), opts)
-    expect(result).toEqual({ ok: false, offending: [BEFORE] })
+    expect(result).toEqual({ ok: false, offending: [BEFORE], gateFailures: [] })
   })
 
   it('verifica todos os pendentes por rodada e dorme uma vez por rodada', async () => {
@@ -151,6 +173,114 @@ describe('runMainGuard — delete, retries e corpo', () => {
     await runMainGuard(event(), api, opts)
     const body = (api.createIssue.mock.calls[0] as unknown as string[])[1]
     expect(body).toContain('Chegaram à `main` commits sem PR mergeado:')
+  })
+})
+
+describe('runMainGuard — gates de saúde do merge', () => {
+  const GATES_TITLE = `Merge sem gates: #7 (${SHA.slice(0, 7)})`
+  const run = (overrides: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) => {
+    const api = makeApi(overrides)
+    return runMainGuard(event(), api, { ...opts, ...extra }).then((result) => ({ api, result }))
+  }
+  const missingOf = (result: { gateFailures: { missing: string[] }[] }) =>
+    result.gateFailures[0]?.missing
+
+  it('ok com checks success, UAT aprovado e 1 pai', async () => {
+    const { api, result } = await run()
+    expect(result).toEqual({ ok: true, offending: [], gateFailures: [] })
+    expect(api.createIssue).not.toHaveBeenCalled()
+    expect(api.checkRuns).toHaveBeenCalledWith(HEAD)
+    expect(api.commitParents).toHaveBeenCalledWith(SHA)
+  })
+
+  it('check ausente alarma e abre issue merge-sem-gates', async () => {
+    const { api, result } = await run({
+      checkRuns: vi.fn(async () => runs(['Test & Lint (root)', 'Walking Skeleton (example)'])),
+    })
+    expect(result.ok).toBe(false)
+    expect(result.gateFailures[0]).toMatchObject({ pr: 7, sha: SHA })
+    expect(missingOf(result)).toContain('check "PR gate" ausente')
+    expect(api.createIssue).toHaveBeenCalledWith(
+      GATES_TITLE,
+      expect.stringContaining('check "PR gate" ausente'),
+      'merge-sem-gates'
+    )
+  })
+
+  it.each(['failure', 'skipped', 'cancelled'])('conclusão %s alarma', async (conclusion) => {
+    const { result } = await run({
+      checkRuns: vi.fn(async () => [
+        ...runs(['PR gate'], conclusion),
+        ...runs(REQUIRED.slice(0, 2)),
+      ]),
+    })
+    expect(missingOf(result)).toEqual([`check "PR gate" com conclusão ${conclusion}`])
+  })
+
+  it('check não concluído reporta o status', async () => {
+    const { result } = await run({
+      checkRuns: vi.fn(async () => [
+        ...runs(['PR gate'], null, 'in_progress'),
+        ...runs(REQUIRED.slice(0, 2)),
+      ]),
+    })
+    expect(missingOf(result)).toEqual(['check "PR gate" com conclusão in_progress'])
+  })
+
+  it('Spec × código ausente: ok com specGate false, alarme com true', async () => {
+    const off = await run()
+    expect(off.result.ok).toBe(true)
+    const on = await run({}, { specGate: true })
+    expect(on.result.ok).toBe(false)
+    expect(missingOf(on.result)).toEqual(['check "Spec × código" ausente'])
+    expect(on.api.createIssue).toHaveBeenCalledWith(
+      GATES_TITLE,
+      expect.stringContaining('SPEC_GATE'),
+      'merge-sem-gates'
+    )
+  })
+
+  it.each([
+    ['UAT não marcado', '- [ ] UAT aprovado\n- [ ] UAT não se aplica — '],
+    ['UAT "não se aplica" sem motivo', '- [ ] UAT aprovado\n- [x] UAT não se aplica — '],
+    ['duas opções de UAT marcadas', '- [x] UAT aprovado\n- [x] UAT não se aplica — só docs'],
+    ['UAT não marcado', 'sem seção de uat'],
+  ])('%s alarma', async (message, body) => {
+    const { result } = await run({ pullsForCommit: vi.fn(async () => [merged('main', body)]) })
+    expect(missingOf(result)).toEqual([message])
+  })
+
+  it('UAT "não se aplica" com motivo é ok', async () => {
+    const body = '- [ ] UAT aprovado\n- [x] UAT não se aplica — só docs'
+    const { result } = await run({ pullsForCommit: vi.fn(async () => [merged('main', body)]) })
+    expect(result.ok).toBe(true)
+  })
+
+  it('merge commit (2 pais) alarma', async () => {
+    const { result } = await run({ commitParents: vi.fn(async () => ['1', '2']) })
+    expect(missingOf(result)).toEqual(['merge commit (2 pais): use squash'])
+  })
+
+  it('issue merge-sem-gates aberta recebe comentário', async () => {
+    const { api } = await run({
+      checkRuns: vi.fn(async () => []),
+      findOpenIssue: vi.fn(async (label: string) => (label === 'merge-sem-gates' ? 9 : null)),
+    })
+    expect(api.comment).toHaveBeenCalledWith(9, expect.stringContaining('PR #7'))
+    expect(api.createIssue).not.toHaveBeenCalled()
+  })
+
+  it('PR com vários commits é avaliado uma vez', async () => {
+    const { api, result } = await run({ compare: vi.fn(async () => [SHA, AFTER]) })
+    expect(result.ok).toBe(true)
+    expect(api.checkRuns).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-lê os checks: check que chega na 2ª tentativa é ok', async () => {
+    const checkRuns = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce(runs())
+    const { result } = await run({ checkRuns })
+    expect(result.ok).toBe(true)
+    expect(checkRuns).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -209,7 +339,7 @@ describe('makeGithubApi', () => {
       return json({})
     })
     const result = await runMainGuard(event(), githubApi(fetchFn), opts)
-    expect(result).toEqual({ ok: false, offending: [AFTER] })
+    expect(result).toEqual({ ok: false, offending: [AFTER], gateFailures: [] })
     const post = fetchFn.mock.calls.find(([u]) => u.endsWith('/issues'))
     expect(String(post?.[1].body)).toContain('compare retornou')
   })
@@ -219,7 +349,7 @@ describe('makeGithubApi', () => {
       url.includes('/compare/') ? json({ commits: [{ sha: SHA }] }) : json([])
     )
     const result = await runMainGuard(event(), githubApi(fetchFn), opts)
-    expect(result).toEqual({ ok: false, offending: [AFTER] })
+    expect(result).toEqual({ ok: false, offending: [AFTER], gateFailures: [] })
   })
 
   it('erro de compare sem force propaga', async () => {
@@ -251,6 +381,34 @@ describe('makeGithubApi', () => {
     expect(calls[0].url).toBe(
       'https://gh.test/repos/o/r/issues?labels=main%20sem%2Fpr&state=open&per_page=100'
     )
+  })
+})
+
+describe('config e workflows', () => {
+  const config = JSON.parse(readFileSync(resolve(ROOT, 'hooks/protect-main/config.json'), 'utf8'))
+  const workflowsDir = resolve(ROOT, '.github/workflows')
+  const jobNames = readdirSync(workflowsDir)
+    .filter((file) => file.endsWith('.yml'))
+    .flatMap((file) =>
+      [...readFileSync(resolve(workflowsDir, file), 'utf8').matchAll(/^ {4}name:\s*(.+)$/gm)].map(
+        (match) => match[1].trim().replace(/^['"]|['"]$/g, '')
+      )
+    )
+
+  it('requiredChecks são nomes de job dos workflows', () => {
+    for (const name of config.requiredChecks) expect(jobNames).toContain(name)
+  })
+
+  // o job "Spec × código" nasce na Task 3; até lá o workflow não existe.
+  it.skipIf(!existsSync(resolve(workflowsDir, 'spec-gate.yml')))(
+    'specGateCheck é nome de job de um workflow',
+    () => expect(jobNames).toContain(config.specGateCheck)
+  )
+
+  it('main-guard.yml tem checks: read e SPEC_GATE', () => {
+    const yml = readFileSync(resolve(workflowsDir, 'main-guard.yml'), 'utf8')
+    expect(yml).toMatch(/^\s+checks:\s*read\s*$/m)
+    expect(yml).toContain('SPEC_GATE: ${{ vars.SPEC_GATE }}')
   })
 })
 
