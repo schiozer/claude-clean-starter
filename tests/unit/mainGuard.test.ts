@@ -47,6 +47,7 @@ const event = (extra = {}) => ({
 const opts = {
   retries: 3,
   delayMs: 0,
+  pendingPollMs: 0,
   protectedBranches: ['main'],
   requiredChecks: REQUIRED,
   specGate: false,
@@ -274,6 +275,45 @@ describe('runMainGuard — gates de saúde do merge', () => {
     const { api, result } = await run({ compare: vi.fn(async () => [SHA, AFTER]) })
     expect(result.ok).toBe(true)
     expect(api.checkRuns).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['novo primeiro', 'success', 20, 'failure', 10],
+    ['velho primeiro', 'failure', 10, 'success', 20],
+  ])('usa o run mais recente por id (%s)', async (_name, c1, id1, c2, id2) => {
+    const { result } = await run({
+      checkRuns: vi.fn(async () => [
+        { name: 'PR gate', status: 'completed', conclusion: c1, id: id1 },
+        { name: 'PR gate', status: 'completed', conclusion: c2, id: id2 },
+        ...runs(REQUIRED.slice(0, 2)),
+      ]),
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('espera check pendente: in_progress na 1ª leitura e success na 2ª → ok', async () => {
+    const checkRuns = vi
+      .fn()
+      .mockResolvedValueOnce([
+        ...runs(['PR gate'], null, 'in_progress'),
+        ...runs(REQUIRED.slice(0, 2)),
+      ])
+      .mockResolvedValueOnce(runs())
+    const { api, result } = await run({ checkRuns }, { retries: 1 })
+    expect(result.ok).toBe(true)
+    expect(checkRuns).toHaveBeenCalledTimes(2)
+    expect(api.createIssue).not.toHaveBeenCalled()
+  })
+
+  it('check sempre pendente alarma ao esgotar o orçamento de espera', async () => {
+    const checkRuns = vi.fn(async () => [
+      ...runs(['PR gate'], null, 'queued'),
+      ...runs(REQUIRED.slice(0, 2)),
+    ])
+    const { api, result } = await run({ checkRuns }, { pendingMaxPolls: 4 })
+    expect(missingOf(result)).toEqual(['check "PR gate" com conclusão queued'])
+    expect(checkRuns).toHaveBeenCalledTimes(5)
+    expect(api.createIssue).toHaveBeenCalled()
   })
 
   it('re-lê os checks: check que chega na 2ª tentativa é ok', async () => {

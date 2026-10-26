@@ -8,13 +8,16 @@ import { readFileSync, realpathSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { makeGithubClient } from './github-api.mjs'
+import { latestCheckRun, makeGithubClient } from './github-api.mjs'
 import { parseUat } from './pr-gate.mjs'
 
 const LABEL = 'main-sem-pr'
 const GATES_LABEL = 'merge-sem-gates'
 const DEFAULT_RETRIES = 3
 const DEFAULT_DELAY_MS = 10000
+// checks ainda rodando (queued/in_progress): espera até 20 × 15 s = 5 min no total.
+const DEFAULT_PENDING_POLL_MS = 15000
+const DEFAULT_PENDING_MAX_POLLS = 20
 const PAGE_SIZE = 100
 // o compare do GitHub limita a 250 commits no total.
 const COMPARE_MAX_PAGES = 3
@@ -27,7 +30,9 @@ const BRANCH_PREFIX = 'refs/heads/'
  *   number: number, title: string, body: string | null, merged_at: string | null,
  *   base: { ref: string }, head: { sha: string },
  * }} PullInfo
- * @typedef {{ name: string, status: string, conclusion: string | null }} CheckRun
+ * @typedef {{
+ *   name: string, status: string, conclusion: string | null, id?: number, started_at?: string | null,
+ * }} CheckRun
  * @typedef {{
  *   compare(base: string, head: string): Promise<string[]>,
  *   pullsForCommit(sha: string): Promise<PullInfo[]>,
@@ -83,7 +88,7 @@ const findUnmerged = async (api, commits, branch, retries, delayMs) => {
 export function evaluateGates(pr, { checkRuns, parents, requiredChecks }) {
   const missing = []
   for (const name of requiredChecks) {
-    const run = checkRuns.filter((check) => check.name === name).at(-1)
+    const run = latestCheckRun(checkRuns, name)
     if (!run) missing.push(`check "${name}" ausente`)
     else if (run.status !== 'completed' || run.conclusion !== 'success') {
       missing.push(`check "${name}" com conclusão ${run.conclusion ?? run.status}`)
@@ -97,10 +102,21 @@ export function evaluateGates(pr, { checkRuns, parents, requiredChecks }) {
   return missing
 }
 
-/** Avalia os gates de um PR relendo checks/pais a cada rodada (checks podem chegar atrasados). */
-const gateFailureFor = async (api, { pr, shas }, requiredChecks, retries, delayMs) => {
+const hasPendingCheck = (checkRuns, requiredChecks) =>
+  requiredChecks.some((name) => {
+    const run = latestCheckRun(checkRuns, name)
+    return !!run && run.status !== 'completed'
+  })
+
+/**
+ * Avalia os gates de um PR relendo checks/pais a cada rodada (checks podem chegar atrasados).
+ * Check pendente espera até `pending.maxPolls` leituras extras; ausente/falho usa `retries`.
+ */
+const gateFailureFor = async (api, { pr, shas }, requiredChecks, retries, delayMs, pending) => {
   let missing = []
-  for (let attempt = 1; attempt <= retries; attempt++) {
+  let attempt = 1
+  let polls = 0
+  for (;;) {
     const checkRuns = await api.checkRuns(pr.head.sha)
     const parents = []
     for (const sha of shas) {
@@ -109,7 +125,15 @@ const gateFailureFor = async (api, { pr, shas }, requiredChecks, retries, delayM
     }
     missing = evaluateGates(pr, { checkRuns, parents, requiredChecks })
     if (missing.length === 0) return null
-    if (attempt < retries) await sleep(delayMs)
+    if (hasPendingCheck(checkRuns, requiredChecks)) {
+      if (polls >= pending.maxPolls) break
+      polls++
+      await sleep(pending.pollMs)
+    } else {
+      if (attempt >= retries) break
+      attempt++
+      await sleep(delayMs)
+    }
   }
   return { pr: pr.number, sha: shas[0], missing }
 }
@@ -155,8 +179,8 @@ const raise = async (api, label, title, body) => {
  * @param {PushEvent} event
  * @param {GuardApi} api
  * @param {{
- *   retries?: number, delayMs?: number, protectedBranches?: string[],
- *   requiredChecks?: string[], specGate?: boolean,
+ *   retries?: number, delayMs?: number, pendingPollMs?: number, pendingMaxPolls?: number,
+ *   protectedBranches?: string[], requiredChecks?: string[], specGate?: boolean,
  * }} [opts]
  * @returns {Promise<{
  *   ok: boolean, offending: string[],
@@ -166,6 +190,10 @@ const raise = async (api, label, title, body) => {
 export async function runMainGuard(event, api, opts = {}) {
   const retries = opts.retries ?? DEFAULT_RETRIES
   const delayMs = opts.delayMs ?? DEFAULT_DELAY_MS
+  const pending = {
+    pollMs: opts.pendingPollMs ?? DEFAULT_PENDING_POLL_MS,
+    maxPolls: opts.pendingMaxPolls ?? DEFAULT_PENDING_MAX_POLLS,
+  }
   const config = readConfig()
   const protectedBranches = opts.protectedBranches ?? config.protectedBranches
   const specGate = opts.specGate ?? process.env.SPEC_GATE === 'on'
@@ -217,7 +245,7 @@ export async function runMainGuard(event, api, opts = {}) {
 
   const gateFailures = []
   for (const entry of pulls) {
-    const failure = await gateFailureFor(api, entry, requiredChecks, retries, delayMs)
+    const failure = await gateFailureFor(api, entry, requiredChecks, retries, delayMs, pending)
     if (!failure) continue
     gateFailures.push(failure)
     await raise(

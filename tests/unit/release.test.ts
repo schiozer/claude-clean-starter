@@ -49,6 +49,7 @@ describe('nextVersion', () => {
 describe('buildReleaseNotes', () => {
   const base = {
     title: 'feat(a): algo',
+    tag: 'v0.2.0',
     prNumber: 12,
     prUrl: 'https://github.com/o/r/pull/12',
     body: SPEC_BODY,
@@ -59,7 +60,8 @@ describe('buildReleaseNotes', () => {
     const notes = buildReleaseNotes(base)
     expect(notes).toContain('#12')
     expect(notes).toContain('https://github.com/o/r/pull/12')
-    expect(notes).toContain('docs/superpowers/specs/x.md')
+    expect(notes).toContain('https://github.com/o/r/blob/v0.2.0/docs/superpowers/specs/x.md')
+    expect(notes).not.toContain('blob/main')
     expect(notes).toContain('Spec × código: ok')
     expect(notes).toContain('UAT: aprovado')
     expect(notes).not.toContain('### Commits')
@@ -97,12 +99,19 @@ const makeApi = (overrides: Record<string, unknown> = {}) => ({
   checkRuns: vi.fn(async () => [
     { name: 'Spec × código', status: 'completed', conclusion: 'success' },
   ]),
+  releaseExists: vi.fn(async () => true),
   createTag: vi.fn() as Mocked,
   createRelease: vi.fn() as Mocked,
   ...overrides,
 })
 
-const opts = { packageVersion: '0.1.0' }
+const opts = { packageVersion: '0.1.0', delayMs: 0 }
+const check = (conclusion: string, id?: number) => ({
+  name: 'Spec × código',
+  status: 'completed',
+  conclusion,
+  ...(id === undefined ? {} : { id }),
+})
 
 describe('runRelease', () => {
   it('é idempotente quando uma tag já aponta para after', async () => {
@@ -111,6 +120,21 @@ describe('runRelease', () => {
     expect(result).toEqual({ created: false, tag: 'v0.2.0' })
     expect(api.createTag).not.toHaveBeenCalled()
     expect(api.createRelease).not.toHaveBeenCalled()
+    expect(api.releaseExists).toHaveBeenCalledWith('v0.2.0')
+  })
+  it('tag existente sem Release (404) cria só a Release dessa tag', async () => {
+    const api = makeApi({
+      tags: vi.fn(async () => [{ name: 'v0.2.0', sha: AFTER }]),
+      releaseExists: vi.fn(async () => false),
+    })
+    const result = await runRelease({ before: BEFORE, after: AFTER }, api, opts)
+    expect(result).toEqual({ created: false, releaseCreated: true, tag: 'v0.2.0' })
+    expect(api.createTag).not.toHaveBeenCalled()
+    const [tag, name, notes] = api.createRelease.mock.calls[0]
+    expect(tag).toBe('v0.2.0')
+    expect(name).toBe('v0.2.0 — feat(a): algo')
+    expect(notes).toContain('[#12](https://github.com/o/r/pull/12)')
+    expect(notes).toContain('blob/v0.2.0/')
   })
   it('cria tag e release a partir do PR mergeado', async () => {
     const api = makeApi()
@@ -126,6 +150,7 @@ describe('runRelease', () => {
   it('sem PR usa a primeira linha do commit e Spec × código pulado', async () => {
     const api = makeApi({ pullsForCommit: vi.fn(async () => []) })
     await runRelease({ before: ZEROS, after: AFTER }, api, opts)
+    expect(api.pullsForCommit).toHaveBeenCalledTimes(3)
     expect(api.createTag).toHaveBeenCalledWith('v0.1.1', AFTER, 'fix(b): direto')
     expect(api.compare).not.toHaveBeenCalled()
     expect(api.createRelease.mock.calls[0][2]).toContain('Spec × código: pulado')
@@ -142,6 +167,28 @@ describe('runRelease', () => {
     await runRelease({ before: BEFORE, after: AFTER }, red, opts)
     expect(red.createRelease.mock.calls[0][2]).toContain('Spec × código: vermelho')
   })
+  it('retenta commits/{sha}/pulls: [] na 1ª e PR na 2ª → notas com o PR', async () => {
+    const pulls = await makeApi().pullsForCommit()
+    const pullsForCommit = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce(pulls)
+    const api = makeApi({ pullsForCommit })
+    await runRelease({ before: BEFORE, after: AFTER }, api, opts)
+    expect(pullsForCommit).toHaveBeenCalledTimes(2)
+    expect(api.createTag).toHaveBeenCalledWith('v0.2.0', AFTER, 'feat(a): algo')
+    expect(api.createRelease.mock.calls[0][2]).toContain('[#12](https://github.com/o/r/pull/12)')
+  })
+  it('Spec × código skipped vira pulado', async () => {
+    const api = makeApi({ checkRuns: vi.fn(async () => [check('skipped')]) })
+    await runRelease({ before: BEFORE, after: AFTER }, api, opts)
+    expect(api.createRelease.mock.calls[0][2]).toContain('Spec × código: pulado')
+  })
+  it.each([
+    ['novo primeiro', [check('success', 20), check('failure', 10)]],
+    ['velho primeiro', [check('failure', 10), check('success', 20)]],
+  ])('usa o run mais recente por id (%s)', async (_name, runs) => {
+    const api = makeApi({ checkRuns: vi.fn(async () => runs) })
+    await runRelease({ before: BEFORE, after: AFTER }, api, opts)
+    expect(api.createRelease.mock.calls[0][2]).toContain('Spec × código: ok')
+  })
   it('propaga o erro se o release falhar depois da tag', async () => {
     const api = makeApi({
       createRelease: vi.fn(async () => {
@@ -154,6 +201,17 @@ describe('runRelease', () => {
 })
 
 describe('makeReleaseApi', () => {
+  it('releaseExists: 200 → true, 404 → false, outro erro propaga', async () => {
+    const make = (status: number) =>
+      makeReleaseApi({
+        token: 't',
+        repository: 'o/r',
+        fetchFn: (async () => new Response('{}', { status })) as unknown as typeof fetch,
+      })
+    expect(await make(200).releaseExists('v1.0.0')).toBe(true)
+    expect(await make(404).releaseExists('v1.0.0')).toBe(false)
+    await expect(make(500).releaseExists('v1.0.0')).rejects.toThrow('HTTP 500')
+  })
   it('createTag faz POST git/tags e depois git/refs; tags pagina', async () => {
     const calls: { method: string; url: string; body?: string }[] = []
     const fetchFn = (async (url: string, init: { method: string; body?: string }) => {

@@ -42,6 +42,12 @@ describe('título', () => {
     }
   )
 
+  it('aceita título de exatamente 72 caracteres', () => {
+    const title = `fix: ${'a'.repeat(67)}`
+    expect(title).toHaveLength(72)
+    expect(run({ title })).toEqual([])
+  })
+
   it('recusa título de 73 caracteres', () => {
     const title = `fix: ${'a'.repeat(68)}`
     expect(title).toHaveLength(73)
@@ -130,6 +136,22 @@ describe('UAT', () => {
     const body = bodyWith(`Spec: ${SPEC}`, '- [ ] UAT aprovado\n- [X] UAT não se aplica — docs\n')
     expect(parseUat(body)).toMatchObject({ notApplicable: true, reason: 'docs' })
     expect(run({ action: 'opened', body })).toHaveLength(1)
+  })
+
+  it('UAT aprovado sem diferenciar maiúsculas (como o hook)', () => {
+    const body = bodyWith(
+      `Spec: ${SPEC}`,
+      '- [X] uat Aprovado\n- [ ] UAT não se aplica — <motivo>\n'
+    )
+    expect(parseUat(body)).toMatchObject({ present: true, approved: true })
+    expect(run({ action: 'opened', body })).toHaveLength(1)
+  })
+
+  it('as duas opções marcadas → erro (mesma redação da guarda)', () => {
+    const body = bodyWith(`Spec: ${SPEC}`, '- [x] UAT aprovado\n- [x] UAT não se aplica — docs\n')
+    const errors = run({ action: 'edited', body })
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('duas opções de UAT marcadas')
   })
 
   it('não se aplica marcado sem motivo → erro', () => {

@@ -56,3 +56,21 @@ export function makeGithubClient({
 
   return { call, paginate }
 }
+
+const runOrder = (a, b) =>
+  typeof a.id === 'number' && typeof b.id === 'number'
+    ? a.id - b.id
+    : String(a.started_at ?? '').localeCompare(String(b.started_at ?? ''))
+
+/**
+ * Run mais recente do check `name`: maior `id` (fallback `started_at`), independente da ordem da
+ * API; empate fica com o último do array.
+ * @template {{ name: string, id?: number, started_at?: string | null }} T
+ * @param {T[]} runs
+ * @param {string} name
+ * @returns {T | undefined}
+ */
+export const latestCheckRun = (runs, name) =>
+  runs
+    .filter((run) => run.name === name)
+    .reduce((best, run) => (!best || runOrder(run, best) >= 0 ? run : best), undefined)

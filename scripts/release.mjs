@@ -3,26 +3,33 @@
 // calcula a próxima versão SemVer a partir das tags, cria a tag anotada e o GitHub Release.
 
 import { readFileSync, realpathSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { makeGithubClient } from './github-api.mjs'
+import { latestCheckRun, makeGithubClient } from './github-api.mjs'
 import { parseSpecLine, parseTitle, parseUat } from './pr-gate.mjs'
 
 const ZERO_SHA = /^0+$/
 const VERSION_TAG = /^v(\d+)\.(\d+)\.(\d+)$/
 const BREAKING_BODY = /\bBREAKING[ -]CHANGE\b/
 const SPEC_GATE_LABEL = { ok: 'ok', pulado: 'pulado', vermelho: 'vermelho' }
+// a associação commit → PR pode demorar a aparecer na API logo após o merge.
+const DEFAULT_RETRIES = 3
+const DEFAULT_DELAY_MS = 10000
 
 /**
  * @typedef {{ number: number, html_url?: string, title: string, body: string | null,
  *   merged_at: string | null, base: { ref: string }, head: { sha: string } }} PullInfo
- * @typedef {{ name: string, status: string, conclusion: string | null }} CheckRun
+ * @typedef {{
+ *   name: string, status: string, conclusion: string | null, id?: number, started_at?: string | null,
+ * }} CheckRun
  * @typedef {{
  *   tags(): Promise<{ name: string, sha: string }[]>,
  *   pullsForCommit(sha: string): Promise<PullInfo[]>,
  *   commitMessage(sha: string): Promise<string>,
  *   compare(base: string, head: string): Promise<string[]>,
  *   checkRuns(sha: string): Promise<CheckRun[]>,
+ *   releaseExists(tag: string): Promise<boolean>,
  *   createTag(tag: string, sha: string, message: string): Promise<void>,
  *   createRelease(tag: string, name: string, body: string): Promise<void>,
  * }} ReleaseApi
@@ -57,12 +64,12 @@ export function nextVersion(tags, change, packageVersion) {
   return `${major}.${minor}.${patch + 1}`
 }
 
-const specLink = (body, prUrl) => {
+const specLink = (body, prUrl, tag) => {
   const spec = parseSpecLine(body)
   if (spec.kind === 'na') return `n/a — ${spec.reason}`
   if (spec.kind !== 'path') return 'não informada'
   const base = prUrl ? /^(.*)\/pull\/\d+/.exec(prUrl)?.[1] : null
-  return base ? `[${spec.path}](${base}/blob/main/${spec.path})` : spec.path
+  return base ? `[${spec.path}](${base}/blob/${tag}/${spec.path})` : spec.path
 }
 
 const uatLine = (body) => {
@@ -72,11 +79,11 @@ const uatLine = (body) => {
   return 'não marcado'
 }
 
-export function buildReleaseNotes({ title, prNumber, prUrl, body, specGate, commits }) {
+export function buildReleaseNotes({ title, tag, prNumber, prUrl, body, specGate, commits }) {
   const lines = [`## ${title}`, '']
   if (prNumber !== null) lines.push(`PR: ${prUrl ? `[#${prNumber}](${prUrl})` : `#${prNumber}`}`)
   lines.push(
-    `Spec: ${specLink(body, prUrl)}`,
+    `Spec: ${specLink(body, prUrl, tag)}`,
     `Spec × código: ${SPEC_GATE_LABEL[specGate]}`,
     `UAT: ${uatLine(body)}`
   )
@@ -86,39 +93,58 @@ export function buildReleaseNotes({ title, prNumber, prUrl, body, specGate, comm
 
 const specGateState = async (api, pr, specGateCheck) => {
   if (!pr) return 'pulado'
-  const runs = await api.checkRuns(pr.head.sha)
-  const run = runs.filter((check) => check.name === specGateCheck).at(-1)
-  if (!run) return 'pulado'
+  const run = latestCheckRun(await api.checkRuns(pr.head.sha), specGateCheck)
+  if (!run || run.conclusion === 'skipped') return 'pulado'
   return run.status === 'completed' && run.conclusion === 'success' ? 'ok' : 'vermelho'
+}
+
+const findMergedPull = async (api, sha, retries, delayMs) => {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const pulls = await api.pullsForCommit(sha)
+    const pr = pulls.find((pull) => pull.merged_at && pull.base.ref === 'main')
+    if (pr) return pr
+    if (attempt < retries) await sleep(delayMs)
+  }
+  return null
 }
 
 /**
  * @param {{ before: string, after: string }} event
  * @param {ReleaseApi} api
- * @param {{ packageVersion: string, specGateCheck?: string }} opts
+ * @param {{ packageVersion: string, specGateCheck?: string, retries?: number, delayMs?: number }} opts
+ * @returns {Promise<{ created: boolean, tag: string, releaseCreated?: boolean }>}
  */
 export async function runRelease({ before, after }, api, opts) {
   const { packageVersion } = opts
   const specGateCheck = opts.specGateCheck ?? readConfig().specGateCheck
   const tags = await api.tags()
   const existing = tags.find((tag) => tag.sha === after)
-  if (existing) return { created: false, tag: existing.name }
+  // tag já existe: só recria a Release se ela sumiu (ex.: run anterior falhou depois da tag).
+  if (existing && (await api.releaseExists(existing.name))) {
+    return { created: false, tag: existing.name }
+  }
 
-  const pulls = await api.pullsForCommit(after)
-  const pr = pulls.find((pull) => pull.merged_at && pull.base.ref === 'main') ?? null
+  const pr = await findMergedPull(
+    api,
+    after,
+    opts.retries ?? DEFAULT_RETRIES,
+    opts.delayMs ?? DEFAULT_DELAY_MS
+  )
   const title = pr ? pr.title : (await api.commitMessage(after)).split('\n')[0]
   const body = pr ? (pr.body ?? '') : ''
 
-  const version = nextVersion(
-    tags.map((tag) => tag.name),
-    { title, body },
-    packageVersion
-  )
-  const tag = `v${version.replace(/^v/, '')}`
+  const tag =
+    existing?.name ??
+    `v${nextVersion(
+      tags.map((t) => t.name),
+      { title, body },
+      packageVersion
+    ).replace(/^v/, '')}`
   const commits = ZERO_SHA.test(before) ? [after] : await api.compare(before, after)
   const specGate = await specGateState(api, pr, specGateCheck)
   const notes = buildReleaseNotes({
     title,
+    tag,
     prNumber: pr?.number ?? null,
     prUrl: pr?.html_url ?? null,
     body,
@@ -126,9 +152,9 @@ export async function runRelease({ before, after }, api, opts) {
     commits,
   })
 
-  await api.createTag(tag, after, title)
+  if (!existing) await api.createTag(tag, after, title)
   await api.createRelease(tag, `${tag} — ${title}`, notes)
-  return { created: true, tag }
+  return existing ? { created: false, releaseCreated: true, tag } : { created: true, tag }
 }
 
 /** @param {{ token: string, repository: string, apiUrl?: string, fetchFn?: typeof fetch }} opts */
@@ -158,6 +184,15 @@ export function makeReleaseApi({ token, repository, apiUrl, fetchFn }) {
     async checkRuns(sha) {
       return paginate(`/commits/${sha}/check-runs?filter=latest`, (page) => page.check_runs)
     },
+    async releaseExists(tag) {
+      try {
+        await call('GET', `/releases/tags/${encodeURIComponent(tag)}`)
+        return true
+      } catch (error) {
+        if (error.status === 404) return false
+        throw error
+      }
+    },
     async createTag(tag, sha, message) {
       await call('POST', '/git/tags', { tag, message, object: sha, type: 'commit' })
       await call('POST', '/git/refs', { ref: `refs/tags/${tag}`, sha })
@@ -185,13 +220,14 @@ if (isMain) {
       repository: GITHUB_REPOSITORY,
       apiUrl: GITHUB_API_URL || undefined,
     })
-    const { created, tag } = await runRelease(event, api, {
+    const { created, releaseCreated, tag } = await runRelease(event, api, {
       packageVersion: version,
       specGateCheck,
     })
-    process.stdout.write(
-      created ? `release: ${tag} criada.\n` : `release: commit já tem a tag ${tag}; nada a fazer.\n`
-    )
+    if (created) process.stdout.write(`release: ${tag} criada.\n`)
+    else if (releaseCreated)
+      process.stdout.write(`release: tag ${tag} já existia; Release criada.\n`)
+    else process.stdout.write(`release: commit já tem a tag ${tag} e a Release; nada a fazer.\n`)
   } catch (error) {
     process.stderr.write(
       `release: erro — ${error instanceof Error ? error.message : String(error)}\n`

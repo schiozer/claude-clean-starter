@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { makeGithubClient } from '../../scripts/github-api.mjs'
+import { latestCheckRun, makeGithubClient } from '../../scripts/github-api.mjs'
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -61,5 +61,27 @@ describe('makeGithubClient', () => {
     expect(fetchFn.mock.calls[0][0]).toBe(
       'https://gh.test/repos/o/r/runs?filter=latest&per_page=100&page=1'
     )
+  })
+})
+
+describe('latestCheckRun', () => {
+  const novo = { name: 'X', status: 'completed', conclusion: 'success', id: 20 }
+  const velho = { name: 'X', status: 'completed', conclusion: 'failure', id: 10 }
+
+  it.each([
+    ['novo primeiro', [novo, velho]],
+    ['velho primeiro', [velho, novo]],
+  ])('escolhe o maior id (%s)', (_name, runs) => {
+    expect(latestCheckRun(runs, 'X')).toBe(novo)
+  })
+
+  it('sem id usa started_at; sem nada, o último do array', () => {
+    const a = { name: 'X', status: 'completed', conclusion: 'success', started_at: '2026-01-02' }
+    const b = { name: 'X', status: 'completed', conclusion: 'failure', started_at: '2026-01-01' }
+    expect(latestCheckRun([a, b], 'X')).toBe(a)
+    const c = { name: 'X', status: 'completed', conclusion: 'failure' }
+    const d = { name: 'X', status: 'completed', conclusion: 'success' }
+    expect(latestCheckRun([c, d], 'X')).toBe(d)
+    expect(latestCheckRun([c], 'Y')).toBeUndefined()
   })
 })

@@ -3,6 +3,7 @@
 // diff do PR com os critérios de aceitação da spec e publica UM comentário (criado/editado).
 // Ligado pela variável SPEC_GATE=on; o workflow `spec-gate.yml` chama `prepare` e `report`.
 
+import { Buffer } from 'node:buffer'
 import { randomBytes } from 'node:crypto'
 import { appendFileSync, existsSync, readFileSync, realpathSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
@@ -15,7 +16,8 @@ const RESULT_PATTERN = /<!-- spec-gate:result=(pass|fail) -->/
 const BOT_LOGIN = 'github-actions[bot]'
 const SPECS_DIR = 'docs/superpowers/specs'
 const DIFF_FILE = '.spec-gate/diff.patch'
-const MAX_DIFF_CHARS = 150_000
+// orçamento do prompt inteiro (spec + diff + tabela + instruções), em bytes UTF-8.
+export const MAX_PROMPT_BYTES = 100_000
 const STATUSES = ['ok', 'parcial', 'fora', 'sem-teste']
 const SECTION_HEADING = /^## Spec × código[^\n]*$/m
 const SPEC_LINE = /^Spec:[^\n]*$/m
@@ -197,6 +199,40 @@ export function buildPrompt({ spec, diff, table, nonce }) {
     .trimEnd()
 }
 
+const byteLength = (text) => Buffer.byteLength(text, 'utf8')
+
+/** Prefixo de `text` com até `maxBytes` bytes UTF-8, sem partir code point (nem par surrogate). */
+const truncateUtf8 = (text, maxBytes) => {
+  let used = 0
+  let end = 0
+  for (const char of text) {
+    const size = byteLength(char)
+    if (used + size > maxBytes) break
+    used += size
+    end += char.length
+  }
+  return text.slice(0, end)
+}
+
+/**
+ * `buildPrompt` dentro de `maxBytes`: corta o diff e, se ainda passar, a spec (e por fim a tabela),
+ * cada um com aviso de truncamento.
+ * @param {{ spec: string, diff: string, table: string, nonce?: string, maxBytes?: number }} input
+ */
+export function fitPrompt({ spec, diff, table, nonce, maxBytes = MAX_PROMPT_BYTES }) {
+  const parts = { spec, diff, table, nonce: nonce ?? randomBytes(8).toString('hex') }
+  const notice = `\n[truncado: o prompt tem limite de ${maxBytes} bytes]`
+  for (const name of ['diff', 'spec', 'table']) {
+    const excess = byteLength(buildPrompt(parts)) - maxBytes
+    if (excess <= 0) break
+    const size = byteLength(parts[name])
+    if (size <= byteLength(notice)) continue
+    parts[name] =
+      `${truncateUtf8(parts[name], Math.max(0, size - excess - byteLength(notice)))}${notice}`
+  }
+  return buildPrompt(parts)
+}
+
 // ---- CLI ----
 
 const MESSAGES = {
@@ -254,13 +290,9 @@ export async function runPrepare({ event, env, client, fs, diff }) {
     if (run && run.sha === pr.head?.sha) return { mode: 'reuse', schema }
   }
 
-  const trimmed =
-    diff.length > MAX_DIFF_CHARS
-      ? `${diff.slice(0, MAX_DIFF_CHARS)}\n[diff truncado em ${MAX_DIFF_CHARS} caracteres]`
-      : diff
   return {
     mode: 'analyze',
-    prompt: buildPrompt({ spec, diff: trimmed, table: specSection(body) }),
+    prompt: fitPrompt({ spec, diff, table: specSection(body) }),
     schema,
   }
 }

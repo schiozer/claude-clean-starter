@@ -14,7 +14,7 @@ const SPECS_DIR = 'docs/superpowers/specs/'
 const SPEC_TEMPLATE_NAME = '_TEMPLATE.md'
 const SPEC_LINE = /^Spec:[ \t]*(.+)$/gm
 const SPEC_NA = /^n\/a(?: *[—-] *(.*))?$/i
-const UAT_APPROVED = /^- \[([ xX])\] UAT aprovado[ \t]*$/m
+const UAT_APPROVED = /^- \[([ xX])\] UAT aprovado[ \t]*$/im
 const UAT_NOT_APPLICABLE = /^- \[([ xX])\] UAT não se aplica(?:[ \t]*[—-][ \t]*(.*))?$/im
 // tipos em que `Spec: n/a` não é aceito (mudança de comportamento).
 const TYPES_REQUIRING_SPEC = ['feat', 'refactor']
@@ -145,7 +145,11 @@ const checkUat = (body, action) => {
       'Na abertura do PR nenhuma opção de UAT pode estar marcada: o UAT é marcado pelo humano depois de testar. Desmarque a opção; o humano marca depois.'
     )
   }
-  if (uat.notApplicable && !uat.reason) {
+  if (uat.approved && uat.notApplicable) {
+    errors.push(
+      'duas opções de UAT marcadas: deixe só uma ("UAT aprovado" ou "UAT não se aplica — <motivo>").'
+    )
+  } else if (uat.notApplicable && !uat.reason) {
     errors.push('"UAT não se aplica" exige um motivo: "- [x] UAT não se aplica — <motivo>".')
   }
   return errors
