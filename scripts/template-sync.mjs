@@ -2,12 +2,14 @@
 // Motor do template sync (spec 2026-10-27-template-sync-design.md): classifica os arquivos
 // gerenciados em três vias (base × alvo × projeto) e devolve JSON para a skill `template-sync`.
 
-import { realpathSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
+import { applyPlan, finishSync } from './template-sync/apply.mjs'
 import { fileURLToPath } from 'node:url'
 import { buildPlan } from './template-sync/classify.mjs'
 import { readControl } from './template-sync/control.mjs'
 import { makeMatcher } from './template-sync/manifest.mjs'
 import {
+  isClean,
   projectBlobs,
   readManifestAt,
   renames,
@@ -89,6 +91,14 @@ export function plan({ template, project, target, base }) {
   return { base: baseCommit, target: { tag: target, commit: targetCommit }, entries }
 }
 
+const DIRTY = 'Árvore suja no projeto: faça commit ou stash antes do sync.'
+
+/** Data local de hoje em AAAA-MM-DD. */
+export function today(now = new Date()) {
+  const pad = (/** @type {number} */ n) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
 /** @type {Record<string, (args: Record<string, string | string[]>) => unknown>} */
 export const COMMANDS = {
   plan: (args) =>
@@ -98,6 +108,23 @@ export const COMMANDS = {
       target: required(args, 'target'),
       base: typeof args.base === 'string' ? args.base : undefined,
     }),
+  apply: (args) => {
+    const projectDir = required(args, 'project')
+    if (!isClean(projectDir)) throw new Error(DIRTY)
+    const plan = JSON.parse(readFileSync(required(args, 'plan'), 'utf8'))
+    return applyPlan({ templateDir: required(args, 'template'), projectDir, plan })
+  },
+  finish: (args) => {
+    const template = required(args, 'template')
+    const tag = required(args, 'target')
+    return finishSync({
+      projectDir: required(args, 'project'),
+      templateUrl: typeof args['template-url'] === 'string' ? args['template-url'] : undefined,
+      tag,
+      commit: commitOf(template, tag),
+      date: today(),
+    })
+  },
 }
 
 const isMain =
