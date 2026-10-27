@@ -7,7 +7,7 @@
 ## Objetivo
 
 Aplicar uma migração `drizzle/NNNN_nome.sql` com o aplicador do projeto
-([ADR-008](../adr/008-migracoes-sql-versionadas-driver-http.md)), na ordem preview/Dev → UAT →
+([ADR-008](../adr/template/008-migracoes-sql-versionadas-driver-http.md)), na ordem preview/Dev → UAT →
 Prod. Migração é **aditiva** e vai a Prod **antes do merge** do PR que a usa.
 `drizzle-kit push` é **proibido**. Não há rollback automático: o reverso é uma nova
 migração ou a restauração do branch de backup.

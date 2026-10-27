@@ -16,7 +16,7 @@ Este guia é **auto-contido**: todo padrão citado tem um teste equivalente em
 - **Playwright** — E2E, opcional (entra quando a UI estabiliza).
 
 A arquitetura por módulos com **`<Ctx>Service` como porta única**
-([ADR-011](../adr/011-service-layer-ddd-modular-e-perfis.md)) é o que torna o teste
+([ADR-011](../adr/template/011-service-layer-ddd-modular-e-perfis.md)) é o que torna o teste
 barato: regra e autorização vivem no service, que recebe o `actor` e dependências por
 construtor. A maior parte é teste unitário de Value Object/aggregate + service com um
 **repositório in-memory**; as bordas (REST e MCP) ganham poucos testes de integração.
@@ -497,9 +497,9 @@ maior valor — E2E é caro e frágil por natureza. A conexão real de um client
 
 ## Ver Também
 
-- [ADR-011](../adr/011-service-layer-ddd-modular-e-perfis.md) — service como porta única (o que torna o teste barato)
-- [ADR-012](../adr/012-mcp-como-borda-agentica.md) — borda MCP (o que os testes de `/api/mcp` afirmam)
-- [ADR-009](../adr/009-erros-funcional-vs-tecnico.md) — taxonomia de erro (o que os testes de fronteira afirmam)
+- [ADR-011](../adr/template/011-service-layer-ddd-modular-e-perfis.md) — service como porta única (o que torna o teste barato)
+- [ADR-012](../adr/template/012-mcp-como-borda-agentica.md) — borda MCP (o que os testes de `/api/mcp` afirmam)
+- [ADR-009](../adr/template/009-erros-funcional-vs-tecnico.md) — taxonomia de erro (o que os testes de fronteira afirmam)
 - [BEST_PRACTICES.md](../../BEST_PRACTICES.md) — padrões gerais
 - [docs/guides/error-handling-guide.md](./error-handling-guide.md) — tratamento de erros
 - [docs/guides/zod-guide.md](./zod-guide.md) — validação com Zod

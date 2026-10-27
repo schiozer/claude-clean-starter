@@ -6,10 +6,10 @@ description: Prepara o merge do PR aprovado no UAT e acompanha o deploy de produ
 # Deploy para Produção — via merge do PR (feito pelo humano)
 
 > ⚠️ Só após o UAT ser aprovado pelo usuário.
-> 📄 Ambientes (Dev/UAT/Prod): ver [ADR-002](../../docs/adr/002-estrategia-de-ambientes.md).
+> 📄 Ambientes (Dev/UAT/Prod): ver [ADR-002](../../docs/adr/template/002-estrategia-de-ambientes.md).
 > 🔒 Promove-se o mesmo commit da trunk aprovado em UAT; **o merge é o gatilho de
-> produção** (ver [ADR-005](../../docs/adr/005-trunk-based-development.md)).
-> 🛡️ Operação governada pelo [ADR-013](../../docs/adr/013-governanca-operacional-e-runbooks.md).
+> produção** (ver [ADR-005](../../docs/adr/template/005-trunk-based-development.md)).
+> 🛡️ Operação governada pelo [ADR-013](../../docs/adr/template/013-governanca-operacional-e-runbooks.md).
 
 Use a skill `runbook-execution` com
 [`docs/runbooks/deploy-prod.md`](../../docs/runbooks/deploy-prod.md).

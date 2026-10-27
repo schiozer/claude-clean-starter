@@ -10,7 +10,7 @@ description: Use ao executar qualquer operação de deploy/configuração (Verce
 Operação (deploy, configuração, segredos, flags, migrações, MCP, rollback) só acontece **a
 partir de um runbook** de `docs/runbooks/`. Esta skill é o procedimento para executar
 **qualquer** runbook com os gates do
-[ADR-013](../../../docs/adr/013-governanca-operacional-e-runbooks.md).
+[ADR-013](../../../docs/adr/template/013-governanca-operacional-e-runbooks.md).
 
 **Princípio:** o runbook decide *o quê*; a classe de risco decide *quem*. Na dúvida, a
 classe mais alta.

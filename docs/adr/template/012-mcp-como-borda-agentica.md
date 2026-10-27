@@ -12,7 +12,7 @@ via HTTP e o cliente as descobre e chama. O ChatGPT conecta-se a servidores MCP 
 autenticados por **OAuth**.
 
 Restrições: app serverless (Vercel como recomendação, ver
-[deploy-ci-guide](../guides/deploy-ci-guide.md)), Neon + Auth0 ([ADR-001](./001-neon-auth0.md)), Auth0 por ambiente
+[deploy-ci-guide](../../guides/deploy-ci-guide.md)), Neon + Auth0 ([ADR-001](./001-neon-auth0.md)), Auth0 por ambiente
 ([ADR-004](./004-auth-por-ambiente-auth0.md)), toggles por feature
 ([ADR-006](./006-processo-de-feature-e-feature-toggle.md)), erros funcional vs técnico
 ([ADR-009](./009-erros-funcional-vs-tecnico.md)), rate limit em Postgres
@@ -76,7 +76,7 @@ Restrições: app serverless (Vercel como recomendação, ver
 - ➕ A LLM enxerga só o que o usuário enxergaria; sem caminho que pule guards.
 - ➕ Nada de infraestrutura nova: mesma função serverless, mesmo pipeline PR → UAT → Prod.
 - ➖ Configuração extra no Auth0 (API com audience = URL do MCP, registro dinâmico de
-  cliente, escopos) por ambiente — ver [docs/guides/mcp-guide.md](../guides/mcp-guide.md).
+  cliente, escopos) por ambiente — ver [docs/guides/mcp-guide.md](../../guides/mcp-guide.md).
 - ➖ Descrições de tools viram "UX para LLM" e precisam de revisão como copy.
 - ➖ Sem sessão MCP (stateless): sem notificações server→client. Aceito.
 

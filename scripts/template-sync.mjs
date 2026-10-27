@@ -7,6 +7,7 @@ import { applyPlan, finishSync } from './template-sync/apply.mjs'
 import { fileURLToPath } from 'node:url'
 import { buildPlan } from './template-sync/classify.mjs'
 import { readControl } from './template-sync/control.mjs'
+import { rewriteProjectLinks } from './template-sync/links.mjs'
 import { makeMatcher } from './template-sync/manifest.mjs'
 import {
   isClean,
@@ -113,6 +114,17 @@ export const COMMANDS = {
     if (!isClean(projectDir)) throw new Error(DIRTY)
     const plan = JSON.parse(readFileSync(required(args, 'plan'), 'utf8'))
     return applyPlan({ templateDir: required(args, 'template'), projectDir, plan })
+  },
+  'rewrite-links': (args) => {
+    const maps = args.map === undefined ? [] : [args.map].flat()
+    const moves = new Map(
+      maps.map((pair) => {
+        const [from, to] = pair.split('=')
+        if (!from || !to) throw new Error(`--map espera velho=novo, recebeu ${pair}.`)
+        return [from, to]
+      })
+    )
+    return { linkRewrites: rewriteProjectLinks(required(args, 'project'), moves) }
   },
   finish: (args) => {
     const template = required(args, 'template')

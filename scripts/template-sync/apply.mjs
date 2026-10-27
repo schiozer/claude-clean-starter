@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readControl, writeControl } from './control.mjs'
 import { git, readBlob } from './git.mjs'
+import { adrMoves, rewriteProjectLinks } from './links.mjs'
 
 /**
  * @typedef {import('./classify.mjs').PlanEntry} PlanEntry
@@ -22,7 +23,7 @@ import { git, readBlob } from './git.mjs'
  * @typedef {{
  *   applied: string[], merged: string[],
  *   conflicts: { path: string, kind: 'markers' | 'invalid-json' }[],
- *   asked: { path: string, case: Case }[], notes: string[],
+ *   asked: { path: string, case: Case }[], notes: string[], linkRewrites: string[],
  * }} ApplyReport
  */
 
@@ -122,7 +123,7 @@ const isJson = (path) => path.endsWith('.json')
  */
 export function applyPlan({ templateDir, projectDir, plan }) {
   /** @type {ApplyReport} */
-  const report = { applied: [], merged: [], conflicts: [], asked: [], notes: [] }
+  const report = { applied: [], merged: [], conflicts: [], asked: [], notes: [], linkRewrites: [] }
   const exec = executables(templateDir, plan.target.commit)
   const at = (/** @type {string} */ path) => join(projectDir, path)
 
@@ -171,6 +172,12 @@ export function applyPlan({ templateDir, projectDir, plan }) {
     }
     report.merged.push(path)
   }
+  const renamed = new Map(
+    plan.entries
+      .filter((e) => e.from && (e.action === 'move' || e.action === 'merge'))
+      .map((e) => [e.path, /** @type {string} */ (e.from)])
+  )
+  report.linkRewrites = rewriteProjectLinks(projectDir, adrMoves(renamed))
   report.notes = examplesNotes(projectDir, [...report.applied, ...report.merged])
   return report
 }

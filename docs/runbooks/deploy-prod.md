@@ -7,16 +7,16 @@
 ## Objetivo
 
 Promover para Prod um PR já aprovado no UAT. O deploy de Prod é disparado pelo **merge na
-`main`** ([ADR-002](../adr/002-estrategia-de-ambientes.md)) — e o merge é **sempre do
-humano** (R3, [ADR-013](../adr/013-governanca-operacional-e-runbooks.md)). O agente prepara,
+`main`** ([ADR-002](../adr/template/002-estrategia-de-ambientes.md)) — e o merge é **sempre do
+humano** (R3, [ADR-013](../adr/template/013-governanca-operacional-e-runbooks.md)). O agente prepara,
 confere, acompanha o deploy e faz o smoke test.
 
 ## Pré-condições
 
 - PR passou pelo [deploy-uat.md](./deploy-uat.md) e o **humano aprovou o UAT** (registrado no PR).
 - Gates verdes (`PR gate`, e `Spec × código` se `SPEC_GATE=on`) e UAT **marcado pelo humano** no PR (o agente nunca o marca).
-- Migração aditiva, se houver, **já aplicada em Prod antes do merge** ([ADR-008](../adr/008-migracoes-sql-versionadas-driver-http.md), [migracao-banco.md](./migracao-banco.md)).
-- Envs/flags de Prod já configuradas; features novas entram **desligadas** em Prod ([ADR-006](../adr/006-processo-de-feature-e-feature-toggle.md)).
+- Migração aditiva, se houver, **já aplicada em Prod antes do merge** ([ADR-008](../adr/template/008-migracoes-sql-versionadas-driver-http.md), [migracao-banco.md](./migracao-banco.md)).
+- Envs/flags de Prod já configuradas; features novas entram **desligadas** em Prod ([ADR-006](../adr/template/006-processo-de-feature-e-feature-toggle.md)).
 
 ## Pre-flight
 

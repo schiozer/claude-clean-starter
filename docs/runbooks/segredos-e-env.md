@@ -8,7 +8,7 @@
 
 Criar ou alterar variáveis de ambiente na Vercel (Preview = UAT, Production = Prod) e
 criar/rotacionar **segredos** sem que o valor passe pelo agente
-([ADR-013](../adr/013-governanca-operacional-e-runbooks.md) §4). Dev local usa `.env.local`,
+([ADR-013](../adr/template/013-governanca-operacional-e-runbooks.md) §4). Dev local usa `.env.local`,
 editado só pelo humano e nunca commitado.
 
 ## Pré-condições

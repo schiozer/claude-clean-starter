@@ -3,7 +3,7 @@
 Procedimentos de **operação** (deploy, configuração de ambientes, segredos, flags,
 migrações, MCP, rollback) escritos para serem executados **por agentes** — e por humanos —
 passo a passo, com classe de risco e verificação em cada passo. Regras em
-[ADR-013](../adr/013-governanca-operacional-e-runbooks.md).
+[ADR-013](../adr/template/013-governanca-operacional-e-runbooks.md).
 
 > Este é o catálogo do **template**: os comandos assumem a stack padrão (Vercel + Neon +
 > Auth0) e os valores do projeto estão como `<preencher: …>` (entradas, decididas pelo

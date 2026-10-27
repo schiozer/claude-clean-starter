@@ -55,7 +55,7 @@ Regras que decorrem da decisão:
 é uma decisão separada. Como este repositório é um **template** (não uma app),
 ela **não** é decidida aqui: o ADR vinculante de host/CI nasce no **projeto real**.
 O mapeamento recomendado que materializa `PR → UAT` / `merge → Prod` está no
-[guia de Host & CI](../guides/deploy-ci-guide.md). Este ADR é agnóstico de host —
+[guia de Host & CI](../../guides/deploy-ci-guide.md). Este ADR é agnóstico de host —
 fixa apenas a política dos três ambientes.
 
 ## Consequências

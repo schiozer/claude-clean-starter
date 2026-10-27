@@ -5,7 +5,7 @@
 **Ambientes**: Dev, UAT, Prod
 
 > Copie este arquivo para `docs/runbooks/<operacao>.md` e **remova estas instruções**
-> (os blocos `>`). Regras em [ADR-013](../adr/013-governanca-operacional-e-runbooks.md).
+> (os blocos `>`). Regras em [ADR-013](../adr/template/013-governanca-operacional-e-runbooks.md).
 > `Ambientes` lista só os ambientes onde o runbook se aplica (`Dev`, `UAT`, `Prod`).
 > Valide com `npm run check:runbooks`.
 

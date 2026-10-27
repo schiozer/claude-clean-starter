@@ -385,7 +385,7 @@ z.setErrorMap(zodI18nMap)
 Os schemas de um contexto moram em **`src/modules/<ctx>/application/schemas.ts`** e são
 exportados pelo `index.ts` do módulo. O **mesmo** schema valida a entrada na UI, no
 handler REST e na tool MCP — e o `<Ctx>Service` recebe o tipo inferido
-([ADR-011](../adr/011-service-layer-ddd-modular-e-perfis.md)).
+([ADR-011](../adr/template/011-service-layer-ddd-modular-e-perfis.md)).
 
 ```
 UI (safeParse, erros inline) ─┐
@@ -604,7 +604,7 @@ const createLessonSchema = z.object({
 ### 4. Erros de validação não são bugs
 
 `ZodError` é erro **funcional**: vira 400 no REST e `isError: true` no MCP, e **não** vai
-para o log (ver [ADR-009](../adr/009-erros-funcional-vs-tecnico.md)). Escreva as mensagens
+para o log (ver [ADR-009](../adr/template/009-erros-funcional-vs-tecnico.md)). Escreva as mensagens
 em pt-BR e acionáveis — elas chegam ao usuário e à LLM.
 
 ---

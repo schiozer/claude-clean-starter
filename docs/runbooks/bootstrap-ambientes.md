@@ -7,9 +7,9 @@
 ## Objetivo
 
 Criar, **uma vez por projeto**, a infraestrutura dos três estágios (Dev local / UAT / Prod,
-[ADR-002](../adr/002-estrategia-de-ambientes.md)): projeto Vercel ligado ao repo, banco Neon
-com branch por ambiente ([ADR-003](../adr/003-banco-por-ambiente-neon.md)), tenants Auth0 por
-ambiente ([ADR-004](../adr/004-auth-por-ambiente-auth0.md)), envs por ambiente, alias
+[ADR-002](../adr/template/002-estrategia-de-ambientes.md)): projeto Vercel ligado ao repo, banco Neon
+com branch por ambiente ([ADR-003](../adr/template/003-banco-por-ambiente-neon.md)), tenants Auth0 por
+ambiente ([ADR-004](../adr/template/004-auth-por-ambiente-auth0.md)), envs por ambiente, alias
 estável do UAT e proteção da `main`. Quase tudo aqui cria recurso externo → R2.
 
 Entradas (marcadas "preencher") são decididas pelo humano **antes** de executar; saídas
@@ -36,7 +36,7 @@ runbook, e o agente as grava aqui e nos demais runbooks via PR ao final.
    Verificar: `neonctl branches list --project-id <gerado: id do projeto Neon>` mostra `main` (o id vem na saída do `create`).
 3. [R2] Criar os branches Neon de UAT e Dev a partir de `main`: `neonctl branches create --name uat --parent main --project-id <gerado: id do projeto Neon>` (idem `dev`).
    Verificar: `neonctl branches list --project-id <gerado: id do projeto Neon>` mostra `main`, `uat` e `dev`.
-4. [R2] Ligar o banco aos ambientes **sem** a integração "branch por preview" (o UAT é o branch fixo `uat`, [ADR-003](../adr/003-banco-por-ambiente-neon.md)): o `DATABASE_URL` de Preview aponta para o branch `uat` e o de Production para `main`, ambos como **segredo** via [segredos-e-env.md](./segredos-e-env.md) (o humano copia a connection string do console Neon).
+4. [R2] Ligar o banco aos ambientes **sem** a integração "branch por preview" (o UAT é o branch fixo `uat`, [ADR-003](../adr/template/003-banco-por-ambiente-neon.md)): o `DATABASE_URL` de Preview aponta para o branch `uat` e o de Production para `main`, ambos como **segredo** via [segredos-e-env.md](./segredos-e-env.md) (o humano copia a connection string do console Neon).
    Verificar: `vercel env ls preview` e `vercel env ls production` listam o **nome** `DATABASE_URL`.
 5. [R3] Humano: criar os tenants Auth0 de UAT e Prod (`<gerado: domínio do tenant UAT>`, `<gerado: domínio do tenant Prod>`) e os apps de login web; nunca colar client secrets no chat.
    Verificar: o humano confirma os dois domínios de tenant; o agente os anota no runbook via PR.
@@ -48,7 +48,7 @@ runbook, e o agente as grava aqui e nos demais runbooks via PR ao final.
    Verificar: `vercel alias ls --scope <preencher: team Vercel>` mostra o alias → `<preview-url>`.
 9. [R3] Humano: configurar a _Deployment Protection_ da Vercel para o alias do UAT ser acessível no aceite e pelo ChatGPT (exceção para o alias, ou _Protection Bypass_ — ao menos `/api/mcp` e `/.well-known/*`).
    Verificar: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: alias UAT>/` → `200` e `curl -si -X POST https://<preencher: alias UAT>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'` encontra o header do app.
-10. [R3] Humano: em Settings → General → Pull Requests, deixar só "Allow squash merging" com "Default to pull request title" (o título do PR vira a mensagem do commit e a fonte da versão, [ADR-014](../adr/014-release-management.md)).
+10. [R3] Humano: em Settings → General → Pull Requests, deixar só "Allow squash merging" com "Default to pull request title" (o título do PR vira a mensagem do commit e a fonte da versão, [ADR-014](../adr/template/014-release-management.md)).
     Verificar: `gh api repos/<preencher: owner/repo> --jq '.allow_squash_merge, .allow_merge_commit, .allow_rebase_merge, .squash_merge_commit_title'` → `true false false PR_TITLE`.
 11. [R3] Humano: se o plano permitir, ligar a branch protection da `main` (PR obrigatório, sem push direto, required checks `Test & Lint (root)`, `Walking Skeleton (example)` e `PR gate` — e `Spec × código` se `SPEC_GATE=on` — ou os jobs equivalentes do projeto); senão, confirmar que o workflow `Guarda da main` está ativo em Actions.
     Verificar: `gh api repos/<preencher: owner/repo>/branches/main/protection --jq '.required_status_checks.contexts'` lista os checks; sem branch protection, `gh workflow list --repo <preencher: owner/repo>` mostra `Guarda da main` como `active`.

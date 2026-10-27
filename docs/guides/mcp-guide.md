@@ -1,6 +1,6 @@
 # Guia: MCP — conectar ChatGPT, Claude e Cursor ao seu sistema
 
-> Decisão em [ADR-012](../adr/012-mcp-como-borda-agentica.md). Este guia é o passo a passo
+> Decisão em [ADR-012](../adr/template/012-mcp-como-borda-agentica.md). Este guia é o passo a passo
 > operacional. Nomes de menus de terceiros (ChatGPT, Auth0) mudam com frequência — se algo
 > não bater, confira a documentação atual do fornecedor.
 

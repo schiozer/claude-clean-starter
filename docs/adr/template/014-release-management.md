@@ -20,7 +20,7 @@ Environment. O agente e o humano usam a **mesma conta git/gh** do projeto (regra
   nos demais) e recusa UAT marcado no `opened`.
 - **Conferência local** pelo Claudinho (instrução, não script) antes de abrir/atualizar o PR.
 - **Gate `Spec × código` com Claude**, opcional atrás da variável `SPEC_GATE`
-  (runbook [`spec-gate.md`](../runbooks/spec-gate.md)). É o **único toggle permanente**: o
+  (runbook [`spec-gate.md`](../../runbooks/spec-gate.md)). É o **único toggle permanente**: o
   critério de remoção do [ADR-006](./006-processo-de-feature-e-feature-toggle.md) não se aplica,
   porque depende de uma chave paga, de custo e de decisão do dono do repositório. Action
   `anthropics/claude-code-action` fixada por SHA de commit (v1.0.262); atualizar é trocar o SHA
