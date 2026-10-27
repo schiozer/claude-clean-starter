@@ -64,7 +64,7 @@ Checklist (crie uma tarefa por item):
 12. **`notes`** (itens que só existem por causa de `examples/`, como o check
     `Walking Skeleton (example)` em `requiredChecks`): **aponte** no PR; nunca remova sozinho.
 13. **Dependências**: `package.json` mudou → `npm install` (regera o `package-lock.json`).
-14. **Verificar**: `npm run lint`, `npm run type-check`, `npm test`, `npm run check:runbooks`.
+14. **Verificar**, depois de `git add -A` (testes do template leem o índice do git): `npm run lint`, `npm run type-check`, `npm test`, `npm run check:runbooks`.
     Falhou → corrija no próprio PR ou explique no corpo; não esconda.
 15. **Registrar o sync**: `node <clone>/scripts/template-sync.mjs finish --project <projeto> --template <clone> --target <tag>`
     (grava `lastSync` no `.template-sync.json`).
@@ -118,7 +118,7 @@ Leva uma melhoria do projeto para o template:
    (`git remote get-url origin`) e as contas de `gh auth status`:
    `node <clone>/scripts/template-sync.mjs check-agnostic --root <clone> --term <nome> --term <owner> --term <conta> --files <arq1> --files <arq2>`
    (um `--files` por arquivo alterado). Termo encontrado → generalize e rode de novo.
-5. **Verificar** no clone: `npm install`, `npm run lint`, `npm run type-check`, `npm test`,
+5. **Verificar** no clone, depois de `git add -A`: `npm install`, `npm run lint`, `npm run type-check`, `npm test`,
    `npm run check:runbooks`.
 6. **Conta `gh`** (regra 5), **push + PR no template** com o template de PR e a conferência
    spec × código; UAT desmarcado. Restaure a conta padrão. A Release seguinte leva a melhoria
