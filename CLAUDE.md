@@ -33,6 +33,10 @@
 > antes do primeiro deploy fora do Dev, preencha todo `<preencher>` de `docs/runbooks/`,
 > date a `Última verificação` de cada runbook e troque o passo do CI para
 > `npm run check:runbooks -- --strict`.
+>
+> **Adoção — sync com o template** ([ADR-015](./docs/adr/template/015-template-sync.md)): rode
+> `/template-sync adotar` a partir do template; depois, `/template-sync` a cada Release (aviso
+> semanal na issue `template-sync`).
 
 ---
 
@@ -181,7 +185,7 @@ branch e abertura de PR seguem só as regras 5 e 8 — nenhum outro passo de ope
 <projeto>/
 ├── .claude/
 │   ├── commands/                  # Slash-commands do projeto (templates)
-│   └── skills/                    # mvp-development, ddd-service-development, runbook-execution
+│   └── skills/                    # mvp-development, ddd-service-development, runbook-execution, template-sync
 ├── .githooks/                     # git hooks versionados (reference-transaction, pre-push) — trava da main
 ├── hooks/                         # hooks do Claude Code: check-dependencies, git-freshness, protect-main
 ├── docs/
