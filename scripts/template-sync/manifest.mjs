@@ -33,7 +33,8 @@ export function parseManifest(json) {
     throw new Error('Manifesto inválido: esperado um objeto { managed, ignore }.')
   }
   const { managed, ignore = [] } = /** @type {Record<string, unknown>} */ (json)
-  if (!isStringArray(managed)) throw new Error('Manifesto inválido: managed deve ser lista de globs.')
+  if (!isStringArray(managed))
+    throw new Error('Manifesto inválido: managed deve ser lista de globs.')
   if (!isStringArray(ignore)) throw new Error('Manifesto inválido: ignore deve ser lista de globs.')
   return { managed, ignore }
 }

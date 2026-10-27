@@ -58,5 +58,8 @@ export function readControl(projectDir) {
 
 /** @param {Control} control */
 export function writeControl(projectDir, control) {
-  writeFileSync(join(projectDir, CONTROL_PATH), `${JSON.stringify(parseControl(control), null, 2)}\n`)
+  writeFileSync(
+    join(projectDir, CONTROL_PATH),
+    `${JSON.stringify(parseControl(control), null, 2)}\n`
+  )
 }
