@@ -92,6 +92,55 @@ describe('buildPlan', () => {
     ])
   })
 
+  it('renome cuja origem está fora do manifesto não move: o arquivo do projeto fica', () => {
+    const entries = plan({
+      base: new Map([['examples/ws/NOTES.md', 'n']]),
+      target: new Map([['docs/guides/NOTES.md', 'g']]),
+      project: new Map([['examples/ws/NOTES.md', 'n']]),
+      renames: new Map([['docs/guides/NOTES.md', 'examples/ws/NOTES.md']]),
+    })
+    expect(entries).toEqual([
+      {
+        path: 'docs/guides/NOTES.md',
+        case: 'template-only',
+        action: 'write',
+        base: null,
+        target: 'g',
+        project: null,
+      },
+    ])
+  })
+
+  it('renome para fora do manifesto: o caminho velho é classificado (apagado no template)', () => {
+    const entries = plan({
+      base: new Map([['scripts/foo.mjs', 'a']]),
+      target: new Map([['examples/ws/foo.mjs', 'a']]),
+      project: new Map([['scripts/foo.mjs', 'a']]),
+      renames: new Map([['examples/ws/foo.mjs', 'scripts/foo.mjs']]),
+    })
+    expect(entries).toEqual([
+      {
+        path: 'scripts/foo.mjs',
+        case: 'template-only',
+        action: 'delete',
+        base: 'a',
+        target: null,
+        project: 'a',
+      },
+    ])
+  })
+
+  it('a mudança de docs/adr/ para docs/adr/template/ move mesmo com o ADR velho fora do manifesto', () => {
+    const entries = plan({
+      base: new Map([[OLD, 'a']]),
+      target: new Map([[NEW, 'b']]),
+      project: new Map([[OLD, 'a']]),
+      renames: new Map([[NEW, OLD]]),
+      isManaged: (p) => p.startsWith('docs/adr/template/'),
+    })
+    expect(entries[0]).toMatchObject({ path: NEW, from: OLD, action: 'move' })
+  })
+
   it('ADR próprio do projeto e arquivos fora do manifesto não entram', () => {
     const entries = plan({
       base: new Map([

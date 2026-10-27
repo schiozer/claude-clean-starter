@@ -41,11 +41,11 @@ sobrescrever o que o projeto mudou. Um levantamento nos projetos derivados mostr
    O `lastSync` novo entra no mesmo PR, e o que já foi decidido não volta.
 
 3. **O manifesto define o que é do template.** O arquivo é `template-sync.manifest.json`, com
-   as listas `managed` e `ignore`. O motor considera a união dos manifestos da base e do alvo.
+   as listas `managed` e `ignore`. Um caminho é do template se algum dos manifestos (base ou alvo, cada um com o próprio `ignore`) o gerencia.
    Fora do manifesto nada é tocado. A única exceção são links para ADRs do template que
    mudaram de lugar; cada arquivo reescrito é listado no PR. O motor também cuida de três
    casos:
-   - detecta renomes;
+   - detecta renomes só entre caminhos do template (e a ida dos ADRs para `docs/adr/template/`);
    - valida o JSON depois da junção;
    - aponta no PR os itens que só existem por causa de `examples/`, sem nunca removê-los.
 4. **Os ADRs do template ficam em `docs/adr/template/`**, no mesmo caminho no template e nos

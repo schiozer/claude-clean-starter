@@ -89,8 +89,8 @@ export function renames(repo, base, target) {
 const fileName = (/** @type {string} */ path) => path.slice(path.lastIndexOf('/') + 1)
 
 /**
- * Renome que o `-M` não vê (arquivo muito editado ao mudar de pasta): apagado e novo com o
- * mesmo nome de arquivo, único de cada lado.
+ * Renome que o `-M` não vê (ADR muito editado ao ir para `docs/adr/template/`): ADR apagado e
+ * ADR novo com o mesmo nome de arquivo, único de cada lado.
  * @param {string[]} deleted
  * @param {string[]} added
  * @returns {[string, string][]} pares [novo, velho]
@@ -102,11 +102,13 @@ function pairByFileName(deleted, added) {
     for (const path of paths) count.set(fileName(path), (count.get(fileName(path)) ?? 0) + 1)
     return new Map(paths.filter((p) => count.get(fileName(p)) === 1).map((p) => [fileName(p), p]))
   }
-  const from = uniqueByName(deleted)
-  return [...uniqueByName(added)].flatMap(([name, to]) => {
-    const old = from.get(name)
-    return old ? [[to, old]] : []
-  })
+  const from = uniqueByName(deleted.filter((p) => /^docs\/adr\/[^/]+\.md$/.test(p)))
+  return [...uniqueByName(added.filter((p) => p.startsWith('docs/adr/template/')))].flatMap(
+    ([name, to]) => {
+      const old = from.get(name)
+      return old ? [[to, old]] : []
+    }
+  )
 }
 
 /** @param {string} dir */

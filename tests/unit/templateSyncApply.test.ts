@@ -99,6 +99,18 @@ describe('applyPlan / finishSync', () => {
     expect(report.conflicts).toEqual([{ path: 'package.json', kind: 'invalid-json' }])
   })
 
+  it('binário mudado nos dois lados vira conflito sem tocar o arquivo nem parar o apply', () => {
+    base = commitFiles(template, { 'docs/img.png': PNG })
+    git(project, 'pull', '-q', template, 'main')
+    const mine = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1])
+    commitFiles(project, { 'docs/img.png': mine })
+    target({ 'docs/img.png': Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 2]), 'README.md': 'a\nb\n' })
+    const report = apply()
+    expect(readFileSync(join(project, 'docs/img.png'))).toEqual(mine)
+    expect(report.conflicts).toEqual([{ path: 'docs/img.png', kind: 'binary' }])
+    expect(report.applied).toContain('README.md')
+  })
+
   it('ask não toca o arquivo', () => {
     commitFiles(project, { 'pergunta.md': 'meu\n' })
     target({ 'pergunta.md': null })

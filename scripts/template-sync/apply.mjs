@@ -22,27 +22,32 @@ import { adrMoves, rewriteProjectLinks } from './links.mjs'
  * @typedef {{ base: string | null, target: { tag: string, commit: string }, entries: PlanEntry[] }} Plan
  * @typedef {{
  *   applied: string[], merged: string[],
- *   conflicts: { path: string, kind: 'markers' | 'invalid-json' }[],
+ *   conflicts: { path: string, kind: 'markers' | 'invalid-json' | 'binary' }[],
  *   asked: { path: string, case: Case }[], notes: string[], linkRewrites: string[],
  * }} ApplyReport
  */
 
 const EXAMPLE_REF = /examples\/|\(example\)/
 
+/** Mesmo critério do git: NUL nos primeiros 8000 bytes. */
+const isBinary = (/** @type {Buffer} */ content) => content.subarray(0, 8000).includes(0)
+
 /**
- * Junção de três vias; `conflicts` = nº de blocos em conflito.
+ * Junção de três vias; `conflicts` = nº de blocos em conflito; `null` se algum lado é binário
+ * (o `git merge-file` recusa).
  * @param {string} templateDir
  * @param {{ base: string, target: string, project: Buffer }} blobs
- * @returns {{ content: Buffer, conflicts: number }}
+ * @returns {{ content: Buffer, conflicts: number } | null}
  */
 export function mergeBlobs(templateDir, { base, target, project }) {
+  const files = {
+    projeto: project,
+    base: readBlob(templateDir, base),
+    template: readBlob(templateDir, target),
+  }
+  if (Object.values(files).some(isBinary)) return null
   const dir = mkdtempSync(join(tmpdir(), 'template-sync-merge-'))
   try {
-    const files = {
-      projeto: project,
-      base: readBlob(templateDir, base),
-      template: readBlob(templateDir, target),
-    }
     for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content)
     try {
       const content = git(dir, [
@@ -151,11 +156,16 @@ export function applyPlan({ templateDir, projectDir, plan }) {
     }
     // merge
     const source = at(entry.from ?? path)
-    const { content, conflicts } = mergeBlobs(templateDir, {
+    const merge = mergeBlobs(templateDir, {
       base: /** @type {string} */ (entry.base),
       target: /** @type {string} */ (entry.target),
       project: readFileSync(source),
     })
+    if (!merge) {
+      report.conflicts.push({ path, kind: 'binary' })
+      continue
+    }
+    const { content, conflicts } = merge
     if (entry.from && entry.from !== path) rmSync(source, { force: true })
     writeFile(at(path), content, exec.has(path))
     if (conflicts > 0) {

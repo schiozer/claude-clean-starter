@@ -36,14 +36,27 @@ function classifyRename(base, target, projectOld) {
 }
 
 /**
+ * Os ADRs do template saíram de `docs/adr/` para `docs/adr/template/` (ADR-015); o caminho velho
+ * não está no manifesto, mas o renome vale.
+ * @param {string} from
+ * @param {string} to
+ */
+export const isAdrMove = (from, to) =>
+  /^docs\/adr\/[^/]+\.md$/.test(from) && /^docs\/adr\/template\/[^/]+\.md$/.test(to)
+
+/**
  * @param {{
  *   base: Map<string, string>, target: Map<string, string>, project: Map<string, string>,
  *   renames: Map<string, string>, isManaged: (p: string) => boolean, projectOwned: string[]
  * }} input
  * @returns {PlanEntry[]}
  */
-export function buildPlan({ base, target, project, renames, isManaged, projectOwned }) {
+export function buildPlan({ base, target, project, renames: detected, isManaged, projectOwned }) {
   const owned = new Set(projectOwned)
+  // renome só entre caminhos do template: nunca move (e apaga) um arquivo de fora do manifesto
+  const renames = new Map(
+    [...detected].filter(([to, from]) => isManaged(to) && (isManaged(from) || isAdrMove(from, to)))
+  )
   const renamedFrom = new Set(renames.values())
   const paths = new Set([...base.keys(), ...target.keys()].filter(isManaged))
   /** @type {PlanEntry[]} */

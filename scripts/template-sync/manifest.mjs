@@ -39,9 +39,16 @@ export function parseManifest(json) {
   return { managed, ignore }
 }
 
-/** Gerenciado = casa algum `managed` da união e nenhum `ignore` da união. */
+/**
+ * Gerenciado = gerenciado em algum dos manifestos (base ou alvo), cada um com o próprio `ignore`.
+ * @param {...Manifest} manifests
+ */
 export function makeMatcher(...manifests) {
-  const managed = manifests.flatMap((m) => m.managed).map(globToRegExp)
-  const ignore = manifests.flatMap((m) => m.ignore).map(globToRegExp)
-  return (path) => managed.some((re) => re.test(path)) && !ignore.some((re) => re.test(path))
+  const matchers = manifests.map((m) => {
+    const managed = m.managed.map(globToRegExp)
+    const ignore = m.ignore.map(globToRegExp)
+    return (/** @type {string} */ path) =>
+      managed.some((re) => re.test(path)) && !ignore.some((re) => re.test(path))
+  })
+  return (/** @type {string} */ path) => matchers.some((matches) => matches(path))
 }

@@ -55,6 +55,8 @@ Checklist (crie uma tarefa por item):
 9. **Aplicar**: `node <clone>/scripts/template-sync.mjs apply --template <clone> --project <projeto> --plan <tmp>/plan.json > <tmp>/report.json`.
    O relatório traz `applied`, `merged`, `conflicts`, `asked`, `notes`, `linkRewrites`.
 10. **Resolver `conflicts`** arquivo a arquivo (marcadores `<<<<<<< projeto` / `>>>>>>> template`):
+    - `binary` (imagem etc. mudada nos dois lados): o motor não toca o arquivo; mostre as duas
+      versões ao humano junto com os `asked` e aplique a escolhida;
     - preserve a **intenção do projeto**; traga só a novidade do template;
     - runbooks: os valores preenchidos do projeto prevalecem; só a estrutura nova entra;
     - JSON precisa parsear (`node -e "JSON.parse(require('fs').readFileSync('<arquivo>','utf8'))"`);
@@ -91,16 +93,19 @@ sessão do template:
    difere vira "os dois mudaram" e é decidido um a um).
 4. **Release alvo** e clone: `node scripts/template-sync.mjs latest --template .`; trabalhe
    num clone do template no checkout da tag (como no `sync`, passos 4–6).
-5. **Plano** com a base escolhida:
+5. **Branch no projeto**, a partir da `main` atualizada:
+   `git -C <projeto> switch -c chore/template-sync-adota-<vY>`. O projeto ainda não tem a
+   proteção da `main`: nada é aplicado nem commitado fora desta branch.
+6. **Plano** com a base escolhida:
    `node <clone>/scripts/template-sync.mjs plan --template <clone> --project <projeto> --target <tag> --base <sha|none> > <tmp>/plan.json`;
    depois siga o `sync` dos passos 8 a 14.
-6. **ADRs copiados**: um ADR do projeto em `docs/adr/NNN-*.md` que seja cópia de um ADR do
+7. **ADRs copiados**: um ADR do projeto em `docs/adr/NNN-*.md` que seja cópia de um ADR do
    template (mesmo título, conteúdo quase igual) → **proponha** a remoção em favor de
    `docs/adr/template/`. Aprovado: apague a cópia e reescreva os links,
    `node <clone>/scripts/template-sync.mjs rewrite-links --project <projeto> --map docs/adr/<velho>.md=docs/adr/template/<novo>.md`
    (um `--map` por ADR). Os demais ADRs do projeto ficam, com a numeração dele.
-7. **Registrar**: `node <clone>/scripts/template-sync.mjs finish --project <projeto> --template <clone> --target <tag> --template-url <URL do repo do template>`.
-8. **Commit, push + PR** como no `sync` (passos 16–18), com título
+8. **Registrar**: `node <clone>/scripts/template-sync.mjs finish --project <projeto> --template <clone> --target <tag> --template-url <URL do repo do template>`.
+9. **Commit, push + PR** como no `sync` (passos 16–18), com título
    `chore(template): adota o template vY`. O PR instala a skill, o workflow de aviso
    (`template-sync-check.yml`) e o `.template-sync.json`.
 

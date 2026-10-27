@@ -141,6 +141,7 @@ describe('renames', () => {
       'docs/adr/006-a.md': 'igual\n',
       'a/dup.md': '1\n',
       'b/dup.md': '2\n',
+      '.claude/skills/velha/SKILL.md': 'velha\n',
     })
     const target = commitFiles(repo, {
       'docs/adr/005-trunk.md': null,
@@ -151,6 +152,8 @@ describe('renames', () => {
       'b/dup.md': null,
       'c/dup.md': '3\n',
       'd/dup.md': '4\n',
+      '.claude/skills/velha/SKILL.md': null,
+      '.claude/skills/nova/SKILL.md': 'outra coisa\n',
     })
     expect(renames(repo, base, target)).toEqual(
       new Map([
