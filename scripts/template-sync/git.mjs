@@ -69,16 +69,44 @@ export const readBlob = (repo, sha) => git(repo, ['cat-file', 'blob', sha])
 export function renames(repo, base, target) {
   const parts = splitZ(git(repo, ['diff', '-M', '--name-status', '-z', base, target]))
   const map = new Map()
+  const deleted = []
+  const added = []
   for (let i = 0; i < parts.length;) {
     const status = parts[i]
     if (status.startsWith('R') || status.startsWith('C')) {
       if (status.startsWith('R')) map.set(parts[i + 2], parts[i + 1])
       i += 3
     } else {
+      if (status === 'D') deleted.push(parts[i + 1])
+      if (status === 'A') added.push(parts[i + 1])
       i += 2
     }
   }
+  for (const [to, from] of pairByFileName(deleted, added)) map.set(to, from)
   return map
+}
+
+const fileName = (/** @type {string} */ path) => path.slice(path.lastIndexOf('/') + 1)
+
+/**
+ * Renome que o `-M` não vê (arquivo muito editado ao mudar de pasta): apagado e novo com o
+ * mesmo nome de arquivo, único de cada lado.
+ * @param {string[]} deleted
+ * @param {string[]} added
+ * @returns {[string, string][]} pares [novo, velho]
+ */
+function pairByFileName(deleted, added) {
+  /** @param {string[]} paths */
+  const uniqueByName = (paths) => {
+    const count = new Map()
+    for (const path of paths) count.set(fileName(path), (count.get(fileName(path)) ?? 0) + 1)
+    return new Map(paths.filter((p) => count.get(fileName(p)) === 1).map((p) => [fileName(p), p]))
+  }
+  const from = uniqueByName(deleted)
+  return [...uniqueByName(added)].flatMap(([name, to]) => {
+    const old = from.get(name)
+    return old ? [[to, old]] : []
+  })
 }
 
 /** @param {string} dir */

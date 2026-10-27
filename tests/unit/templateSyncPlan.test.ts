@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
+import { renames } from '../../scripts/template-sync/git.mjs'
 import { GIT_ENV, commitFiles, git, makeRepo, removeRepo, tag } from '../helpers/gitRepo'
 
 const CLI = resolve(__dirname, '../../scripts/template-sync.mjs')
@@ -124,5 +125,38 @@ describe('template-sync plan (CLI)', () => {
     )
     expect(result.status).toBe(1)
     expect(result.stderr).toMatch(/v0\.2\.0/)
+  })
+})
+
+describe('renames', () => {
+  let repo: string
+  afterEach(() => removeRepo(repo))
+
+  it('caminho apagado + novo com o mesmo nome de arquivo (único) conta como renome, mesmo muito editado', () => {
+    repo = makeRepo('ts-ren-')
+    const old = Array.from({ length: 20 }, (_, i) => `linha velha ${i}`).join('\n')
+    const fresh = Array.from({ length: 20 }, (_, i) => `texto novo ${i}`).join('\n')
+    const base = commitFiles(repo, {
+      'docs/adr/005-trunk.md': `${old}\n`,
+      'docs/adr/006-a.md': 'igual\n',
+      'a/dup.md': '1\n',
+      'b/dup.md': '2\n',
+    })
+    const target = commitFiles(repo, {
+      'docs/adr/005-trunk.md': null,
+      'docs/adr/template/005-trunk.md': `${fresh}\n`,
+      'docs/adr/006-a.md': null,
+      'docs/adr/template/006-a.md': 'igual\n',
+      'a/dup.md': null,
+      'b/dup.md': null,
+      'c/dup.md': '3\n',
+      'd/dup.md': '4\n',
+    })
+    expect(renames(repo, base, target)).toEqual(
+      new Map([
+        ['docs/adr/template/005-trunk.md', 'docs/adr/005-trunk.md'],
+        ['docs/adr/template/006-a.md', 'docs/adr/006-a.md'],
+      ])
+    )
   })
 })
