@@ -3,10 +3,12 @@
 // gerenciados em três vias (base × alvo × projeto) e devolve JSON para a skill `template-sync`.
 
 import { readFileSync, realpathSync } from 'node:fs'
+import { join } from 'node:path'
 import { applyPlan, finishSync } from './template-sync/apply.mjs'
 import { fileURLToPath } from 'node:url'
 import { buildPlan } from './template-sync/classify.mjs'
 import { readControl } from './template-sync/control.mjs'
+import { findForbidden, inventory } from './template-sync/inventory.mjs'
 import { rewriteProjectLinks } from './template-sync/links.mjs'
 import { makeMatcher } from './template-sync/manifest.mjs'
 import {
@@ -17,6 +19,7 @@ import {
   resolveCommit,
   treeBlobs,
 } from './template-sync/git.mjs'
+import { latestRelease, proposeBase } from './template-sync/versions.mjs'
 
 /**
  * `--chave valor` → { chave: valor }; `--map` pode repetir.
@@ -125,6 +128,24 @@ export const COMMANDS = {
       })
     )
     return { linkRewrites: rewriteProjectLinks(required(args, 'project'), moves) }
+  },
+  latest: (args) => latestRelease(required(args, 'template')),
+  'propose-base': (args) => proposeBase(required(args, 'template'), required(args, 'project')),
+  inventory: (args) =>
+    inventory({ templateDir: required(args, 'template'), projectDir: required(args, 'project') }),
+  'check-agnostic': (args) => {
+    const root = required(args, 'root')
+    const terms = args.term === undefined ? [] : [args.term].flat()
+    const files = args.files === undefined ? [] : [args.files].flat()
+    const found = files.flatMap((file) =>
+      findForbidden(readFileSync(join(root, file), 'utf8'), terms).map((hit) => ({ file, ...hit }))
+    )
+    if (found.length > 0) {
+      throw new Error(
+        `termos proibidos encontrados: ${found.map((f) => `${f.file}:${f.line} (${f.term})`).join(', ')}.`
+      )
+    }
+    return { ok: true, files: files.length }
   },
   finish: (args) => {
     const template = required(args, 'template')
