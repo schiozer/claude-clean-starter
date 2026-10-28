@@ -20,9 +20,9 @@ clara de responsabilidades entre camadas. A arquitetura busca ser:
 
 Todo projeto declara um **perfil arquitetural** no `CLAUDE.md` — `mvp-primeiro`
 (começa enxuto e é promovido) ou `completo-direto` (sem fase MVP) — ver
-[ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md). Em ambos, o sistema é
+[ADR-011](./docs/adr/template/011-service-layer-ddd-modular-e-perfis.md). Em ambos, o sistema é
 **agêntico**: além da UI/REST, expõe um servidor **MCP** que LLMs chamam em nome do
-usuário ([ADR-012](./docs/adr/012-mcp-como-borda-agentica.md)).
+usuário ([ADR-012](./docs/adr/template/012-mcp-como-borda-agentica.md)).
 
 ---
 
@@ -209,7 +209,7 @@ export const { POST } = resourceHandlers // montado em src/composition.ts
 
 ## Borda agêntica (MCP)
 
-Detalhes e justificativas em [ADR-012](./docs/adr/012-mcp-como-borda-agentica.md); passo a
+Detalhes e justificativas em [ADR-012](./docs/adr/template/012-mcp-como-borda-agentica.md); passo a
 passo de conexão em [docs/guides/mcp-guide.md](./docs/guides/mcp-guide.md).
 
 ```typescript

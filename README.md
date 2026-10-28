@@ -65,6 +65,12 @@ humano), validado pelo `PR gate`. O merge é _squash_; o título do PR define a 
 cada merge sai uma tag `vX.Y.Z` e uma GitHub Release (o CHANGELOG). O gate opcional `Spec × código`
 com Claude liga com `SPEC_GATE` (runbook `docs/runbooks/spec-gate.md`). Ver ADR-014.
 
+## Sync com o template
+
+Projetos criados a partir deste template recebem as novidades de cada Release por PR com a skill
+`template-sync` (`/template-sync adotar` na primeira vez, `/template-sync` depois), sem perder o
+que mudaram. Ver [ADR-015](./docs/adr/template/015-template-sync.md).
+
 ## O pipeline
 
 ```

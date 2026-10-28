@@ -9,7 +9,7 @@ Antes de invocar qualquer skill, o agente deve ter lido `ARCHITECTURE.md` e
 `BEST_PRACTICES.md`. Para trabalho em features, leia também a spec relevante em
 `docs/superpowers/specs/`.
 
-Leia também o **Perfil arquitetural** no `CLAUDE.md` — ele decide entre `mvp-development` e `ddd-service-development` (ver [ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md)).
+Leia também o **Perfil arquitetural** no `CLAUDE.md` — ele decide entre `mvp-development` e `ddd-service-development` (ver [ADR-011](./docs/adr/template/011-service-layer-ddd-modular-e-perfis.md)).
 
 ## Pipeline de Skills
 
@@ -51,23 +51,24 @@ para tudo que vem depois.
 
 | Skill                                        | Origem      | Papel                                                                                                                                                                                                     |
 | -------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `superpowers:verification-before-completion` | Superpowers | Checagens antes de declarar concluído ou abrir PR, incluindo a conferência local spec × código e o template de PR ([ADR-014](./docs/adr/014-release-management.md)).                                      |
+| `superpowers:verification-before-completion` | Superpowers | Checagens antes de declarar concluído ou abrir PR, incluindo a conferência local spec × código e o template de PR ([ADR-014](./docs/adr/template/014-release-management.md)).                             |
 | `superpowers:requesting-code-review`         | Superpowers | Estrutura o pedido de revisão.                                                                                                                                                                            |
 | `superpowers:finishing-a-development-branch` | Superpowers | Encerra a branch: só **push + PR** é válido (merge local e descartar não são oferecidos) — ver regra 0 do `CLAUDE.md`. O PR usa o template, com a conferência spec × código feita e o UAT **desmarcado**. |
 
 ### Operação — Deploy e Configuração
 
-| Skill               | Origem  | Papel                                                                                                                                                                                                                                                                                                                          |
-| ------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `runbook-execution` | Projeto | Executa um runbook de `docs/runbooks/` (deploy, envs, segredos, flags, migração, MCP, rollback) com as classes de risco R0–R3 e aprovação humana por operação — ver [ADR-013](./docs/adr/013-governanca-operacional-e-runbooks.md). Sem runbook → não executa. Inclui `spec-gate` (ligar/desligar o gate opcional com Claude). |
+| Skill               | Origem  | Papel                                                                                                                                                                                                                                                                                                                                   |
+| ------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runbook-execution` | Projeto | Executa um runbook de `docs/runbooks/` (deploy, envs, segredos, flags, migração, MCP, rollback) com as classes de risco R0–R3 e aprovação humana por operação — ver [ADR-013](./docs/adr/template/013-governanca-operacional-e-runbooks.md). Sem runbook → não executa. Inclui `spec-gate` (ligar/desligar o gate opcional com Claude). |
 
 ### Transversais
 
-| Skill                                     | Origem      | Papel                                                                        |
-| ----------------------------------------- | ----------- | ---------------------------------------------------------------------------- |
-| `superpowers:brainstorming`               | Superpowers | Também usável para trabalho exploratório, ADRs ou discussões de arquitetura. |
-| `superpowers:using-git-worktrees`         | Superpowers | Isola o trabalho de feature quando necessário.                               |
-| `superpowers:dispatching-parallel-agents` | Superpowers | Para 2+ tarefas independentes sem estado compartilhado.                      |
+| Skill                                     | Origem      | Papel                                                                                                                             |
+| ----------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `superpowers:brainstorming`               | Superpowers | Também usável para trabalho exploratório, ADRs ou discussões de arquitetura.                                                      |
+| `superpowers:using-git-worktrees`         | Superpowers | Isola o trabalho de feature quando necessário.                                                                                    |
+| `superpowers:dispatching-parallel-agents` | Superpowers | Para 2+ tarefas independentes sem estado compartilhado.                                                                           |
+| `template-sync`                           | Projeto     | Sync do projeto com a Release do template, adoção, contribuir e status — ver [ADR-015](./docs/adr/template/015-template-sync.md). |
 
 > Adicione aqui skills específicas do seu projeto (ex.: uma skill de migração de
 > infraestrutura) à medida que forem criadas em `.claude/skills/`.

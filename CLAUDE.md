@@ -8,7 +8,7 @@
 
 **Perfil arquitetural**: <mvp-primeiro | completo-direto>
 
-> Preencha ao adotar o template ([ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md)).
+> Preencha ao adotar o template ([ADR-011](./docs/adr/template/011-service-layer-ddd-modular-e-perfis.md)).
 > `mvp-primeiro` = começa enxuto e é promovido por decisão explícita (o campo passa a
 > `mvp-primeiro (promovido — ADR-NNN)`);
 > `completo-direto` = projeto pequeno, **sem fase MVP**. Se estiver vazio ou inválido,
@@ -23,16 +23,20 @@
 > **Adoção — `main` protegida**: ao adotar o template, **não remova** a regra 0, `hooks/protect-main`,
 > `.githooks/` nem o workflow `.github/workflows/main-guard.yml`.
 >
-> **Adoção — release** ([ADR-014](./docs/adr/014-release-management.md)): **não remova** `pr-gate.yml`
+> **Adoção — release** ([ADR-014](./docs/adr/template/014-release-management.md)): **não remova** `pr-gate.yml`
 > nem `release.yml`; decida o `SPEC_GATE` (gate opcional com Claude) pelo runbook
 > [`spec-gate.md`](./docs/runbooks/spec-gate.md). Ao renomear/remover jobs de CI (ex.:
 > `Walking Skeleton (example)`), atualize `requiredChecks` em `hooks/protect-main/config.json`,
 > senão todo merge alarma na `Guarda da main`.
 >
-> **Adoção — operação** ([ADR-013](./docs/adr/013-governanca-operacional-e-runbooks.md)):
+> **Adoção — operação** ([ADR-013](./docs/adr/template/013-governanca-operacional-e-runbooks.md)):
 > antes do primeiro deploy fora do Dev, preencha todo `<preencher>` de `docs/runbooks/`,
 > date a `Última verificação` de cada runbook e troque o passo do CI para
 > `npm run check:runbooks -- --strict`.
+>
+> **Adoção — sync com o template** ([ADR-015](./docs/adr/template/015-template-sync.md)): rode
+> `/template-sync adotar` a partir do template; depois, `/template-sync` a cada Release (aviso
+> semanal na issue `template-sync`).
 
 ---
 
@@ -54,14 +58,14 @@ Se você está lendo isso, provavelmente sou eu mesmo (Claude) trabalhando no pr
 - O merge do PR é sempre do humano (`[R3]`); o agente nunca roda `gh pr merge`.
 - Em `superpowers:finishing-a-development-branch` (ou qualquer skill que ofereça merge local),
   a única opção válida é **push + PR**.
-- A `main` se autogarante em três camadas (ver [ADR-005](./docs/adr/005-trunk-based-development.md)):
+- A `main` se autogarante em três camadas (ver [ADR-005](./docs/adr/template/005-trunk-based-development.md)):
   git hooks versionados em `.githooks/` (valem para todos, instalados por `npm install`),
   o hook `hooks/protect-main` (agente) e o workflow `Guarda da main` (GitHub, detecção).
   Branches protegidas em `hooks/protect-main/config.json`; se algo barrar, siga a mensagem —
   não peça para desligar.
 - A entrega inclui o template de PR preenchido (`.github/pull_request_template.md`) e a conferência
   local spec × código (leia a spec e o diff, preencha a tabela, aponte o que ficou `parcial`/`fora`)
-  **antes** de `gh pr create`/atualizar o PR — ver [ADR-014](./docs/adr/014-release-management.md).
+  **antes** de `gh pr create`/atualizar o PR — ver [ADR-014](./docs/adr/template/014-release-management.md).
 - Nunca edite, desative ou contorne `hooks/protect-main`, `.githooks/` ou `core.hooksPath` (nem o
   `.claude/settings.json` que registra o hook) para passar por um bloqueio.
 
@@ -75,7 +79,7 @@ brainstorming → writing-plans → [mvp-development | ddd-service-development] 
 
 Toda funcionalidade é **entrevistada (brainstorming) + planejada** e **sempre**
 pergunte ao usuário se ela precisa de **feature toggle** — ver
-[ADR-006](./docs/adr/006-processo-de-feature-e-feature-toggle.md). Nunca assuma
+[ADR-006](./docs/adr/template/006-processo-de-feature-e-feature-toggle.md). Nunca assuma
 silenciosamente que não precisa.
 
 Para bug fixes ou pequenas correções, use `superpowers:systematic-debugging` diretamente.
@@ -90,7 +94,7 @@ A skill de implementação é escolhida pelo **Perfil arquitetural** (topo deste
 - Perfil vazio/inválido: **pergunte** ao usuário antes de implementar.
 
 Em ambos, toda capacidade nova pergunta se deve virar **tool MCP** e com qual flag
-(escrita nasce desligada) — ver [ADR-012](./docs/adr/012-mcp-como-borda-agentica.md).
+(escrita nasce desligada) — ver [ADR-012](./docs/adr/template/012-mcp-como-borda-agentica.md).
 
 ### 3. **Specs são a Fonte da Verdade**
 
@@ -143,14 +147,14 @@ crie uma tarefa por item.
 
 Nunca há push direto na trunk. **Qualquer** mudança (código, docs, ADRs) passa por
 uma feature branch curta e um **Pull Request**. Ver
-[ADR-005](./docs/adr/005-trunk-based-development.md) (trunk-based) e a regra 5
+[ADR-005](./docs/adr/template/005-trunk-based-development.md) (trunk-based) e a regra 5
 (conta git correta antes de push/PR/merge).
 
 ### 9. **Deploy é dirigido por PR: PR → UAT, merge → Prod**
 
 Abrir/atualizar um PR **dispara o deploy em UAT** (acessível por site/celular);
 o **merge na `main`**, após o UAT aprovado, **dispara o deploy em produção**. Ver
-[ADR-002](./docs/adr/002-estrategia-de-ambientes.md). Ambientes sempre em três
+[ADR-002](./docs/adr/template/002-estrategia-de-ambientes.md). Ambientes sempre em três
 estágios (Dev local / UAT / Prod) para plataforma, banco (Neon) e auth (Auth0) —
 ver ADRs 002, 003 e 004. Os passos estão nos runbooks
 [`deploy-uat.md`](./docs/runbooks/deploy-uat.md) e
@@ -160,7 +164,7 @@ ver ADRs 002, 003 e 004. Os passos estão nos runbooks
 
 Operação de deploy/configuração só via runbook de `docs/runbooks/` executado pela skill
 `runbook-execution`, respeitando as classes de risco do
-[ADR-013](./docs/adr/013-governanca-operacional-e-runbooks.md). Sem runbook para a
+[ADR-013](./docs/adr/template/013-governanca-operacional-e-runbooks.md). Sem runbook para a
 operação → não executa; propõe o runbook via PR.
 
 **Exceção pré-bootstrap:** enquanto não há infraestrutura (este template, ou um projeto cujo
@@ -181,7 +185,7 @@ branch e abertura de PR seguem só as regras 5 e 8 — nenhum outro passo de ope
 <projeto>/
 ├── .claude/
 │   ├── commands/                  # Slash-commands do projeto (templates)
-│   └── skills/                    # mvp-development, ddd-service-development, runbook-execution
+│   └── skills/                    # mvp-development, ddd-service-development, runbook-execution, template-sync
 ├── .githooks/                     # git hooks versionados (reference-transaction, pre-push) — trava da main
 ├── hooks/                         # hooks do Claude Code: check-dependencies, git-freshness, protect-main
 ├── docs/
@@ -230,7 +234,7 @@ primeiro + guard), Zod nas bordas, REST + MCP finos, autorização no servidor.
 - ✅ Testes robustos (unit, integration REST + MCP, E2E)
 
 Ver as skills `mvp-development` e `ddd-service-development` e a
-[ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md).
+[ADR-011](./docs/adr/template/011-service-layer-ddd-modular-e-perfis.md).
 
 ---
 
@@ -328,6 +332,10 @@ npm run check:runbooks  # valida docs/runbooks (-- --strict no projeto adotado)
 
 Copie `docs/adr/000-template.md` para `docs/adr/NNN-titulo.md` e preencha
 Contexto / Decisão / Consequências / Alternativas.
+
+- **ADR do projeto** → `docs/adr/NNN-titulo.md`, numeração livre (é do projeto; o sync nunca toca).
+- **ADR do template** → `docs/adr/template/NNN-titulo.md`, só no repositório do template (chega
+  aos projetos pelo `template-sync`).
 
 ---
 

@@ -7,7 +7,7 @@
 ## Objetivo
 
 Ligar (ou desligar) o gate opcional `Spec × código`, que usa o Claude para conferir a spec
-declarada no PR contra o diff ([ADR-014](../adr/014-release-management.md)). É o único gate
+declarada no PR contra o diff ([ADR-014](../adr/template/014-release-management.md)). É o único gate
 atrás de toggle permanente: desligado (`SPEC_GATE` ausente) não tem custo, não cria check e a
 `Guarda da main` não o exige. Os demais gates (`PR gate`, squash, release) valem sempre.
 

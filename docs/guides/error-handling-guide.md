@@ -18,7 +18,7 @@ código citado existe em `examples/walking-skeleton/src/shared/`. Os pilares sã
 - **Taxonomia funcional vs. técnico** — decide o que loga e como a UI reage.
 
 A decisão de fundo (por que erro funcional não vira log/500) está no
-[ADR-009](../adr/009-erros-funcional-vs-tecnico.md).
+[ADR-009](../adr/template/009-erros-funcional-vs-tecnico.md).
 
 ---
 
@@ -153,7 +153,7 @@ export const { GET, POST } = resourceHandlers
 ## A Fronteira MCP: `isError` vs. HTTP 401
 
 O servidor MCP (`src/shared/mcp/`) aplica a **mesma taxonomia** em outro formato
-([ADR-012](../adr/012-mcp-como-borda-agentica.md)):
+([ADR-012](../adr/template/012-mcp-como-borda-agentica.md)):
 
 - **Autenticação** (sem token, token inválido/expirado/revogado) → **HTTP 401** com
   `WWW-Authenticate: Bearer resource_metadata="…"`. Não é um resultado de tool: o cliente
@@ -181,7 +181,7 @@ export function toToolError(error: unknown, context: string): CallToolResult {
 ## O Sink Central: `logError`
 
 `console.*` é **proibido** no app pela regra ESLint `no-console: 'error'` (ver
-[ADR-009](../adr/009-erros-funcional-vs-tecnico.md)). A única exceção autorizada é a
+[ADR-009](../adr/template/009-erros-funcional-vs-tecnico.md)). A única exceção autorizada é a
 linha dentro de `logError` — o funil por onde todo erro engolido passa. Assim há um
 ponto único para, no futuro, plugar Sentry/observabilidade sem caçar `console.error`
 espalhados.
@@ -332,8 +332,8 @@ Antes de commitar código com tratamento de erro:
 
 ## Ver Também
 
-- [ADR-009](../adr/009-erros-funcional-vs-tecnico.md) — a decisão por trás deste guia
-- [ADR-012](../adr/012-mcp-como-borda-agentica.md) — erros na borda MCP
+- [ADR-009](../adr/template/009-erros-funcional-vs-tecnico.md) — a decisão por trás deste guia
+- [ADR-012](../adr/template/012-mcp-como-borda-agentica.md) — erros na borda MCP
 - [BEST_PRACTICES.md](../../BEST_PRACTICES.md) — seção *Notificações* (visual funcional/técnico)
 - [docs/guides/testing-guide.md](./testing-guide.md) — testes
 - [docs/guides/zod-guide.md](./zod-guide.md) — validação com Zod

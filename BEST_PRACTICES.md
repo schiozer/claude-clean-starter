@@ -122,7 +122,7 @@ async archive(input: { id: string; ownerId: string }) { /* ... */ }
   service.
 - **Service nunca devolve entidade** — sempre DTO (`toResourceDTO`).
 
-Ver [ADR-011](./docs/adr/011-service-layer-ddd-modular-e-perfis.md).
+Ver [ADR-011](./docs/adr/template/011-service-layer-ddd-modular-e-perfis.md).
 
 ---
 
@@ -279,20 +279,20 @@ feat(resources): add create resource use case
 fix(items): correct order_index on reorder
 ```
 
-**Branches** — **Trunk-Based Development** (ver [ADR-005](./docs/adr/005-trunk-based-development.md)):
+**Branches** — **Trunk-Based Development** (ver [ADR-005](./docs/adr/template/005-trunk-based-development.md)):
 uma única trunk (`main`), sempre deployável. Feature branches **curtas**
 (`tipo/descrição-curta`, ex.: `feature/resource-editor`) com merge frequente.
 **Sem branches longevas por ambiente** (`develop`/`staging`/`production`); trabalho
 incompleto fica atrás de **feature flags**. A promoção entre ambientes é por commit
-da trunk (ver [ADR-002](./docs/adr/002-estrategia-de-ambientes.md)).
+da trunk (ver [ADR-002](./docs/adr/template/002-estrategia-de-ambientes.md)).
 
-**Squash e versão** ([ADR-014](./docs/adr/014-release-management.md)): só _squash merge_; o
+**Squash e versão** ([ADR-014](./docs/adr/template/014-release-management.md)): só _squash merge_; o
 **título do PR** é a mensagem do commit na `main` e a fonte da versão (`!`/`BREAKING CHANGE` →
 major, `feat` → minor, demais → patch). A versão vive na **tag** `vX.Y.Z` (uma por merge) e as
 Releases do GitHub são o CHANGELOG; não edite `version` do `package.json` nem crie `CHANGELOG.md`.
 
 **Pull Requests** — **toda mudança entra na `main` via PR, SEMPRE (sem push
-direto na trunk)** — ver [ADR-005](./docs/adr/005-trunk-based-development.md).
+direto na trunk)** — ver [ADR-005](./docs/adr/template/005-trunk-based-development.md).
 Descreva o quê e o porquê, marque o tipo, checklist, screenshots se aplicável, e
 vincule issues (`Closes #123`).
 
@@ -345,7 +345,7 @@ defineTool({
 defineTool({ name: 'update', description: 'Atualiza', input: z.any() /* ... */ })
 ```
 
-Ver [ADR-012](./docs/adr/012-mcp-como-borda-agentica.md).
+Ver [ADR-012](./docs/adr/template/012-mcp-como-borda-agentica.md).
 
 ---
 

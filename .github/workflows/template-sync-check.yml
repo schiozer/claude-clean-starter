@@ -1,0 +1,28 @@
+name: Template sync — aviso
+
+# Semanal e sob demanda: compara o lastSync do projeto (.template-sync.json) com as Releases do
+# template e mantém uma única issue `template-sync`. No repositório do template não faz nada.
+on:
+  schedule:
+    - cron: '0 12 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Versões atrás do template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Comparar com as Releases do template
+        run: node scripts/template-sync-check.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -7,13 +7,13 @@
 ## Objetivo
 
 Levar uma feature branch ao UAT: abrir/atualizar o PR, que dispara o preview deployment
-([ADR-002](../adr/002-estrategia-de-ambientes.md)), apontar o alias estável do UAT para ele e
+([ADR-002](../adr/template/002-estrategia-de-ambientes.md)), apontar o alias estável do UAT para ele e
 fazer o smoke test. **Não faz merge** — Prod é o [deploy-prod.md](./deploy-prod.md).
 
 ## Pré-condições
 
 - `bootstrap-ambientes.md` já executado (antes disso não há UAT a operar: push + PR seguem só as regras 5 e 8 do `CLAUDE.md`).
-- Trabalho commitado numa feature branch curta (`tipo/descricao`, [ADR-005](../adr/005-trunk-based-development.md)), nunca na `main`.
+- Trabalho commitado numa feature branch curta (`tipo/descricao`, [ADR-005](../adr/template/005-trunk-based-development.md)), nunca na `main`.
 - Migração aditiva, se houver, já aplicada no branch Neon de preview/UAT ([migracao-banco.md](./migracao-banco.md)).
 - Envs/flags necessárias já existem no ambiente Preview ([segredos-e-env.md](./segredos-e-env.md), [feature-flags.md](./feature-flags.md)).
 

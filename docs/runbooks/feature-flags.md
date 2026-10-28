@@ -6,7 +6,7 @@
 
 ## Objetivo
 
-Ligar ou desligar uma flag num ambiente ([ADR-006](../adr/006-processo-de-feature-e-feature-toggle.md)).
+Ligar ou desligar uma flag num ambiente ([ADR-006](../adr/template/006-processo-de-feature-e-feature-toggle.md)).
 Flags são envs **não-secretas** (`on`/`off`):
 
 | Env | Papel |

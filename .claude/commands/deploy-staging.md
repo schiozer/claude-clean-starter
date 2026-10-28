@@ -5,10 +5,10 @@ description: Abre/atualiza o PR que dispara o deploy em staging/UAT (runbook dep
 
 # Deploy para Staging (UAT) — via PR
 
-> 📄 Ambientes (Dev/UAT/Prod): ver [ADR-002](../../docs/adr/002-estrategia-de-ambientes.md).
+> 📄 Ambientes (Dev/UAT/Prod): ver [ADR-002](../../docs/adr/template/002-estrategia-de-ambientes.md).
 > 🔒 **Toda mudança entra na `main` via PR, SEMPRE** — sem push direto na trunk
-> (ver [ADR-005](../../docs/adr/005-trunk-based-development.md)).
-> 🛡️ Operação governada pelo [ADR-013](../../docs/adr/013-governanca-operacional-e-runbooks.md).
+> (ver [ADR-005](../../docs/adr/template/005-trunk-based-development.md)).
+> 🛡️ Operação governada pelo [ADR-013](../../docs/adr/template/013-governanca-operacional-e-runbooks.md).
 
 O deploy em UAT é **disparado pelo PR** (abrir/atualizar um PR → preview em UAT).
 

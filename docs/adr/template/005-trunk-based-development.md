@@ -81,7 +81,7 @@ agente e humano. Spec: `docs/superpowers/specs/2026-10-24-main-autogarantida-des
   issue com o rótulo `main-sem-pr` (ou comentário na issue aberta). Não reverte nada.
 - **Branch protection do GitHub é opcional.** Se o plano permitir (repositório público ou
   plano pago), ligue também (passo 11 de
-  [`bootstrap-ambientes`](../runbooks/bootstrap-ambientes.md)): é a garantia mais forte.
+  [`bootstrap-ambientes`](../../runbooks/bootstrap-ambientes.md)): é a garantia mais forte.
 
 ### Limites honestos
 

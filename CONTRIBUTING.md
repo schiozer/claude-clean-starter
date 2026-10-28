@@ -31,6 +31,12 @@ O merge é _squash_ e o **título do PR** (`tipo(escopo): mensagem`) define a ve
 GitHub são o CHANGELOG. O gate opcional com Claude depende de `SPEC_GATE` (runbook `spec-gate.md`).
 Ver ADR-014.
 
+## Melhorias vindas de projetos derivados
+
+Uma melhoria feita num projeto derivado volta ao template por PR com `/template-sync contribuir`,
+generalizada e sem nomes de projeto, conta ou segredo. Ver
+[ADR-015](./docs/adr/template/015-template-sync.md).
+
 ## Conta git
 
 Se você usa múltiplas contas git na mesma máquina, confira a conta ativa **antes**

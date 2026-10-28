@@ -11,11 +11,11 @@
 
 Os ADRs já fixaram o **comportamento**; falta escolher a **infra** que o executa:
 
-- **3 ambientes** Dev / UAT / Prod ([ADR-002](../adr/002-estrategia-de-ambientes.md)).
-- **Trunk-based, tudo via PR** ([ADR-005](../adr/005-trunk-based-development.md)).
+- **3 ambientes** Dev / UAT / Prod ([ADR-002](../adr/template/002-estrategia-de-ambientes.md)).
+- **Trunk-based, tudo via PR** ([ADR-005](../adr/template/005-trunk-based-development.md)).
 - **PR → deploy em UAT**; **merge na `main` → deploy em Prod** (ADR-002/005).
-- **Banco = branches de um projeto Neon único** ([ADR-003](../adr/003-banco-por-ambiente-neon.md)).
-- **Auth = tenant Auth0 por ambiente** ([ADR-004](../adr/004-auth-por-ambiente-auth0.md)).
+- **Banco = branches de um projeto Neon único** ([ADR-003](../adr/template/003-banco-por-ambiente-neon.md)).
+- **Auth = tenant Auth0 por ambiente** ([ADR-004](../adr/template/004-auth-por-ambiente-auth0.md)).
 
 ## Mapeamento recomendado (default)
 
@@ -50,7 +50,7 @@ Cada ambiente tem seu conjunto de secrets (ver `.env.local.example`):
 Deploy e configuração são executados **por runbook**: os procedimentos ficam em
 [`docs/runbooks/`](../runbooks/README.md) e as regras (classes de risco R0–R3, aprovação
 humana por operação, segredos, registro) no
-[ADR-013](../adr/013-governanca-operacional-e-runbooks.md). O merge na `main` (= deploy em
+[ADR-013](../adr/template/013-governanca-operacional-e-runbooks.md). O merge na `main` (= deploy em
 Prod) é sempre do humano.
 
 ## Quando for criar o ADR do projeto

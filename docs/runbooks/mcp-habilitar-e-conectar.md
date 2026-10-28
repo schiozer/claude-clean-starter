@@ -7,7 +7,7 @@
 ## Objetivo
 
 Configurar o Auth0 do ambiente para o servidor MCP (`/api/mcp`,
-[ADR-012](../adr/012-mcp-como-borda-agentica.md)), definir as envs, verificar o endpoint e
+[ADR-012](../adr/template/012-mcp-como-borda-agentica.md)), definir as envs, verificar o endpoint e
 conectar o ChatGPT com usuários de teste. Detalhes de cada tela em
 [mcp-guide.md](../guides/mcp-guide.md). Comece pelo **UAT**; Prod só depois do merge.
 

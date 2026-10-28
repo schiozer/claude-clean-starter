@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { checkPr } from '../../scripts/pr-gate.mjs'
 import { evaluateGates } from '../../scripts/main-guard.mjs'
@@ -10,7 +10,8 @@ const ROOT = resolve(__dirname, '../..')
 const read = (path: string) => readFileSync(resolve(ROOT, path), 'utf8')
 const config = JSON.parse(read('hooks/protect-main/config.json'))
 
-const SPEC = 'docs/superpowers/specs/2026-10-25-release-management-design.md'
+// Spec fictícia: as specs do template não vão para os projetos derivados (template-sync).
+const SPEC = 'docs/superpowers/specs/2026-01-01-exemplo-design.md'
 const TITLE = 'feat(release): versão por merge'
 const HEAD = 'd'.repeat(40)
 const AFTER = 'a'.repeat(40)
@@ -52,12 +53,11 @@ describe('fluxo de release ponta a ponta', () => {
 
   it('o template preenchido passa no PR gate (edited)', () => {
     expect(body).toContain(TICKED)
-    expect(existsSync(resolve(ROOT, SPEC))).toBe(true)
     const errors = checkPr({
       title: TITLE,
       body,
       action: 'edited',
-      fileExists: (path: string) => existsSync(resolve(ROOT, path)),
+      fileExists: (path: string) => path === SPEC,
     })
     expect(errors).toEqual([])
   })
