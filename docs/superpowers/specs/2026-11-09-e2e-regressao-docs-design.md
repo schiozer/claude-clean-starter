@@ -1,7 +1,7 @@
 # Spec: Testes E2E e sistêmicos nascidos da spec — regressão no UAT, documentação, demos e treinamento
 
 **Data**: 2026-11-09
-**Status**: Rascunho
+**Status**: Aprovada
 **Autor(es)**: Fabio Schiozer + Claudinho
 
 > Produzida pela skill `superpowers:brainstorming`. É o **contrato** para o plano e a
