@@ -16,7 +16,7 @@ import {
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { globToRegExp, listarArquivos, loadIndice, rotaDaPagina } from './e2e/config.mjs'
-import { normalizarPasso } from './e2e/cenarios.mjs'
+import { diffPassos, normalizarPasso } from './e2e/cenarios.mjs'
 import { scanTestes } from './e2e/testes.mjs'
 import { parseSpecLine } from './pr-gate.mjs'
 
@@ -34,26 +34,6 @@ export const RELATORIO_PATH = '.e2e/rastreabilidade.md'
  */
 
 const local = (path, linha) => (linha ? `${path}:${linha}` : path)
-const lista = (itens) => itens.map((s) => `"${s}"`).join(', ')
-
-/**
- * Diferença entre duas listas de passos: faltando/sobrando ou só a ordem.
- * @param {string[]} esperado
- * @param {string[]} obtido
- * @returns {string | null} descrição da divergência, ou `null` se iguais.
- */
-const diffPassos = (esperado, obtido) => {
-  if (esperado.length === obtido.length && esperado.every((p, i) => p === obtido[i])) return null
-  const faltando = esperado.filter((p) => !obtido.includes(p))
-  const sobrando = obtido.filter((p) => !esperado.includes(p))
-  if (faltando.length === 0 && sobrando.length === 0) {
-    return `mesmos passos em ordem diferente (esperado: ${lista(esperado)})`
-  }
-  const partes = []
-  if (faltando.length > 0) partes.push(`faltando: ${lista(faltando)}`)
-  if (sobrando.length > 0) partes.push(`sobrando: ${lista(sobrando)}`)
-  return partes.join('; ')
-}
 
 const celula = (texto) => texto.replace(/\|/g, '\\|').replace(/\n/g, ' ')
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizarPasso, parseCenarios } from '../../scripts/e2e/cenarios.mjs'
+import { diffPassos, normalizarPasso, parseCenarios } from '../../scripts/e2e/cenarios.mjs'
 
 const SPEC = `## 8. Cenários de teste
 
@@ -123,5 +123,15 @@ describe('normalizarPasso', () => {
     expect(normalizarPasso('Então   vejo  o selo  "Publicado"')).toBe('vejo o selo "Publicado"')
     expect(normalizarPasso('E publico')).toBe('publico')
     expect(normalizarPasso('Mas   não   vejo')).toBe('não vejo')
+  })
+})
+
+describe('diffPassos', () => {
+  it('iguais → null; ordem trocada, faltando e sobrando são descritos', () => {
+    expect(diffPassos(['a', 'b'], ['a', 'b'])).toBeNull()
+    expect(diffPassos(['a', 'b'], ['b', 'a'])).toBe(
+      'mesmos passos em ordem diferente (esperado: "a", "b")'
+    )
+    expect(diffPassos(['a', 'b'], ['a', 'c'])).toBe('faltando: "b"; sobrando: "c"')
   })
 })

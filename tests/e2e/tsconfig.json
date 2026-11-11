@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "types": ["node"]
+  },
+  "include": [
+    "./**/*.ts",
+    "../../playwright.config.ts",
+    "../../examples/walking-skeleton/tests/e2e/**/*.ts"
+  ],
+  "exclude": ["../../node_modules", "../../examples/walking-skeleton/node_modules"]
+}

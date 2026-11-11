@@ -166,3 +166,25 @@ const processarBloco = (bloco, path, cenarios, erros) => {
   })
   void tipoLinha
 }
+
+const lista = (itens) => itens.map((s) => `"${s}"`).join(', ')
+
+/**
+ * Diferença entre duas listas de passos já normalizados: faltando/sobrando ou só a ordem.
+ * Fonte única da comparação: usada pelo `check-cenarios` (estático) e por `jornada()` (execução).
+ * @param {string[]} esperado
+ * @param {string[]} obtido
+ * @returns {string | null} descrição da divergência, ou `null` se iguais.
+ */
+export const diffPassos = (esperado, obtido) => {
+  if (esperado.length === obtido.length && esperado.every((p, i) => p === obtido[i])) return null
+  const faltando = esperado.filter((p) => !obtido.includes(p))
+  const sobrando = obtido.filter((p) => !esperado.includes(p))
+  if (faltando.length === 0 && sobrando.length === 0) {
+    return `mesmos passos em ordem diferente (esperado: ${lista(esperado)})`
+  }
+  const partes = []
+  if (faltando.length > 0) partes.push(`faltando: ${lista(faltando)}`)
+  if (sobrando.length > 0) partes.push(`sobrando: ${lista(sobrando)}`)
+  return partes.join('; ')
+}

@@ -1,0 +1,11 @@
+// API pública dos helpers de E2E (gerenciada pelo template). Testes importam só daqui.
+export { jornada, registrarGanchoDePasso } from './jornada'
+export type { GanchoDePasso, PassoCtx, Passos } from './jornada'
+export { dado } from './dado'
+export { rnf, rnfMs, telas } from './rnf'
+export type { Requisito } from './rnf'
+export { AXE_TAGS, checarA11y } from './axe'
+export { loginAuth0, loginDev, perfis } from './auth'
+export type { Perfil } from './auth'
+export { e2eEnv } from './env'
+export type { E2eEnv, Env } from './env'

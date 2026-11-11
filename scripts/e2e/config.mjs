@@ -5,7 +5,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { globToRegExp } from '../template-sync/manifest.mjs'
 import { parseCenarios } from './cenarios.mjs'
 import { parseRnf } from './rnf.mjs'
@@ -175,8 +175,8 @@ export const listarArquivos = (root, globs) => {
 const ehListaDeTexto = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string')
 
 /** @returns {{ config: CenariosConfig, erro: string | null, existe: boolean }} */
-const lerConfig = (root) => {
-  const arquivo = join(root, CONFIG_PATH)
+const lerConfig = (root, configPath) => {
+  const arquivo = resolve(root, configPath)
   if (!existsSync(arquivo)) return { config: { ...CONFIG_VAZIA }, erro: null, existe: false }
   try {
     const json = JSON.parse(readFileSync(arquivo, 'utf8'))
@@ -201,24 +201,28 @@ const lerConfig = (root) => {
 /**
  * Lê `tests/e2e/cenarios.config.json`, as specs e o baseline de RNF. Síncrono.
  * Sem config → índice vazio + aviso; sem `docs/rnf.md` → RNF vazio + aviso. Nunca lança.
+ * `configPath` (relativo à raiz ou absoluto) troca o arquivo de config — usado pelos selftests
+ * dos helpers de E2E com um índice falso (`E2E_CENARIOS_CONFIG`). Os globs continuam relativos
+ * à raiz.
  * @param {string} root
+ * @param {{ configPath?: string }} [opcoes]
  * @returns {Indice}
  */
-export const loadIndice = (root) => {
-  const { config, erro, existe } = lerConfig(root)
+export const loadIndice = (root, { configPath = CONFIG_PATH } = {}) => {
+  const { config, erro, existe } = lerConfig(root, configPath)
   /** @type {Erro[]} */
   const avisos = []
   /** @type {ErroIndice[]} */
   const erros = []
   if (!existe) {
     avisos.push({
-      path: CONFIG_PATH,
+      path: configPath,
       linha: 1,
       mensagem: 'arquivo não encontrado: check de cenários não configurado neste projeto',
     })
     return { ...montarIndice({ config, specs: [], rnf: null, avisos, erros }), avisos }
   }
-  if (erro) erros.push({ path: CONFIG_PATH, linha: 1, mensagem: erro, global: true })
+  if (erro) erros.push({ path: configPath, linha: 1, mensagem: erro, global: true })
 
   let caminhos = []
   try {
@@ -226,7 +230,7 @@ export const loadIndice = (root) => {
   } catch (error) {
     const motivo = error instanceof Error ? error.message : String(error)
     erros.push({
-      path: CONFIG_PATH,
+      path: configPath,
       linha: 1,
       mensagem: `falha ao listar specs: ${motivo}`,
       global: true,

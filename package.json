@@ -6,16 +6,20 @@
   "type": "module",
   "scripts": {
     "lint": "eslint .",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit && tsc --noEmit -p tests/e2e",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "docs:gerar": "E2E_DOCS=1 playwright test --grep @doc --project=desktop",
     "prepare": "node scripts/install-git-hooks.mjs",
     "check:runbooks": "node scripts/check-runbooks.mjs",
     "check:cenarios": "node scripts/check-cenarios.mjs",
     "format": "prettier --write ."
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@eslint/js": "^9.0.0",
+    "@playwright/test": "^1.65.0",
     "@types/node": "^20.0.0",
     "@vitejs/plugin-react": "^4.3.0",
     "eslint": "^9.0.0",

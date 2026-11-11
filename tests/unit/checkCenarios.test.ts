@@ -1,12 +1,16 @@
+import { resolve } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { checkCenarios } from '../../scripts/check-cenarios.mjs'
 import {
   DEFAULT_CONFIG,
   globToRegExp,
+  loadIndice,
   montarIndice,
   rnfsDeclarados,
   rotaDaPagina,
 } from '../../scripts/e2e/config.mjs'
+
+const ROOT = resolve(__dirname, '../..')
 
 const SPEC_PR = 'docs/superpowers/specs/2026-01-01-recursos.md'
 const SPEC_VELHA = 'docs/superpowers/specs/2025-01-01-velha.md'
@@ -372,5 +376,22 @@ describe('checkCenarios', () => {
     const titulo = PUBLICAR.replace('Publicar um recurso', 'Publicar | arquivar')
     const r = rodar({ specs: [{ path: SPEC_PR, markdown: spec(titulo) }] })
     expect(r.relatorio).toContain('Publicar \\| arquivar')
+  })
+})
+
+describe('loadIndice com configPath', () => {
+  it('lê o índice a partir de outra config (índice falso dos selftests de E2E)', () => {
+    const indice = loadIndice(ROOT, {
+      configPath: 'tests/e2e/support/__fixtures__/cenarios.config.json',
+    })
+    expect(indice.erros).toEqual([])
+    expect([...indice.cenarios.keys()]).toEqual(['CT-JOR-001'])
+    expect(indice.rnf.requisitos.map((r) => r.id)).toContain('RNF-TMO-001')
+  })
+
+  it('config inexistente → aviso com o caminho pedido, sem lançar', () => {
+    const indice = loadIndice(ROOT, { configPath: 'tests/e2e/nao-existe.json' })
+    expect(indice.cenarios.size).toBe(0)
+    expect(indice.avisos[0]?.path).toBe('tests/e2e/nao-existe.json')
   })
 })
