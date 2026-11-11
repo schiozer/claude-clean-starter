@@ -16,7 +16,7 @@ describe('e2eDelayMs', () => {
     [{ APP_ENV: 'uat', E2E_FAULTS_SECRET: 'curto' }, 'curto', '500', 0],
     [{ APP_ENV: 'uat', E2E_FAULTS_SECRET: 's'.repeat(16) }, 's'.repeat(16), '500', 500],
     [{ APP_ENV: 'uat', E2E_FAULTS_SECRET: 's'.repeat(16) }, 's'.repeat(16), '999999', 60000],
-  ])('e2eDelayMs(%o) = %i', (env, secret, delay, esperado) => {
+  ])('e2eDelayMs(env=%o, segredo=%s, atraso=%s) = %i', (env, secret, delay, esperado) => {
     expect(e2eDelayMs(req(secret, delay), env)).toBe(esperado)
   })
 

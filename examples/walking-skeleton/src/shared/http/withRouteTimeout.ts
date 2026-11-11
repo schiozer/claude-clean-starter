@@ -9,7 +9,9 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 /**
  * Prazo da rota de API (RNF-TMO-001): estourou → 504 `TIMEOUT` tratado, sem pendurar. O atraso de
- * teste (`e2eDelayMs`) entra antes do handler e conta no prazo; após o 504 o handler não roda.
+ * teste (`e2eDelayMs`) entra antes do handler e conta no prazo; se o prazo estoura durante o
+ * atraso, o handler não roda. Já um handler **lento** que começou continua executando após o 504
+ * (não há cancelamento): o efeito dele pode acontecer mesmo com o cliente tendo recebido o erro.
  */
 export function withRouteTimeout(handler: RouteHandler, ms: number, context: string): RouteHandler {
   return async (req) => {

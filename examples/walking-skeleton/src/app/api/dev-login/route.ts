@@ -1,13 +1,8 @@
 import { e2eSessions } from '@/composition'
 import { isE2ePerfil } from '@/shared/auth/E2eCookieAuthProvider'
+import { safeNext } from '@/shared/http/safeNext'
 
 export const dynamic = 'force-dynamic'
-
-/** Só caminho relativo com uma única `/` inicial; o resto cai em `/` (sem open redirect). */
-function safeNext(next: string | null): string {
-  if (!next || !next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return '/'
-  return next
-}
 
 /** GET /api/dev-login?perfil=usuario|interno&next=/x — login stub do modo E2E local. */
 export async function GET(req: Request): Promise<Response> {
