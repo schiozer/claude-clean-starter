@@ -29,6 +29,7 @@
     "tests/unit/docsLinks.test.ts",
     "tests/unit/e2eCenarios.test.ts",
     "tests/unit/e2eRnf.test.ts",
+    "tests/unit/e2eTestes.test.ts",
     "tests/unit/gitGuard.test.ts",
     "tests/unit/gitGuardHooks.test.ts",
     "tests/unit/githubApi.test.ts",
