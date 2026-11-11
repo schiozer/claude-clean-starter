@@ -64,6 +64,24 @@ describe('withRouteTimeout', () => {
     expect(handler).not.toHaveBeenCalled()
   })
 
+  it('falha injetada fora de Prod → 500 genérico, sem a sentinela, sem chamar o handler', async () => {
+    process.env.APP_ENV = 'uat'
+    process.env.E2E_FAULTS_SECRET = SEGREDO
+    const handler = vi.fn(async () => new Response('ok'))
+    const req = new Request('http://localhost/api/resources', {
+      headers: { 'x-e2e-fault': 'throw', 'x-e2e-secret': SEGREDO },
+    })
+    const res = await withRouteTimeout(handler, 1000, 'api/teste:GET')(req)
+    expect(res.status).toBe(500)
+    const texto = await res.text()
+    expect(JSON.parse(texto)).toEqual({
+      error: 'Erro interno. Tente novamente.',
+      code: 'INTERNAL_ERROR',
+    })
+    expect(texto).not.toContain('sentinela')
+    expect(handler).not.toHaveBeenCalled()
+  })
+
   it('handler que lança → erro tratado, nunca rejeita', async () => {
     const res = await withRouteTimeout(
       async () => {

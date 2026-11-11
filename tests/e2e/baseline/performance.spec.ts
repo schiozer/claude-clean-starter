@@ -2,7 +2,7 @@
 // feliz e LCP das telas no perfil mobile. Roda no projeto `sistemico`, com a sessão do usuário e o
 // iPhone de referência em Chromium (o mesmo do projeto `mobile`).
 import { devices, expect, test, type Page } from '@playwright/test'
-import { parametro, perfis, rnfMs, telas } from '../support'
+import { parametro, perfis, rnfMs, telasExigidas } from '../support'
 import { orcamentoComMargem } from './apoio'
 
 test.use({ ...devices['iPhone 13'], defaultBrowserType: 'chromium', storageState: perfis.usuario })
@@ -52,7 +52,7 @@ test(
   { tag: ['@rnf', '@regressao'] },
   async ({ page }) => {
     const orcamento = orcamentoComMargem(rnfMs('RNF-PRF-002'))
-    for (const { rota, nome } of telas()) {
+    for (const { rota, nome } of telasExigidas()) {
       await page.goto(rota, { waitUntil: 'load' })
       expect(new URL(page.url()).pathname, `${nome}: abriu a tela (sessão válida)`).toBe(rota)
       const lcp = await medirLcp(page)

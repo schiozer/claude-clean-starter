@@ -1,6 +1,8 @@
 // Apoio dos testes do baseline (RNF e usabilidade): leitura dos parâmetros do `docs/rnf.md`,
 // segredos exigidos e chamada JSON-RPC ao MCP. Sem valores fixos: tudo vem do baseline ou do env.
-import type { APIRequestContext, APIResponse } from '@playwright/test'
+import { mkdirSync, rmSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { test, type APIRequestContext, type APIResponse } from '@playwright/test'
 import { parametro } from '../support'
 
 /** Valor obrigatório do env da suíte; ausente → erro com o nome da variável (nunca o valor). */
@@ -70,4 +72,41 @@ export const chamarTool = async (
   const corpo = (await res.json()) as { result?: ResultadoTool }
   if (!corpo.result) throw new Error(`tools/call ${name}: resposta sem result`)
   return corpo.result
+}
+
+const TRAVA_VENCIDA_MS = 5 * 60_000
+
+/**
+ * Executa `fn` com exclusão mútua entre workers (diretório-trava no `outputDir` do projeto). Para
+ * testes que disputam um recurso compartilhado do app — ex.: a janela do rate limit do mesmo PAT
+ * sob `--repeat-each`. Trava mais velha que 5 min é tida como abandonada.
+ */
+export const comTrava = async <T>(
+  nome: string,
+  espera: number,
+  fn: () => Promise<T>
+): Promise<T> => {
+  const trava = join(test.info().project.outputDir, `.trava-${nome}`)
+  const fim = Date.now() + espera
+  for (;;) {
+    try {
+      mkdirSync(trava, { recursive: false })
+      break
+    } catch (erro) {
+      if ((erro as NodeJS.ErrnoException).code === 'ENOENT') {
+        mkdirSync(test.info().project.outputDir, { recursive: true })
+        continue
+      }
+      if ((erro as NodeJS.ErrnoException).code !== 'EEXIST') throw erro
+      const idade = Date.now() - (statSync(trava, { throwIfNoEntry: false })?.mtimeMs ?? Date.now())
+      if (idade > TRAVA_VENCIDA_MS) rmSync(trava, { recursive: true, force: true })
+      else if (Date.now() > fim) throw new Error(`trava '${nome}' ocupada por mais de ${espera} ms`)
+      else await new Promise((r) => setTimeout(r, 500))
+    }
+  }
+  try {
+    return await fn()
+  } finally {
+    rmSync(trava, { recursive: true, force: true })
+  }
 }

@@ -1,7 +1,15 @@
 // Baseline de sessão (docs/rnf.md, RNF-SES-*): prazo de inatividade do cookie, sessão inválida que
 // volta à origem após o login e logout que invalida no servidor. Roda no projeto `sistemico`.
 import { expect, test, type Page } from '@playwright/test'
-import { credencialAuth0, e2eEnv, entrar, parametro, perfis, rnfMs, telas } from '../support'
+import {
+  credencialAuth0,
+  e2eEnv,
+  entrar,
+  parametro,
+  perfis,
+  rnfMs,
+  telasExigidas,
+} from '../support'
 
 const cookieDeSessao = <C extends { name: string }>(cookies: C[]): C => {
   const nome = parametro('cookieDeSessao')
@@ -32,13 +40,16 @@ test.describe('com sessão do usuário', () => {
     { tag: ['@rnf', '@regressao'] },
     async ({ request }) => {
       // Visitar uma tela renova a inatividade: o prazo do cookie conta a partir de agora.
-      expect((await request.get(telas()[0]?.rota ?? '/')).status()).toBe(200)
+      expect((await request.get(telasExigidas()[0]?.rota ?? '/')).status()).toBe(200)
       const cookie = cookieDeSessao((await request.storageState()).cookies)
       const restanteMs = cookie.expires * 1000 - Date.now()
       expect(cookie.expires, 'cookie persistente (com Max-Age/Expires)').toBeGreaterThan(0)
-      expect(restanteMs, 'ainda válida').toBeGreaterThan(0)
+      const inatividadeMs = rnfMs('RNF-SES-001')
+      expect(restanteMs, 'expira em ≥ inatividade − 60 s').toBeGreaterThanOrEqual(
+        inatividadeMs - 60_000
+      )
       expect(restanteMs, 'expira em ≤ inatividade + 60 s').toBeLessThanOrEqual(
-        rnfMs('RNF-SES-001') + 60_000
+        inatividadeMs + 60_000
       )
     }
   )

@@ -1,9 +1,9 @@
 // Baseline de usabilidade (docs/rnf.md, USA-*; spec e2e-regressao-docs §6), aplicado a toda tela de
-// `telas()`. Roda nos projetos `desktop` e `mobile` com a sessão do usuário; o alvo de toque só vale
+// `telasExigidas()`. Roda nos projetos `desktop` e `mobile` com a sessão do usuário; o alvo de toque só vale
 // no mobile.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from '@playwright/test'
-import { checarA11y, rnf, telas } from '../support'
+import { expect, test, type Page, type Request, type Route } from '@playwright/test'
+import { checarA11y, dado, parametro, rnf, telasExigidas } from '../support'
 
 const TAG = ['@usabilidade', '@regressao']
 
@@ -20,7 +20,7 @@ const ehChamadaDeApi = (route: Route): boolean =>
   new URL(route.request().url()).pathname.startsWith('/api/')
 
 test('USA-001 acessibilidade automática sem violações graves', { tag: TAG }, async ({ page }) => {
-  for (const { rota, nome } of telas()) {
+  for (const { rota, nome } of telasExigidas()) {
     await test.step(`${nome} (${rota})`, async () => {
       await abrir(page, rota)
       await checarA11y(page)
@@ -35,7 +35,7 @@ test(
     const alvo = rnf('USA-002').valor
     if (!alvo || alvo.unidade !== 'px')
       throw new Error('USA-002: valor do alvo de toque deve ser em px')
-    for (const { rota, nome } of telas()) {
+    for (const { rota, nome } of telasExigidas()) {
       await test.step(`${nome} (${rota})`, async () => {
         await abrir(page, rota)
         const largura = await page.evaluate(() => ({
@@ -52,11 +52,23 @@ test(
               r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none'
             )
           }
-          // Link no meio de um texto corrido é exceção do WCAG 2.5.8 (alvo inline).
+          // Link no meio de um texto corrido é exceção do WCAG 2.5.8 (alvo inline): o pai tem texto
+          // próprio, fora de outros alvos (`a`/`button`) — ex.: uma lista de links não é texto corrido.
+          const textoProprioDoPai = (el: Element): string => {
+            const pai = el.parentElement
+            if (!pai) return ''
+            const walker = document.createTreeWalker(pai, NodeFilter.SHOW_TEXT)
+            let texto = ''
+            for (let no = walker.nextNode(); no; no = walker.nextNode()) {
+              const dono = no.parentElement?.closest('a, button')
+              if (dono && pai.contains(dono) && dono !== pai) continue
+              texto += no.textContent ?? ''
+            }
+            return texto.trim()
+          }
           const inlineEmTexto = (el: Element) =>
-            getComputedStyle(el).display === 'inline' &&
-            (el.parentElement?.textContent ?? '').trim() !== (el.textContent ?? '').trim()
-          return [...document.querySelectorAll('button, a, input')]
+            getComputedStyle(el).display === 'inline' && textoProprioDoPai(el) !== ''
+          return [...document.querySelectorAll('button, a, input, select, textarea, [role=button]')]
             .filter((el) => !(el instanceof HTMLInputElement && el.type === 'hidden'))
             .map((el) => ({ el, r: el.getBoundingClientRect() }))
             .filter(({ el, r }) => visivel(el, r) && !inlineEmTexto(el))
@@ -72,19 +84,22 @@ test(
   }
 )
 
+const FOCAVEIS =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 test('USA-003 teclado percorre os focáveis com foco visível', { tag: TAG }, async ({ page }) => {
-  for (const { rota, nome } of telas()) {
+  for (const { rota, nome } of telasExigidas()) {
     await test.step(`${nome} (${rota})`, async () => {
       await abrir(page, rota)
       await page.waitForLoadState('networkidle')
-      const total = await page.evaluate(
-        () =>
-          [
-            ...document.querySelectorAll(
-              'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-            ),
-          ].filter((el) => el.getClientRects().length > 0).length
-      )
+      // Identidade por índice (`data-e2e-foco`), não por tag/id/texto (que podem se repetir).
+      const total = await page.evaluate((seletor) => {
+        const lista = [...document.querySelectorAll(seletor)].filter(
+          (el) => el.getClientRects().length > 0
+        )
+        lista.forEach((el, i) => el.setAttribute('data-e2e-foco', String(i)))
+        return lista.length
+      }, FOCAVEIS)
       const visitados = new Set<string>()
       for (let i = 0; i < total; i++) {
         await page.keyboard.press('Tab')
@@ -92,38 +107,68 @@ test('USA-003 teclado percorre os focáveis com foco visível', { tag: TAG }, as
           const el = document.activeElement
           if (!el || el === document.body) return null
           const cs = getComputedStyle(el)
-          const contorno = cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0
+          // `outline: auto` é o anel padrão do navegador: não conta como o foco visível do projeto.
+          const contorno =
+            cs.outlineStyle !== 'none' &&
+            cs.outlineStyle !== 'auto' &&
+            parseFloat(cs.outlineWidth) > 0
           return {
-            id: `${el.tagName.toLowerCase()}#${el.id}:${el.textContent?.trim() ?? ''}`,
+            indice: el.getAttribute('data-e2e-foco'),
+            descricao: `${el.tagName.toLowerCase()} "${el.textContent?.trim() ?? ''}"`,
             visivel: contorno || cs.boxShadow !== 'none',
           }
         })
         expect(foco, `Tab ${i + 1}: algum elemento recebe o foco`).not.toBeNull()
         if (!foco) return
-        expect(foco.visivel, `${foco.id}: foco visível (outline ou box-shadow)`).toBe(true)
-        visitados.add(foco.id)
+        expect(
+          foco.visivel,
+          `${foco.descricao}: foco visível do projeto (outline ou box-shadow)`
+        ).toBe(true)
+        if (foco.indice !== null) visitados.add(foco.indice)
       }
       expect(visitados.size, 'Tab alcança todos os focáveis').toBe(total)
     })
   }
 })
 
+// Caminho feliz só pelo teclado na tela de recursos do skeleton (ajuste a tela/rótulos no projeto).
+test('USA-003 caminho feliz da tela de recursos pelo teclado', { tag: TAG }, async ({ page }) => {
+  const rota = parametro('telaComApi')
+  // Único por projeto e repetição: desktop e mobile dividem o mesmo usuário e a mesma lista.
+  const titulo = dado(`Teclado ${test.info().project.name} ${Date.now()}`)
+  await abrir(page, rota)
+  await page.waitForLoadState('networkidle')
+  const campo = page.getByLabel('Título')
+  await campo.focus()
+  await page.keyboard.type(titulo)
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('button', { name: 'Criar' }), 'Tab leva ao enviar').toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(
+    page.getByRole('listitem').filter({ hasText: titulo }),
+    'recurso criado'
+  ).toBeVisible()
+  await expect(campo, 'campo limpo após criar').toHaveValue('')
+})
+
 test(
   'USA-004 estados de loading, erro funcional e erro técnico',
   { tag: TAG },
   async ({ page }) => {
-    for (const { rota, nome } of telas()) {
+    let exercitadas = 0
+    for (const { rota, nome } of telasExigidas()) {
       await test.step(`${nome} (${rota})`, async () => {
         const chamadas: string[] = []
-        page.on('request', (req) => {
+        const registrar = (req: Request) => {
           const path = new URL(req.url()).pathname
           if (['fetch', 'xhr'].includes(req.resourceType()) && path.startsWith('/api/')) {
             chamadas.push(path)
           }
-        })
+        }
+        page.on('request', registrar)
         await abrir(page, rota)
         await page.waitForLoadState('networkidle')
-        page.removeAllListeners('request')
+        page.off('request', registrar)
         if (chamadas.length === 0) {
           test.info().annotations.push({
             type: 'USA-004',
@@ -161,13 +206,18 @@ test(
         await expect(page.getByRole('status'), 'erro funcional em aviso').toContainText(mensagem)
         await expect(alertas(page), 'erro funcional não é alerta').toHaveCount(0)
         await page.unrouteAll({ behavior: 'wait' })
+        exercitadas += 1
       })
     }
+    expect(
+      exercitadas,
+      'ao menos uma tela chama a API e teve os estados exercitados'
+    ).toBeGreaterThan(0)
   }
 )
 
 test('USA-005 botões só-ícone têm nome acessível', { tag: TAG }, async ({ page }) => {
-  for (const { rota, nome } of telas()) {
+  for (const { rota, nome } of telasExigidas()) {
     await test.step(`${nome} (${rota})`, async () => {
       await abrir(page, rota)
       await page.waitForLoadState('networkidle')

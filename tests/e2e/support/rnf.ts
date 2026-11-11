@@ -21,6 +21,19 @@ export const rnfMs = (id: string): number => valorEmMs(rnf(id))
 export const telas = (): { rota: string; nome: string }[] =>
   indiceAtual().rnf.telas.map(({ rota, nome }) => ({ rota, nome }))
 
+/**
+ * Telas do baseline para testes que iteram sobre elas: falha se `## Telas` estiver vazio — loop
+ * sobre lista vazia passaria sem testar nada.
+ */
+export const telasExigidas = (): { rota: string; nome: string }[] => {
+  const lista = telas()
+  if (lista.length === 0) {
+    const { config } = indiceAtual()
+    throw new Error(`rnf: nenhuma tela em ${config.rnf || 'docs/rnf.md'} (## Telas)`)
+  }
+  return lista
+}
+
 /** Parâmetro dos testes do baseline (`## Parâmetros dos testes` do `docs/rnf.md`); falha se faltar. */
 export const parametro = (chave: string): string => {
   const { rnf: baseline, config } = indiceAtual()

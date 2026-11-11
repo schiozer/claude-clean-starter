@@ -2,7 +2,7 @@
 export { jornada, registrarGanchoDePasso } from './jornada'
 export type { GanchoDePasso, PassoCtx, Passos } from './jornada'
 export { dado } from './dado'
-export { parametro, rnf, rnfMs, telas } from './rnf'
+export { parametro, rnf, rnfMs, telas, telasExigidas } from './rnf'
 export type { Requisito } from './rnf'
 export { AXE_TAGS, checarA11y } from './axe'
 export { credencialAuth0, entrar, loginAuth0, loginDev, perfis } from './auth'

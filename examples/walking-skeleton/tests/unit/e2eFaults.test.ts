@@ -1,10 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { e2eDelayMs } from '@/shared/http/e2eFaults'
+import { e2eDelayMs, e2eFault, E2E_FAULT_SENTINEL } from '@/shared/http/e2eFaults'
 
 const req = (secret: string | undefined, delay: string) =>
   new Request('http://localhost/api/resources', {
     headers: {
       'x-e2e-delay-ms': delay,
+      ...(secret === undefined ? {} : { 'x-e2e-secret': secret }),
+    },
+  })
+
+const reqFalha = (secret: string | undefined, fault: string) =>
+  new Request('http://localhost/api/resources', {
+    headers: {
+      'x-e2e-fault': fault,
       ...(secret === undefined ? {} : { 'x-e2e-secret': secret }),
     },
   })
@@ -32,5 +40,29 @@ describe('e2eDelayMs', () => {
   it('sem header de atraso → 0', () => {
     const env = { APP_ENV: 'uat', E2E_FAULTS_SECRET: 's'.repeat(16) }
     expect(e2eDelayMs(new Request('http://localhost/'), env)).toBe(0)
+  })
+})
+
+describe('e2eFault', () => {
+  it.each([
+    [{ APP_ENV: 'production', E2E_FAULTS_SECRET: 's'.repeat(16) }, 's'.repeat(16), 'throw', null],
+    [{ APP_ENV: 'uat', E2E_FAULTS_SECRET: 's'.repeat(16) }, undefined, 'throw', null],
+    [{ APP_ENV: 'uat', E2E_FAULTS_SECRET: 'curto' }, 'curto', 'throw', null],
+    [{ APP_ENV: 'uat', E2E_FAULTS_SECRET: 's'.repeat(16) }, 't'.repeat(16), 'throw', null],
+    [{ E2E_FAULTS_SECRET: 's'.repeat(16) }, 's'.repeat(16), 'throw', null],
+    [{ APP_ENV: 'uat', E2E_FAULTS_SECRET: 's'.repeat(16) }, 's'.repeat(16), 'outra', null],
+    [{ APP_ENV: 'uat', E2E_FAULTS_SECRET: 's'.repeat(16) }, 's'.repeat(16), 'throw', 'throw'],
+  ])('e2eFault(env=%o, segredo=%s, falha=%s) = %s', (env, secret, fault, esperado) => {
+    expect(e2eFault(reqFalha(secret, fault), env)).toBe(esperado)
+  })
+
+  it('sem header de falha → null', () => {
+    const env = { APP_ENV: 'uat', E2E_FAULTS_SECRET: 's'.repeat(16) }
+    expect(e2eFault(new Request('http://localhost/'), env)).toBeNull()
+  })
+
+  it('a sentinela imita o vazamento real (SQL + caminho de código)', () => {
+    expect(E2E_FAULT_SENTINEL).toContain('/src/')
+    expect(E2E_FAULT_SENTINEL).toContain('SELECT')
   })
 })

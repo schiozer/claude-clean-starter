@@ -57,7 +57,10 @@ Como os testes genéricos do baseline encontram a sessão e as rotas deste app. 
   não devolver 401: sem sessão, a tela redireciona ao login.
 - `telaComApi`: tela que chama a `rotaProtegida` ao abrir (RNF-TMO-002).
 - `limiteDeTaxaMcp`: chamadas por ator por minuto antes do `RATE_LIMITED` — o mesmo número do rate
-  limiter do app (`src/composition.ts`, ADR-010). Mudou lá, mude aqui.
+  limiter do app (`src/composition.ts`, ADR-010). Mudou lá, mude aqui. O teste exige a fronteira
+  exata (as `limite` primeiras passam, a seguinte é recusada). O limiter do skeleton é **em memória,
+  por instância**: com várias instâncias (UAT/Prod na Vercel) o limite efetivo vira N × limite e o
+  teste fica instável — lá é preciso um limiter compartilhado (tabela Postgres, ADR-010).
 - `margemDePerformance`: tolerância, em %, sobre os orçamentos de RNF-PRF-001/002 antes de falhar
   (spec §5.3: evita instabilidade). `0` = o orçamento exato.
 

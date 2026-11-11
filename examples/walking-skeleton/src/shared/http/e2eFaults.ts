@@ -3,9 +3,15 @@ import { timingSafeEqual } from 'node:crypto'
 type Env = Record<string, string | undefined>
 
 export const E2E_DELAY_HEADER = 'x-e2e-delay-ms'
+export const E2E_FAULT_HEADER = 'x-e2e-fault'
 export const E2E_SECRET_HEADER = 'x-e2e-secret'
 export const MAX_E2E_DELAY_MS = 60_000
 const MIN_SECRET_LENGTH = 16
+
+/** Mensagem do erro cru injetado (RNF-SEG-004): imita SQL e caminho de código que vazariam. */
+export const E2E_FAULT_SENTINEL = 'SELECT * FROM segredo /src/sentinela.ts'
+
+export type E2eFault = 'throw'
 
 function sameSecret(expected: string, received: string): boolean {
   const a = Buffer.from(expected)
@@ -14,16 +20,29 @@ function sameSecret(expected: string, received: string): boolean {
 }
 
 /**
- * Atraso de teste pedido pelo header `x-e2e-delay-ms` (RNF-TMO-001). Inerte (0, sem efeito nem
- * mensagem) salvo com `APP_ENV` declarado e diferente de `production` **e** `x-e2e-secret` igual a
- * `E2E_FAULTS_SECRET` (≥ 16 caracteres). Limitado a 60 s.
+ * Portão de toda falha injetada: `APP_ENV` declarado e diferente de `production` **e**
+ * `x-e2e-secret` igual a `E2E_FAULTS_SECRET` (≥ 16 caracteres). Fora disso, os headers são inertes.
  */
-export function e2eDelayMs(req: Request, env: Env = process.env): number {
-  if (!env.APP_ENV || env.APP_ENV === 'production') return 0
+function faultsAuthorized(req: Request, env: Env): boolean {
+  if (!env.APP_ENV || env.APP_ENV === 'production') return false
   const secret = env.E2E_FAULTS_SECRET ?? ''
   const received = req.headers.get(E2E_SECRET_HEADER)
-  if (secret.length < MIN_SECRET_LENGTH || !received || !sameSecret(secret, received)) return 0
+  return secret.length >= MIN_SECRET_LENGTH && !!received && sameSecret(secret, received)
+}
+
+/** Atraso de teste pedido pelo header `x-e2e-delay-ms` (RNF-TMO-001), atrás do portão. Limitado a 60 s. */
+export function e2eDelayMs(req: Request, env: Env = process.env): number {
+  if (!faultsAuthorized(req, env)) return 0
   const raw = req.headers.get(E2E_DELAY_HEADER)
   if (!raw || !/^\d+$/.test(raw)) return 0
   return Math.min(Number(raw), MAX_E2E_DELAY_MS)
+}
+
+/**
+ * Falha de teste pedida pelo header `x-e2e-fault` (RNF-SEG-004), atrás do mesmo portão. `throw` →
+ * a rota lança um `Error` cru com `E2E_FAULT_SENTINEL`, que precisa sair genérico pelo `handleApiError`.
+ */
+export function e2eFault(req: Request, env: Env = process.env): E2eFault | null {
+  if (!faultsAuthorized(req, env)) return null
+  return req.headers.get(E2E_FAULT_HEADER) === 'throw' ? 'throw' : null
 }

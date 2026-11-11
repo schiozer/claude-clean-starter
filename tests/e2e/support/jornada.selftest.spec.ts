@@ -2,7 +2,16 @@
 // índice falso (`__fixtures__/cenarios.config.json` via E2E_CENARIOS_CONFIG). Os títulos NÃO
 // começam por ID de cenário, então o `check-cenarios` não os trata como testes de cenário real.
 import { test, expect } from '@playwright/test'
-import { dado, jornada, registrarGanchoDePasso, rnf, rnfMs, telas, type PassoCtx } from './index'
+import {
+  dado,
+  jornada,
+  registrarGanchoDePasso,
+  rnf,
+  rnfMs,
+  telas,
+  telasExigidas,
+  type PassoCtx,
+} from './index'
 
 const FIXTURE = 'tests/e2e/support/__fixtures__/cenarios.config.json'
 
@@ -141,5 +150,13 @@ test.describe('helpers de E2E — selftest', { tag: '@sistemico' }, () => {
       { rota: '/', nome: 'Início' },
       { rota: '/resources', nome: 'Recursos' },
     ])
+    expect(telasExigidas()).toEqual(telas())
+  })
+
+  test('telasExigidas falha quando o baseline não tem telas', () => {
+    process.env.E2E_CENARIOS_CONFIG =
+      'tests/e2e/support/__fixtures__/cenarios-sem-telas.config.json'
+    expect(telas()).toEqual([])
+    expect(() => telasExigidas()).toThrow('nenhuma tela')
   })
 })
