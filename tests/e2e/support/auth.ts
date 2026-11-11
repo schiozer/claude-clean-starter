@@ -1,6 +1,7 @@
 // Login dos perfis de teste (spec e2e-regressao-docs §7.2). Usado pelo projeto `setup`
 // (`tests/e2e/auth.setup.ts`), que salva o `storageState` de cada perfil em `perfis`.
 import { expect, test, type Page } from '@playwright/test'
+import { e2eEnv } from './env'
 
 export type Perfil = 'usuario' | 'interno'
 
@@ -32,4 +33,28 @@ export const loginAuth0 = async (
   await page.locator('input[name=password]').fill(cred.senha)
   await page.locator('button[type=submit][name=action]').click()
   await page.waitForURL((url) => url.origin === origem)
+}
+
+const CREDENCIAIS: Record<Perfil, { email: string; senha: string }> = {
+  usuario: { email: 'E2E_USUARIO_EMAIL', senha: 'E2E_USUARIO_SENHA' },
+  interno: { email: 'E2E_INTERNO_EMAIL', senha: 'E2E_INTERNO_SENHA' },
+}
+
+/** Credencial do usuário de teste do perfil no Auth0; falta → erro com o nome das variáveis. */
+export const credencialAuth0 = (perfil: Perfil): { email: string; senha: string } => {
+  const nomes = CREDENCIAIS[perfil]
+  const email = process.env[nomes.email]?.trim()
+  const senha = process.env[nomes.senha]
+  if (!email || !senha) {
+    throw new Error(
+      `E2E_AUTH=auth0 exige ${nomes.email} e ${nomes.senha} (segredos do GitHub; runbook e2e-uat-configurar)`
+    )
+  }
+  return { email, senha }
+}
+
+/** Login do perfil pelo modo da execução (`E2E_AUTH`): stub local ou Universal Login. */
+export const entrar = async (page: Page, perfil: Perfil): Promise<void> => {
+  if (e2eEnv().auth === 'auth0') await loginAuth0(page, credencialAuth0(perfil))
+  else await loginDev(page, perfil)
 }

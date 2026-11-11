@@ -39,3 +39,11 @@ describe('ResourcesView — erro funcional × técnico', () => {
     )
   })
 })
+
+describe('ResourcesView — loading', () => {
+  it('enquanto a lista carrega → indicador com aria-busy="true"', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
+    render(<ResourcesView />)
+    expect((await screen.findByText('Carregando…')).getAttribute('aria-busy')).toBe('true')
+  })
+})

@@ -30,13 +30,15 @@ const ehSeparador = (cels) => cels.every((c) => /^:?-+:?$/.test(c))
  * @param {string} path
  * @returns {{
  *   requisitos: Requisito[], telas: { rota: string, nome: string }[],
- *   exclusoes: string[], erros: Erro[]
- * }}
+ *   exclusoes: string[], parametros: Record<string, string>, erros: Erro[]
+ * }} `parametros`: tabela `| Chave | Valor |` de `## Parâmetros dos testes` (crases removidas).
  */
 export const parseRnf = (markdown, path) => {
   const requisitos = []
   const telas = []
   const exclusoes = []
+  /** @type {Record<string, string>} */
+  const parametros = {}
   const erros = []
   const erro = (linha, mensagem) => erros.push({ path, linha, mensagem })
 
@@ -53,7 +55,9 @@ export const parseRnf = (markdown, path) => {
           ? 'telas'
           : nome.startsWith('exclus')
             ? 'exclusoes'
-            : 'requisitos'
+            : /^par[âa]metros/.test(nome)
+              ? 'parametros'
+              : 'requisitos'
         return
       }
       if (secao === 'exclusoes') {
@@ -64,6 +68,17 @@ export const parseRnf = (markdown, path) => {
       if (!texto.trim().startsWith('|')) return
       const cels = celulas(texto)
       if (ehSeparador(cels)) return
+
+      if (secao === 'parametros') {
+        const [chave = '', bruto = ''] = cels
+        if (chave === 'Chave') return
+        const valor = bruto.replace(/`/g, '').trim()
+        if (!chave) return erro(n, 'parâmetro sem chave')
+        if (Object.hasOwn(parametros, chave)) return erro(n, `parâmetro '${chave}' repetido`)
+        if (!valor) return erro(n, `parâmetro '${chave}' com valor vazio`)
+        parametros[chave] = valor
+        return
+      }
 
       if (secao === 'telas') {
         if (cels[0].toLowerCase() === 'rota') return
@@ -92,7 +107,7 @@ export const parseRnf = (markdown, path) => {
       requisitos.push({ id, categoria, requisito, valor })
     })
 
-  return { requisitos, telas, exclusoes, erros }
+  return { requisitos, telas, exclusoes, parametros, erros }
 }
 
 /**

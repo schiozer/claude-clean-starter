@@ -131,7 +131,7 @@ export const montarIndice = ({ config, specs, rnf, avisos = [], erros = [] }) =>
   }
 
   /** @type {RnfIndice} */
-  let rnfIndice = { requisitos: [], telas: [], exclusoes: [], erros: [] }
+  let rnfIndice = { requisitos: [], telas: [], exclusoes: [], parametros: {}, erros: [] }
   if (rnf) {
     rnfIndice = parseRnf(rnf.markdown, rnf.path)
     todosErros.push(...rnfIndice.erros.map((e) => ({ ...e, global: true })))

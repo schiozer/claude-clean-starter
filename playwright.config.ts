@@ -61,7 +61,8 @@ export default defineConfig({
   },
   projects: [
     { name: 'setup', testMatch: /auth\.setup\.ts/, use: { browserName: 'chromium' } },
-    { name: 'sistemico', grep: /@sistemico|@rnf/ },
+    // `@rnf` com sessão ou navegador usa `test.use({ storageState: perfis.usuario, ... })`.
+    { name: 'sistemico', grep: /@sistemico|@rnf/, dependencies: ['setup'] },
     {
       name: 'desktop',
       grep: NAVEGADOR,
@@ -91,6 +92,7 @@ export default defineConfig({
         env: {
           APP_ENV: 'e2e',
           RESOURCES_ENABLED: 'on',
+          MCP_RESOURCE_URL: `http://localhost:${PORTA_LOCAL}/api/mcp`,
           ...LOCAL_SOMENTE_TESTE,
           E2E_FAULTS_SECRET: process.env.E2E_FAULTS_SECRET ?? LOCAL_SOMENTE_TESTE.E2E_FAULTS_SECRET,
         },

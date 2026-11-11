@@ -84,3 +84,49 @@ describe('parseRnf', () => {
     expect(erros[0].mensagem).toMatch(/Valor/)
   })
 })
+
+describe('parseRnf — Parâmetros dos testes', () => {
+  const md = `## Requisitos
+
+| ID          | Categoria | Requisito      | Valor    |
+| ----------- | --------- | -------------- | -------- |
+| RNF-TMO-001 | Timeout   | Timeout da API | 10000 ms |
+
+## Parâmetros dos testes
+
+| Chave          | Valor                                       |
+| -------------- | ------------------------------------------- |
+| cookieDeSessao | \`e2e_session\`                               |
+| rotasPublicas  | \`/\`, \`/.well-known/oauth-protected-resource\` |
+
+## Telas
+
+| Rota | Nome   |
+| ---- | ------ |
+| /    | Início |
+`
+
+  it('lê a tabela chave/valor em parametros, sem virar requisito', () => {
+    const { requisitos, parametros, telas, erros } = parseRnf(md, 'rnf.md')
+    expect(erros).toEqual([])
+    expect(requisitos.map((r: { id: string }) => r.id)).toEqual(['RNF-TMO-001'])
+    expect(parametros).toEqual({
+      cookieDeSessao: 'e2e_session',
+      rotasPublicas: '/, /.well-known/oauth-protected-resource',
+    })
+    expect(telas).toEqual([{ rota: '/', nome: 'Início' }])
+  })
+
+  it('sem a seção → parametros vazio', () => {
+    expect(parseRnf(RNF, 'rnf.md').parametros).toEqual({})
+  })
+
+  it('chave repetida ou valor vazio vira erro com linha', () => {
+    const ruim = `## Parâmetros dos testes\n\n| Chave | Valor |\n| -- | -- |\n| a | 1 |\n| a | 2 |\n| b |  |\n`
+    const { parametros, erros } = parseRnf(ruim, 'rnf.md')
+    expect(parametros).toEqual({ a: '1' })
+    expect(erros.map((e: { linha: number }) => e.linha)).toEqual([6, 7])
+    expect(erros[0].mensagem).toMatch(/repetid/)
+    expect(erros[1].mensagem).toMatch(/vazi/)
+  })
+})

@@ -20,3 +20,15 @@ export const rnfMs = (id: string): number => valorEmMs(rnf(id))
 /** Telas principais do baseline (rota + nome), na ordem do `docs/rnf.md`. */
 export const telas = (): { rota: string; nome: string }[] =>
   indiceAtual().rnf.telas.map(({ rota, nome }) => ({ rota, nome }))
+
+/** Parâmetro dos testes do baseline (`## Parâmetros dos testes` do `docs/rnf.md`); falha se faltar. */
+export const parametro = (chave: string): string => {
+  const { rnf: baseline, config } = indiceAtual()
+  const valor = baseline.parametros[chave]
+  if (valor === undefined) {
+    throw new Error(
+      `rnf: parâmetro '${chave}' não encontrado em ${config.rnf || 'docs/rnf.md'} (## Parâmetros dos testes)`
+    )
+  }
+  return valor
+}

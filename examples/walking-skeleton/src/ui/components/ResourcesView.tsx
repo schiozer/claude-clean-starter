@@ -36,7 +36,15 @@ export function ResourcesView() {
           {error.message}
         </p>
       )}
-      {loading ? <p>Carregando…</p> : <ul>{resources.map((r) => <li key={r.id}>{r.title}</li>)}</ul>}
+      {loading ? (
+        <p aria-busy="true">Carregando…</p>
+      ) : (
+        <ul>
+          {resources.map((r) => (
+            <li key={r.id}>{r.title}</li>
+          ))}
+        </ul>
+      )}
     </main>
   )
 }
