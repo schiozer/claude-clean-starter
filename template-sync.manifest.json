@@ -23,6 +23,7 @@
     ".prettierrc",
     ".gitignore",
     ".env.local.example",
+    "tests/e2e/tsconfig.json",
     "tests/e2e/support/**",
     "tests/setup.ts",
     "tests/helpers/gitRepo.ts",
