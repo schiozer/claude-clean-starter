@@ -44,3 +44,10 @@ export class RateLimitedError extends AppError {
     super(message, 'RATE_LIMITED', 429)
   }
 }
+
+/** Erro **técnico**: a operação estourou o prazo (rota de API ou chamada da UI). */
+export class TimeoutError extends AppError {
+  constructor(message = 'A operação demorou demais. Tente novamente.') {
+    super(message, 'TIMEOUT', 504)
+  }
+}

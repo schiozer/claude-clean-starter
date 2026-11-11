@@ -8,3 +8,11 @@ type Env = Record<string, string | undefined>
 export function isDevEnvironment(env: Env = process.env): boolean {
   return env.APP_ENV === 'development' && env.NODE_ENV !== 'production'
 }
+
+/**
+ * Modo E2E local (`webServer` do Playwright): `APP_ENV=e2e` **e** fora da Vercel. Um deploy da
+ * Vercel (`VERCEL=1`) nunca é e2e local, mesmo com `APP_ENV=e2e` copiado por engano (fail-closed).
+ */
+export function isE2eLocalEnvironment(env: Env = process.env): boolean {
+  return env.APP_ENV === 'e2e' && !env.VERCEL
+}

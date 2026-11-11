@@ -18,10 +18,18 @@ const LOCAL_SOMENTE_TESTE = {
   E2E_SESSION_SECRET: 'e2e-local-session-secret-0000000000',
   E2E_FAULTS_SECRET: 'e2e-local-faults-secret-00000000',
   DEV_PERSONAL_TOKEN: 'pat_e2e_local_dev_token_000000000000',
+  E2E_PAT_SEM_ESCOPO: 'pat_e2e_local_sem_escopo_0000000000',
+  E2E_PAT_RATE_LIMIT: 'pat_e2e_local_rate_limit_0000000000',
 }
 
-// No modo local os testes precisam do mesmo segredo de falhas que o app local recebe.
-if (!env.baseUrl) process.env.E2E_FAULTS_SECRET ||= LOCAL_SOMENTE_TESTE.E2E_FAULTS_SECRET
+// No modo local os testes precisam do mesmo segredo de falhas e dos mesmos PATs que o app local
+// recebe.
+if (!env.baseUrl) {
+  process.env.E2E_FAULTS_SECRET ||= LOCAL_SOMENTE_TESTE.E2E_FAULTS_SECRET
+  process.env.E2E_PAT_USUARIO ||= LOCAL_SOMENTE_TESTE.DEV_PERSONAL_TOKEN
+  process.env.E2E_PAT_SEM_ESCOPO ||= LOCAL_SOMENTE_TESTE.E2E_PAT_SEM_ESCOPO
+  process.env.E2E_PAT_RATE_LIMIT ||= LOCAL_SOMENTE_TESTE.E2E_PAT_RATE_LIMIT
+}
 
 const { testes } = JSON.parse(
   readFileSync(new URL('./tests/e2e/cenarios.config.json', import.meta.url), 'utf8')

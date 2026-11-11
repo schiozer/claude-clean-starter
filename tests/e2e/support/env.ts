@@ -14,8 +14,11 @@ export interface E2eEnv {
   faultsSecret: string | null
   /** `E2E_RUN_PREFIX`: sufixo dos dados gravados por esta execução (ver `dado()`). */
   runPrefix: string
-  /** PATs dos usuários de teste, para semear dados pela API/MCP. */
-  pat: { usuario: string | null }
+  /**
+   * PATs dos usuários de teste (`E2E_PAT_USUARIO`, `E2E_PAT_SEM_ESCOPO`, `E2E_PAT_RATE_LIMIT`):
+   * semear dados pela API/MCP, testar o 403 sem escopo e o rate limit sem afetar os demais.
+   */
+  pat: { usuario: string | null; semEscopo: string | null; rateLimit: string | null }
 }
 
 const texto = (valor: string | undefined): string | null => {
@@ -29,5 +32,9 @@ export const e2eEnv = (env: Env = process.env): E2eEnv => ({
   bypass: texto(env.VERCEL_AUTOMATION_BYPASS_SECRET),
   faultsSecret: texto(env.E2E_FAULTS_SECRET),
   runPrefix: env.E2E_RUN_PREFIX?.trim() ?? '',
-  pat: { usuario: texto(env.E2E_PAT_USUARIO) },
+  pat: {
+    usuario: texto(env.E2E_PAT_USUARIO),
+    semEscopo: texto(env.E2E_PAT_SEM_ESCOPO),
+    rateLimit: texto(env.E2E_PAT_RATE_LIMIT),
+  },
 })

@@ -80,3 +80,14 @@ describe('PersonalTokenVerifier', () => {
     await expect(store.issue({ ...owner, devOnly: true, token: 'curto' })).rejects.toThrow('pat_')
   })
 })
+
+describe('PersonalTokenVerifier no modo e2e local', () => {
+  it('token devOnly vale com APP_ENV=e2e sem VERCEL, nunca num deploy da Vercel', async () => {
+    const store = new InMemoryPersonalTokenStore(clock)
+    const token = await store.issue({ ...owner, devOnly: true, token: 'pat_e2e_local_e2e_local_e2e_local_0' })
+    const e2e = new PersonalTokenVerifier(store, clock, { APP_ENV: 'e2e' })
+    expect((await e2e.verify(token)).id).toBe('ana')
+    const vercel = new PersonalTokenVerifier(store, clock, { APP_ENV: 'e2e', VERCEL: '1' })
+    await expect(vercel.verify(token)).rejects.toThrow(UnauthorizedError)
+  })
+})

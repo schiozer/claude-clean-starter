@@ -26,7 +26,16 @@ export function ResourcesView() {
           Criar
         </button>
       </form>
-      {error && <p role="alert">{error}</p>}
+      {error?.kind === 'funcional' && (
+        <p role="status" className="aviso">
+          {error.message}
+        </p>
+      )}
+      {error?.kind === 'tecnico' && (
+        <p role="alert" className="erro">
+          {error.message}
+        </p>
+      )}
       {loading ? <p>Carregando…</p> : <ul>{resources.map((r) => <li key={r.id}>{r.title}</li>)}</ul>}
     </main>
   )
