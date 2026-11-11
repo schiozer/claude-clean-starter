@@ -15,11 +15,19 @@ const ID_TESTE = /^(CT-[A-Z]{2,6}-\d{3}|RNF-[A-Z]{3}-\d{3}|USA-\d{3})(?![\w-])/
 
 const ehLiteral = (n) => n && (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n))
 
-/** `test`, `test.describe`, `test.only`... (raiz da cadeia de acesso é o identificador `test`). */
+const ABRE_BLOCO = ['only', 'skip', 'fixme', 'describe']
+
+/** Chamada que abre um bloco de teste: `test`, `test.only|skip|fixme` ou `test.describe*` com título literal. */
 const ehChamadaTest = (call) => {
+  if (!ehLiteral(call.arguments[0])) return false
+  const nomes = []
   let e = call.expression
-  while (ts.isPropertyAccessExpression(e)) e = e.expression
-  return ts.isIdentifier(e) && e.text === 'test'
+  while (ts.isPropertyAccessExpression(e)) {
+    nomes.unshift(e.name.text)
+    e = e.expression
+  }
+  if (!ts.isIdentifier(e) || e.text !== 'test') return false
+  return nomes.length === 0 || ABRE_BLOCO.includes(nomes[0])
 }
 
 const ehJornada = (call) => ts.isIdentifier(call.expression) && call.expression.text === 'jornada'
@@ -27,7 +35,10 @@ const ehJornada = (call) => ts.isIdentifier(call.expression) && call.expression.
 const lerTags = (opcoes) => {
   if (!opcoes || !ts.isObjectLiteralExpression(opcoes)) return []
   const prop = opcoes.properties.find(
-    (p) => ts.isPropertyAssignment(p) && p.name.getText() === 'tag'
+    (p) =>
+      ts.isPropertyAssignment(p) &&
+      (ts.isIdentifier(p.name) || ehLiteral(p.name)) &&
+      p.name.text === 'tag'
   )
   if (!prop || !ts.isPropertyAssignment(prop)) return []
   const v = prop.initializer
@@ -84,7 +95,7 @@ export const scanTestes = (source, path) => {
   }
 
   const visitar = (no) => {
-    if (ts.isCallExpression(no) && ehChamadaTest(no) && ehLiteral(no.arguments[0])) {
+    if (ts.isCallExpression(no) && ehChamadaTest(no)) {
       const titulo = no.arguments[0].text
       const id = ID_TESTE.exec(titulo)?.[1]
       if (id) {

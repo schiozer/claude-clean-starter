@@ -84,6 +84,19 @@ describe('scanTestes', () => {
     expect(erros[0].mensagem).toContain('chave de passo não literal')
   })
 
+  it('acha jornada dentro de test.step e não gera ref para test.step com ID', () => {
+    const src = `test('CT-RES-003 a', { 'tag': '@e2e' }, async () => {
+  await test.step('CT-RES-009 x', async () => {
+    await jornada('CT-RES-003', { 'passo um': f }, {})
+  })
+})`
+    const { refs, erros } = scanTestes(src, 'h.spec.ts')
+    expect(erros).toEqual([])
+    expect(refs).toEqual([
+      expect.objectContaining({ id: 'CT-RES-003', tags: ['@e2e'], passos: ['passo um'] }),
+    ])
+  })
+
   it('não lança com código inválido', () => {
     expect(() => scanTestes('test(((', 'g.spec.ts')).not.toThrow()
   })
