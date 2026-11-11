@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "prepare": "node scripts/install-git-hooks.mjs",
     "check:runbooks": "node scripts/check-runbooks.mjs",
+    "check:cenarios": "node scripts/check-cenarios.mjs",
     "format": "prettier --write ."
   },
   "devDependencies": {

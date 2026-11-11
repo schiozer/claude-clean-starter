@@ -25,6 +25,7 @@
     ".env.local.example",
     "tests/setup.ts",
     "tests/helpers/gitRepo.ts",
+    "tests/unit/checkCenarios.test.ts",
     "tests/unit/checkRunbooks.test.ts",
     "tests/unit/docsLinks.test.ts",
     "tests/unit/e2eCenarios.test.ts",
