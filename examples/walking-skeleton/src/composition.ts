@@ -63,6 +63,11 @@ const FIXED_TOKENS: FixedToken[] = isE2eLocal
       },
       { envVar: 'E2E_PAT_SEM_ESCOPO', userId: 'e2e-sem-escopo', scopes: [] },
       { envVar: 'E2E_PAT_RATE_LIMIT', userId: 'e2e-rate-limit', scopes: ['resources:read'] },
+      {
+        envVar: 'E2E_PAT_OUTRO_ATOR',
+        userId: 'e2e-outro-ator',
+        scopes: ['resources:read', 'resources:write'],
+      },
     ]
   : isDevEnvironment()
     ? [

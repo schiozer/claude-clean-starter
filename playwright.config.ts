@@ -20,6 +20,7 @@ const LOCAL_SOMENTE_TESTE = {
   DEV_PERSONAL_TOKEN: 'pat_e2e_local_dev_token_000000000000',
   E2E_PAT_SEM_ESCOPO: 'pat_e2e_local_sem_escopo_0000000000',
   E2E_PAT_RATE_LIMIT: 'pat_e2e_local_rate_limit_0000000000',
+  E2E_PAT_OUTRO_ATOR: 'pat_e2e_local_outro_ator_0000000000',
 }
 
 // No modo local os testes precisam do mesmo segredo de falhas e dos mesmos PATs que o app local
@@ -29,6 +30,7 @@ if (!env.baseUrl) {
   process.env.E2E_PAT_USUARIO ||= LOCAL_SOMENTE_TESTE.DEV_PERSONAL_TOKEN
   process.env.E2E_PAT_SEM_ESCOPO ||= LOCAL_SOMENTE_TESTE.E2E_PAT_SEM_ESCOPO
   process.env.E2E_PAT_RATE_LIMIT ||= LOCAL_SOMENTE_TESTE.E2E_PAT_RATE_LIMIT
+  process.env.E2E_PAT_OUTRO_ATOR ||= LOCAL_SOMENTE_TESTE.E2E_PAT_OUTRO_ATOR
 }
 
 const { testes } = JSON.parse(

@@ -9,7 +9,7 @@ describe('e2eEnv', () => {
       bypass: null,
       faultsSecret: null,
       runPrefix: '',
-      pat: { usuario: null, semEscopo: null, rateLimit: null },
+      pat: { usuario: null, semEscopo: null, rateLimit: null, outroAtor: null },
     })
   })
 
@@ -33,6 +33,7 @@ describe('e2eEnv', () => {
         E2E_PAT_USUARIO: 'pat_abc',
         E2E_PAT_SEM_ESCOPO: ' pat_sem ',
         E2E_PAT_RATE_LIMIT: 'pat_rl',
+        E2E_PAT_OUTRO_ATOR: ' pat_outro ',
       })
     ).toEqual({
       baseUrl: 'https://app-git-x.vercel.app',
@@ -40,7 +41,12 @@ describe('e2eEnv', () => {
       bypass: 'bypass-123',
       faultsSecret: 'faults-secret-0123456789',
       runPrefix: '987',
-      pat: { usuario: 'pat_abc', semEscopo: 'pat_sem', rateLimit: 'pat_rl' },
+      pat: {
+        usuario: 'pat_abc',
+        semEscopo: 'pat_sem',
+        rateLimit: 'pat_rl',
+        outroAtor: 'pat_outro',
+      },
     })
   })
 
@@ -52,7 +58,12 @@ describe('e2eEnv', () => {
 
   it('PATs vazios contam como ausentes', () => {
     expect(
-      e2eEnv({ E2E_PAT_USUARIO: '', E2E_PAT_SEM_ESCOPO: '  ', E2E_PAT_RATE_LIMIT: '' }).pat
-    ).toEqual({ usuario: null, semEscopo: null, rateLimit: null })
+      e2eEnv({
+        E2E_PAT_USUARIO: '',
+        E2E_PAT_SEM_ESCOPO: '  ',
+        E2E_PAT_RATE_LIMIT: '',
+        E2E_PAT_OUTRO_ATOR: ' ',
+      }).pat
+    ).toEqual({ usuario: null, semEscopo: null, rateLimit: null, outroAtor: null })
   })
 })
