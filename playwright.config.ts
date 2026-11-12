@@ -9,6 +9,8 @@ const env = e2eEnv()
 const CI = Boolean(process.env.CI)
 /** `docs:gerar` sempre sobe um app novo: banco em memória limpo, capturas sem dados de outra execução. */
 const DOCS = process.env.E2E_DOCS === '1'
+/** `demos:gravar`: vídeo de todo teste, em câmera lenta, contra um app novo e sem retentativa. */
+const DEMOS = process.env.E2E_DEMOS === '1'
 const PORTA_LOCAL = 3100
 
 /**
@@ -47,13 +49,18 @@ export default defineConfig({
   testDir: '.',
   testMatch: testes,
   forbidOnly: CI,
-  retries: CI ? 1 : 0,
+  retries: CI && !DEMOS ? 1 : 0,
   failOnFlakyTests: CI,
-  reporter: CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
+  reporter: DEMOS
+    ? [['list'], ['./tests/e2e/support/demosReporter.ts']]
+    : CI
+      ? [['list'], ['html', { open: 'never' }]]
+      : [['list']],
   use: {
     baseURL: env.baseUrl ?? `http://localhost:${PORTA_LOCAL}`,
     trace: 'retain-on-failure',
-    video: 'retain-on-failure',
+    video: DEMOS ? 'on' : 'retain-on-failure',
+    ...(DEMOS ? { launchOptions: { slowMo: 500 } } : {}),
     // Bypass da Vercel (modo preview): não vai em `extraHTTPHeaders`, que o mandaria a toda origem
     // (Auth0, CDN, terceiros). O `test` de `tests/e2e/support` o põe só nas requisições ao `baseURL`.
   },
@@ -94,7 +101,7 @@ export default defineConfig({
           ...LOCAL_SOMENTE_TESTE,
           E2E_FAULTS_SECRET: process.env.E2E_FAULTS_SECRET ?? LOCAL_SOMENTE_TESTE.E2E_FAULTS_SECRET,
         },
-        reuseExistingServer: !CI && !DOCS,
+        reuseExistingServer: !CI && !DOCS && !DEMOS,
         timeout: 180_000,
       },
 })

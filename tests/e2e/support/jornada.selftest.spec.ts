@@ -97,6 +97,43 @@ test.describe('helpers de E2E — selftest', { tag: '@sistemico' }, () => {
     ])
   })
 
+  test('gancho `antes` roda dentro do passo, antes do efeito; `depois` é o padrão', async () => {
+    const ordem: string[] = []
+    const removerAntes = registrarGanchoDePasso(
+      async ({ indice }) => {
+        ordem.push(`antes:${indice}`)
+      },
+      { momento: 'antes' }
+    )
+    const removerDepois = registrarGanchoDePasso(async ({ indice }) => {
+      ordem.push(`depois:${indice}`)
+    })
+    const efeito = (n: number) => async () => {
+      ordem.push(`efeito:${n}`)
+    }
+    try {
+      await jornada('CT-JOR-001', {
+        'que abro a lista de "Recursos"': efeito(0),
+        'crio o recurso "Plano de estudos"': efeito(1),
+        'vejo "Plano de estudos" na lista': efeito(2),
+      })
+    } finally {
+      removerAntes()
+      removerDepois()
+    }
+    expect(ordem).toEqual([
+      'antes:0',
+      'efeito:0',
+      'depois:0',
+      'antes:1',
+      'efeito:1',
+      'depois:1',
+      'antes:2',
+      'efeito:2',
+      'depois:2',
+    ])
+  })
+
   test('jornada com ID inexistente falha sem executar passo', async () => {
     let executou = false
     await expect(

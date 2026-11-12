@@ -1,6 +1,7 @@
 // API pública dos helpers de E2E (gerenciada pelo template). Testes importam só daqui.
 import { join } from 'node:path'
 import { makeGanchoDeDocs } from './docs'
+import { makeGanchoDeLegenda } from './demos'
 import { RAIZ, indiceAtual } from './indice'
 import { registrarGanchoDePasso } from './jornada'
 import { test } from './test'
@@ -25,4 +26,10 @@ if (process.env.E2E_DOCS === '1') {
   registrarGanchoDePasso(
     makeGanchoDeDocs({ dir: join(RAIZ, ajuda), projeto: () => test.info().project.name })
   )
+}
+
+// `npm run demos:gravar` (`E2E_DEMOS=1`): legenda do passo e destaque do clique nos vídeos
+// `@demo`/`@treinamento`. Roda antes do passo, para a legenda já estar na tela durante a ação.
+if (process.env.E2E_DEMOS === '1') {
+  registrarGanchoDePasso(makeGanchoDeLegenda(), { momento: 'antes' })
 }

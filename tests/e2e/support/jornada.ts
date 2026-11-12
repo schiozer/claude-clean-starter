@@ -21,17 +21,24 @@ export interface PassoCtx {
 
 export type GanchoDePasso = (ctx: PassoCtx) => Promise<void>
 
-const ganchos: GanchoDePasso[] = []
+export type MomentoDoGancho = 'antes' | 'depois'
+
+const ganchos: Record<MomentoDoGancho, GanchoDePasso[]> = { antes: [], depois: [] }
 
 /**
- * Registra um gancho chamado após cada passo de toda `jornada()` (ex.: screenshot da doc).
+ * Registra um gancho chamado em cada passo de toda `jornada()`: por padrão após o passo
+ * (`'depois'`, ex.: screenshot da doc); com `momento: 'antes'`, antes dele (ex.: legenda do vídeo).
  * @returns função que remove o gancho.
  */
-export const registrarGanchoDePasso = (fn: GanchoDePasso): (() => void) => {
-  ganchos.push(fn)
+export const registrarGanchoDePasso = (
+  fn: GanchoDePasso,
+  opts: { momento?: MomentoDoGancho } = {}
+): (() => void) => {
+  const lista = ganchos[opts.momento ?? 'depois']
+  lista.push(fn)
   return () => {
-    const i = ganchos.indexOf(fn)
-    if (i >= 0) ganchos.splice(i, 1)
+    const i = lista.indexOf(fn)
+    if (i >= 0) lista.splice(i, 1)
   }
 }
 
@@ -62,10 +69,11 @@ export const jornada = async (
     const executar = porNormalizado.get(normalizarPasso(passo.texto))
     if (!executar) throw new Error(`jornada: passo sem implementação em ${id}: "${passo.texto}"`)
     await test.step(`${passo.palavra} ${passo.texto}`, async () => {
-      await executar()
       const ctx: PassoCtx = { id, indice, palavra: passo.palavra, texto: passo.texto, cenario }
       if (opts.page) ctx.page = opts.page
-      for (const gancho of [...ganchos]) await gancho(ctx)
+      for (const gancho of [...ganchos.antes]) await gancho(ctx)
+      await executar()
+      for (const gancho of [...ganchos.depois]) await gancho(ctx)
     })
   }
 }
