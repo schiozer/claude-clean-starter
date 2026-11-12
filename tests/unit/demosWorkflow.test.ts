@@ -57,4 +57,34 @@ describe('workflow demos-treinamento.yml', () => {
       for (const uso of usos) expect(uso).toContain(`secrets.${nome}`)
     }
   })
+
+  it('valida a tag do dispatch com vX.Y.Z', () => {
+    expect(yml).toContain('[[ "$INPUT_TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]')
+    expect(yml).not.toContain('-z "$INPUT_TAG$HEAD_SHA"')
+  })
+
+  it('o aviso exige toggle ligado e tag', () => {
+    expect(yml).toContain(
+      "if: failure() && steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != ''"
+    )
+  })
+
+  it('tem a expressão do job, timeout, permissões e checkout sem credenciais', () => {
+    expect(yml).toContain(
+      "if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'"
+    )
+    expect(yml).toContain('timeout-minutes: 60')
+    expect(yml).toMatch(/^permissions:\n {2}contents: write\n {2}pull-requests: read\n/m)
+    expect(yml).toContain('fetch-depth: 0')
+    expect(yml).toContain('persist-credentials: false')
+  })
+
+  it('guarda o CLI ausente em tags antigas', () => {
+    expect(yml).toContain("hashFiles('scripts/demos/publicar.mjs') != ''")
+  })
+
+  it('o artefato é guardado por 7 dias sempre', () => {
+    expect(yml).toContain('retention-days: 7')
+    expect(yml).toMatch(/if: always\(\)[^\n]*\n\s+uses: actions\/upload-artifact/)
+  })
 })

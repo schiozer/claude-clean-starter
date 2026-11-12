@@ -57,11 +57,15 @@ jobs:
         if: steps.toggle.outputs.ligado == 'true'
         run: |
           if [ "$EVENT_NAME" = 'workflow_dispatch' ]; then
-            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
-          else
-            node scripts/demos/publicar.mjs tag
+            if [[ "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::Tag inválida (esperado vX.Y.Z) — nada a gravar."
+              echo 'tag=' >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
           fi
-          if [ -z "$INPUT_TAG$HEAD_SHA" ]; then echo 'tag=' >> "$GITHUB_OUTPUT"; fi
+          node scripts/demos/publicar.mjs tag
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_TAG: ${{ inputs.tag }}
@@ -80,6 +84,7 @@ jobs:
         with:
           ref: ${{ steps.tag.outputs.tag }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Instalar dependências
         if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != ''
@@ -94,9 +99,16 @@ jobs:
         if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != ''
         run: npx playwright install --with-deps chromium
 
+      # Tag antiga (dispatch) pode ser anterior a `scripts/demos/`: sem o CLI, termina verde com aviso.
+      - name: Avisar que a tag não tem o CLI de demos
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && hashFiles('scripts/demos/publicar.mjs') == ''
+        run: |
+          echo "::warning::A tag não tem scripts/demos/publicar.mjs (anterior às demos) — nada a gravar."
+          echo '### Demos & Treinamento: a tag é anterior às demos, nada a gravar' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Selecionar os cenários
         id: selecao
-        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != ''
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && hashFiles('scripts/demos/publicar.mjs') != ''
         run: node scripts/demos/publicar.mjs selecionar
         env:
           TAG: ${{ steps.tag.outputs.tag }}
@@ -104,7 +116,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Avisar que não há cenários
-        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && steps.selecao.outputs.grep == ''
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && hashFiles('scripts/demos/publicar.mjs') != '' && steps.selecao.outputs.grep == ''
         run: |
           echo "::warning::nenhum cenário @demo/@treinamento nesta versão — nada a gravar."
           echo '### Demos & Treinamento: nenhum cenário @demo/@treinamento' >> "$GITHUB_STEP_SUMMARY"
@@ -130,7 +142,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Avisar a falha na Release
-        if: failure() && steps.tag.outputs.tag != ''
+        if: failure() && steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && hashFiles('scripts/demos/publicar.mjs') != ''
         run: node scripts/demos/publicar.mjs aviso
         env:
           TAG: ${{ steps.tag.outputs.tag }}
