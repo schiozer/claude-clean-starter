@@ -1,5 +1,6 @@
 // Apoio dos cenários do módulo `resources` (spec examples/walking-skeleton/docs/specs/resources.md):
-// título único por execução e chamada JSON-RPC ao MCP. Sem dependência do baseline.
+// título único por execução e chamada JSON-RPC ao MCP. Não reaproveita `tests/e2e/baseline/apoio.ts`
+// de propósito: o exemplo é desacoplado do baseline e serve de modelo copiável para um módulo novo.
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import { dado } from '../../../../../tests/e2e/support'
 

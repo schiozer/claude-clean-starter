@@ -57,18 +57,21 @@ test(
               ? route.continue({ postData: JSON.stringify({ title: 'ab' }) })
               : route.continue()
           )
-          await campo.fill(tituloUnico('Título válido'))
-          const resposta = page.waitForResponse(
-            (r) => r.url().endsWith('/api/resources') && r.request().method() === 'POST'
-          )
-          await criar.click()
-          const res = await resposta
-          expect(res.status(), 'a API recusa o título curto').toBe(400)
-          const corpo = (await res.json()) as { error?: string; code?: string }
-          expect(corpo.code).toBe('VALIDATION_ERROR')
-          expect(corpo.error, 'mensagem acionável da API').toBeTruthy()
-          mensagemDaApi = corpo.error ?? ''
-          await page.unrouteAll({ behavior: 'wait' })
+          try {
+            await campo.fill(tituloUnico('Título válido'))
+            const resposta = page.waitForResponse(
+              (r) => r.url().endsWith('/api/resources') && r.request().method() === 'POST'
+            )
+            await criar.click()
+            const res = await resposta
+            expect(res.status(), 'a API recusa o título curto').toBe(400)
+            const corpo = (await res.json()) as { error?: string; code?: string }
+            expect(corpo.code).toBe('VALIDATION_ERROR')
+            expect(corpo.error, 'mensagem acionável da API').toBeTruthy()
+            mensagemDaApi = corpo.error ?? ''
+          } finally {
+            await page.unrouteAll({ behavior: 'wait' })
+          }
         },
         'vejo o aviso com a mensagem da API': () =>
           expect(page.getByRole('status')).toHaveText(mensagemDaApi),
@@ -78,6 +81,7 @@ test(
     )
   }
 )
+
 test(
   'CT-RES-003 criar um recurso só com o teclado',
   { tag: ['@usabilidade', '@regressao'] },

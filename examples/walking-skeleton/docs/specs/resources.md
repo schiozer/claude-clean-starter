@@ -53,6 +53,10 @@ Segue o baseline ([`docs/rnf.md`](../../../../docs/rnf.md)).
 
 > O isolamento entre atores é regra do guard do `ResourceService` (dono derivado do `actor`); o
 > CT-RES-004 o verifica pela borda MCP, porque a sessão web do modo e2e tem um único usuário.
+> A tela mostra só a 1ª página da API: os **20 recursos mais recentes** (a listagem é do mais novo
+> ao mais antigo). Os cenários de tela que criam um recurso e o procuram na lista (CT-RES-001,
+> CT-RES-003 e o USA-003 do baseline) dependem disso: com a ordem antiga (mais antigo primeiro), um
+> usuário de teste com mais de 20 recursos acumulados esconderia o recurso recém-criado.
 > CA-3 e CA-4 são só de backend: cobertos por `@sistemico`, sem `@e2e`. O 401/403 do MCP é coberto
 > pelo baseline (RNF-SEG-003 e RNF-SEG-006).
 
@@ -132,7 +136,8 @@ E vejo a lista de recursos sem erro
 - **CA-1**: o usuário logado cria um recurso com título de 3 a 100 caracteres e o vê na lista.
 - **CA-2**: título fora da regra é recusado: a tela não deixa enviar e a API devolve
   `VALIDATION_ERROR`, mostrado como aviso (`role="status"`), não como alerta.
-- **CA-3**: `GET /api/resources` lista só os recursos do ator; sem sessão, a API responde 401.
+- **CA-3**: `GET /api/resources` lista só os recursos do ator, do mais novo ao mais antigo; sem
+  sessão, a API responde 401.
 - **CA-4**: com a flag `mcp.resources.write` desligada (padrão), `create_resource` não aparece em
   `tools/list` do MCP.
 
