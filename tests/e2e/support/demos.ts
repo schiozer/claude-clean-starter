@@ -13,9 +13,16 @@ export const ehCenarioDeVideo = (c: Cenario): boolean =>
  * Autocontida: é serializada e executada no navegador (`addInitScript`/`evaluate`), então não pode
  * usar nada do escopo do módulo. Idempotente.
  */
-export function instalarLegenda(): void {
+export function instalarLegenda(inicial?: string): void {
   const ID = 'e2e-legenda'
   const CHAVE = 'e2e-legenda'
+  // Semente do 1º passo: o init script roda a cada navegação e não pode sobrescrever passos
+  // posteriores. about:blank nega o acesso ao sessionStorage.
+  try {
+    if (inicial && sessionStorage.getItem(CHAVE) === null) sessionStorage.setItem(CHAVE, inicial)
+  } catch {
+    // sem sessionStorage neste documento
+  }
   const montar = () => {
     if (document.getElementById(ID) || !document.body) return
     const div = document.createElement('div')
@@ -70,12 +77,17 @@ export const makeGanchoDeLegenda = (): GanchoDePasso => async (ctx) => {
   const { page } = ctx
   if (!page || !ehCenarioDeVideo(ctx.cenario)) return
   if (ctx.indice === 0) {
-    await page.addInitScript(instalarLegenda)
+    await page.addInitScript(instalarLegenda, `${ctx.palavra} ${ctx.texto}`)
     await page.evaluate(instalarLegenda)
   }
-  await page.evaluate(atualizarTexto, {
-    chave: CHAVE_LEGENDA,
-    id: LEGENDA_ID,
-    texto: `${ctx.palavra} ${ctx.texto}`,
-  })
+  try {
+    await page.evaluate(atualizarTexto, {
+      chave: CHAVE_LEGENDA,
+      id: LEGENDA_ID,
+      texto: `${ctx.palavra} ${ctx.texto}`,
+    })
+  } catch (erro) {
+    // Legenda é cosmética: uma navegação no meio do passo não pode reprovar o teste de demo.
+    if (!/Execution context was destroyed|navigation/i.test(String(erro))) throw erro
+  }
 }

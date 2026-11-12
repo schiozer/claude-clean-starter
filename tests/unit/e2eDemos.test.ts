@@ -21,13 +21,15 @@ const PASSOS = [
 
 interface Chamadas {
   addInitScript: unknown[]
+  initArgs: unknown[]
   evaluate: { fn: unknown; arg: unknown }[]
 }
 
 const fakePage = (chamadas: Chamadas): Page =>
   ({
-    addInitScript: async (fn: unknown) => {
+    addInitScript: async (fn: unknown, arg?: unknown) => {
       chamadas.addInitScript.push(fn)
+      chamadas.initArgs.push(arg)
     },
     evaluate: async (fn: unknown, arg?: unknown) => {
       chamadas.evaluate.push({ fn, arg })
@@ -62,7 +64,9 @@ describe('ehCenarioDeVideo', () => {
     [['@regressao', '@doc'], false],
   ])('%j → %s', (destinos, esperado) => {
     expect(
-      ehCenarioDeVideo(ctx(0, fakePage({ addInitScript: [], evaluate: [] }), destinos).cenario)
+      ehCenarioDeVideo(
+        ctx(0, fakePage({ addInitScript: [], initArgs: [], evaluate: [] }), destinos).cenario
+      )
     ).toBe(esperado)
   })
 })
@@ -70,13 +74,13 @@ describe('ehCenarioDeVideo', () => {
 describe('makeGanchoDeLegenda', () => {
   let chamadas: Chamadas
   beforeEach(() => {
-    chamadas = { addInitScript: [], evaluate: [] }
+    chamadas = { addInitScript: [], initArgs: [], evaluate: [] }
   })
 
   it('cenário só @doc → nenhuma chamada na page', async () => {
     const page = fakePage(chamadas)
     await makeGanchoDeLegenda()(ctx(0, page, ['@regressao', '@doc']))
-    expect(chamadas).toEqual({ addInitScript: [], evaluate: [] })
+    expect(chamadas).toEqual({ addInitScript: [], initArgs: [], evaluate: [] })
   })
 
   it('sem page → não faz nada', async () => {
@@ -92,6 +96,7 @@ describe('makeGanchoDeLegenda', () => {
 
     await gancho(ctx(0, page, ['@demo']))
     expect(chamadas.addInitScript).toEqual([instalarLegenda])
+    expect(chamadas.initArgs).toEqual(['Dado que estou logado como usuário final'])
     expect(chamadas.evaluate[0]!.fn).toBe(instalarLegenda)
     expect(JSON.stringify(chamadas.evaluate[1]!.arg)).toContain(
       'Dado que estou logado como usuário final'
@@ -119,6 +124,18 @@ describe('instalarLegenda', () => {
     expect(legendas).toHaveLength(1)
     expect(legendas[0]!.getAttribute('aria-hidden')).toBe('true')
     expect(legendas[0]!.textContent).toBe('Quando abro a lista de recursos')
+  })
+
+  it('a semente preenche a chave vazia e aparece na legenda', () => {
+    instalarLegenda('Dado que abro a lista')
+    expect(sessionStorage.getItem(CHAVE_LEGENDA)).toBe('Dado que abro a lista')
+    expect(document.getElementById(LEGENDA_ID)!.textContent).toBe('Dado que abro a lista')
+  })
+
+  it('a semente não sobrescreve um passo já gravado', () => {
+    sessionStorage.setItem(CHAVE_LEGENDA, 'Quando abro a lista de recursos')
+    instalarLegenda('Dado que abro a lista')
+    expect(sessionStorage.getItem(CHAVE_LEGENDA)).toBe('Quando abro a lista de recursos')
   })
 
   it('pointerdown destaca o alvo com outline por um instante', () => {
