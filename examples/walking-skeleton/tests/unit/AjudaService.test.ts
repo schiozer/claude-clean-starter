@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { AjudaService, type AjudaDoc, type IAjudaSource } from '@/modules/ajuda'
+import {
+  AjudaService,
+  type AjudaDoc,
+  type CatalogoIndice,
+  type IAjudaSource,
+  type IVideosDaAjuda,
+} from '@/modules/ajuda'
+import { BunnyEmbeds } from '@/modules/ajuda/infrastructure/BunnyEmbeds'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors'
 import { makeActor } from '../helpers/makeActor'
 
@@ -123,5 +130,127 @@ describe('AjudaService', () => {
     await expect(service.imagem(usuario, { id: PUBLICO.id, n: 1.5 })).rejects.toThrow(
       ValidationError
     )
+  })
+
+  describe('vídeos', () => {
+    const clock = { now: () => new Date(1_700_000_000_000) }
+    const item = (
+      id: string,
+      perfil: AjudaDoc['perfil'],
+      videos: { desktop?: string; mobile?: string }
+    ) => ({
+      id,
+      titulo: `Título de ${id}`,
+      contexto: 'RES',
+      perfil,
+      videos,
+    })
+    const indice = (): CatalogoIndice => ({
+      formato: 1,
+      atualizadoEm: '2026-11-12T00:00:00.000Z',
+      libraryId: 'lib',
+      versoes: ['v1.2.0'],
+      demos: {
+        'CT-RES-001': {
+          ...item('CT-RES-001', 'usuário final', { mobile: 'm1' }),
+          versao: 'v1.2.0',
+        },
+        'CT-RES-006': {
+          ...item('CT-RES-006', 'time interno', { desktop: 'd6', mobile: 'm6' }),
+          versao: 'v1.2.0',
+        },
+      },
+      treinamento: {
+        versao: 'v1.2.0',
+        trilhas: [
+          {
+            perfil: 'usuário final',
+            itens: [item('CT-RES-001', 'usuário final', { desktop: 'd1' })],
+          },
+          {
+            perfil: 'time interno',
+            itens: [
+              item('CT-RES-006', 'time interno', { desktop: 'd6' }),
+              item('CT-RES-007', 'time interno', {}),
+            ],
+          },
+        ],
+      },
+    })
+    const videosCom = (valor: CatalogoIndice | null): IVideosDaAjuda => ({
+      indice: async () => valor,
+    })
+    const comVideos = (valor: CatalogoIndice | null, tokenKey?: string) =>
+      new AjudaService(
+        source,
+        videosCom(valor),
+        (libraryId) => new BunnyEmbeds({ libraryId, tokenKey, clock })
+      )
+
+    it('sem videos → desligado; list sempre desligado', async () => {
+      expect((await service.get(usuario, { id: PUBLICO.id })).videos).toEqual({
+        estado: 'desligado',
+      })
+      const lista = await comVideos(indice()).list(interno)
+      expect(lista.every((d) => d.videos.estado === 'desligado')).toBe(true)
+    })
+
+    it('índice indisponível → indisponivel e o resto do DTO igual', async () => {
+      const base = await service.get(usuario, { id: PUBLICO.id })
+      const dto = await comVideos(null).get(usuario, { id: PUBLICO.id })
+      expect(dto.videos).toEqual({ estado: 'indisponivel' })
+      expect({ ...dto, videos: base.videos }).toEqual(base)
+    })
+
+    it('usuário final: demo pública (desktop senão mobile) e só a trilha dele', async () => {
+      const dto = await comVideos(indice(), 'k').get(usuario, { id: PUBLICO.id })
+      expect(dto.videos).toEqual({
+        estado: 'ok',
+        demo: {
+          versao: 'v1.2.0',
+          embedUrl: 'https://iframe.mediadelivery.net/embed/lib/m1',
+          titulo: 'Título de CT-RES-001',
+        },
+        treinamento: [
+          {
+            id: 'CT-RES-001',
+            titulo: 'Título de CT-RES-001',
+            embedUrl: 'https://iframe.mediadelivery.net/embed/lib/d1',
+          },
+        ],
+      })
+    })
+
+    it('time interno com tokenKey: demo e treinamento assinados, itens sem vídeo omitidos', async () => {
+      const dto = await comVideos(indice(), 'k').get(interno, { id: INTERNO.id })
+      if (dto.videos.estado !== 'ok') throw new Error('esperava ok')
+      expect(dto.videos.demo?.embedUrl).toMatch(
+        /\/embed\/lib\/d6\?token=[0-9a-f]{64}&expires=1700003600$/
+      )
+      expect(dto.videos.treinamento.map((t) => t.id)).toEqual(['CT-RES-001', 'CT-RES-006'])
+      expect(dto.videos.treinamento[1]?.embedUrl).toContain('token=')
+      expect(dto.videos.treinamento[0]?.embedUrl).not.toContain('token=')
+    })
+
+    it('time interno sem tokenKey → demo null e itens internos fora (fail-closed)', async () => {
+      const dto = await comVideos(indice()).get(interno, { id: INTERNO.id })
+      if (dto.videos.estado !== 'ok') throw new Error('esperava ok')
+      expect(dto.videos.demo).toBeNull()
+      expect(dto.videos.treinamento.map((t) => t.id)).toEqual(['CT-RES-001'])
+    })
+
+    it('ator sem ajuda:interno não recebe itens da trilha time interno', async () => {
+      const dto = await comVideos(indice(), 'k').get(usuario, { id: PUBLICO.id })
+      if (dto.videos.estado !== 'ok') throw new Error('esperava ok')
+      expect(dto.videos.treinamento.map((t) => t.id)).toEqual(['CT-RES-001'])
+    })
+
+    it('cenário sem demo no índice → demo null', async () => {
+      const i = indice()
+      delete i.demos['CT-RES-001']
+      const dto = await comVideos(i).get(usuario, { id: PUBLICO.id })
+      if (dto.videos.estado !== 'ok') throw new Error('esperava ok')
+      expect(dto.videos.demo).toBeNull()
+    })
   })
 })

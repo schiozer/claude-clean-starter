@@ -2,6 +2,8 @@
 // Único arquivo que importa infrastructure/: instancia repositórios, services e bordas.
 import { join } from 'node:path'
 import { AjudaService, makeAjudaHandlers } from '@/modules/ajuda'
+import { BunnyEmbeds } from '@/modules/ajuda/infrastructure/BunnyEmbeds'
+import { CdnCatalogoDeVideos } from '@/modules/ajuda/infrastructure/CdnCatalogoDeVideos'
 import { FsAjudaSource } from '@/modules/ajuda/infrastructure/FsAjudaSource'
 import { ResourceService, makeResourceHandlers, makeResourceTools } from '@/modules/resources'
 import { InMemoryResourceRepository } from '@/modules/resources/infrastructure/InMemoryResourceRepository'
@@ -52,7 +54,23 @@ export const resourceHandlers = {
 
 // Módulo ajuda: páginas geradas por `npm run docs:gerar` em docs/ajuda/ (no bundle do servidor via
 // `outputFileTracingIncludes`). Sem tool MCP: a spec da ajuda não pede (ADR-012).
-const ajudaService = new AjudaService(new FsAjudaSource(join(process.cwd(), 'docs', 'ajuda')))
+// Vídeos (Bunny) só com `DEMOS_BUNNY=on` e `BUNNY_CATALOGO_URL`; o embed assinado (time interno)
+// usa `BUNNY_STREAM_TOKEN_KEY` e, sem ela, o vídeo não aparece.
+const catalogoUrl = process.env.BUNNY_CATALOGO_URL
+const videosDaAjuda =
+  process.env.DEMOS_BUNNY === 'on' && catalogoUrl
+    ? new CdnCatalogoDeVideos({ url: catalogoUrl, clock: systemClock })
+    : null
+const ajudaService = new AjudaService(
+  new FsAjudaSource(join(process.cwd(), 'docs', 'ajuda')),
+  videosDaAjuda,
+  (libraryId) =>
+    new BunnyEmbeds({
+      libraryId,
+      tokenKey: process.env.BUNNY_STREAM_TOKEN_KEY,
+      clock: systemClock,
+    })
+)
 export const ajudaHandlers = makeAjudaHandlers(ajudaService, resolveSessionActor)
 
 // Borda MCP (bearer: OAuth Auth0 ou token pessoal)
@@ -99,7 +117,10 @@ const verifierFor = (config: McpConfig) =>
   new CompositeTokenVerifier(
     personalTokenVerifier,
     config.issuerBaseUrl
-      ? new Auth0JwtVerifier({ issuer: config.issuerBaseUrl.href, audience: config.resourceUrl.href })
+      ? new Auth0JwtVerifier({
+          issuer: config.issuerBaseUrl.href,
+          audience: config.resourceUrl.href,
+        })
       : null
   )
 
