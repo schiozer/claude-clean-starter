@@ -1,7 +1,7 @@
 # Guia de Testes
 
-**Última Atualização**: 2026-10-10
-**Versão**: 3.0.0
+**Última Atualização**: 2026-11-11
+**Versão**: 3.1.0
 
 ---
 
@@ -13,7 +13,8 @@ Este guia é **auto-contido**: todo padrão citado tem um teste equivalente em
 - **Vitest** — testes unitários e de integração.
 - **happy-dom** — DOM leve para componentes/hooks (mais rápido que jsdom).
 - **Testing Library** — testes de componentes React (quando houver UI a testar).
-- **Playwright** — E2E, opcional (entra quando a UI estabiliza).
+- **Playwright** — E2E e sistêmicos nascidos dos cenários da spec, obrigatórios para features com
+  UI ou rota nova ([guia de E2E](./e2e-guide.md), [ADR-016](../adr/template/016-testes-e2e-nascidos-da-spec.md)).
 
 A arquitetura por módulos com **`<Ctx>Service` como porta única**
 ([ADR-011](../adr/template/011-service-layer-ddd-modular-e-perfis.md)) é o que torna o teste
@@ -27,7 +28,7 @@ construtor. A maior parte é teste unitário de Value Object/aggregate + service
 
 ```
         /\
-       /E2E\      ← poucos, lentos, alta confiança (Playwright, opcional)
+       /E2E\      ← um por cenário da spec, regressão no UAT (Playwright)
       /------\
      / Integ. \   ← bordas: rota REST e /api/mcp (Request → Response)
     /----------\
@@ -35,7 +36,9 @@ construtor. A maior parte é teste unitário de Value Object/aggregate + service
   /--------------\
 ```
 
-O starter já traz as duas camadas de baixo prontas; E2E entra quando a UI estabiliza.
+O starter traz as três camadas prontas. O topo não é opcional para features com UI ou rota
+nova: cada cenário da spec vira um teste Playwright que entra na regressão (`Regressão (UAT)`).
+Feature só de backend dispensa `@e2e`, com o motivo escrito na spec.
 
 ---
 
@@ -485,19 +488,22 @@ produto amadurece. Coverage é sinal, não meta cega — priorize os caminhos de
 
 ---
 
-## E2E com Playwright (opcional)
+## E2E e sistêmicos com Playwright
 
-Quando a UI estabilizar, adicione E2E para os fluxos ponta a ponta (login → ação →
-verificação). Configure `webServer` apontando para `npm run dev`, rode headless no CI
-com `retries` e `trace: 'on-first-retry'`. Mantenha poucos e focados nos caminhos de
-maior valor — E2E é caro e frágil por natureza. A conexão real de um cliente MCP
-(ChatGPT no UAT) é verificada manualmente — ver o [guia de MCP](./mcp-guide.md).
+Os cenários nascem na spec (seção "8. Cenários de teste", revisada pela QA) e cada um vira um
+teste Playwright com o mesmo ID, ligado pelo `jornada()`. A suíte `@regressao` roda em todo PR no
+check obrigatório `Regressão (UAT)`, e o baseline de RNF e usabilidade (`docs/rnf.md`) roda
+sempre. Formato do cenário, tags, `jornada`/`dado`, rodar local (`npm run test:e2e`), relatório,
+rastreabilidade (`npm run check:cenarios`) e `npm run docs:gerar`: ver o
+[guia de E2E](./e2e-guide.md). A conexão real de um cliente MCP (ChatGPT no UAT) continua
+verificada manualmente — ver o [guia de MCP](./mcp-guide.md).
 
 ---
 
 ## Ver Também
 
 - [ADR-011](../adr/template/011-service-layer-ddd-modular-e-perfis.md) — service como porta única (o que torna o teste barato)
+- [ADR-016](../adr/template/016-testes-e2e-nascidos-da-spec.md) e o [guia de E2E](./e2e-guide.md) — cenários da spec, regressão e ajuda
 - [ADR-012](../adr/template/012-mcp-como-borda-agentica.md) — borda MCP (o que os testes de `/api/mcp` afirmam)
 - [ADR-009](../adr/template/009-erros-funcional-vs-tecnico.md) — taxonomia de erro (o que os testes de fronteira afirmam)
 - [BEST_PRACTICES.md](../../BEST_PRACTICES.md) — padrões gerais

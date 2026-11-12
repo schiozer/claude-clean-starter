@@ -18,12 +18,13 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 │   └── skills/          # mvp-development, ddd-service-development, runbook-execution
 ├── docs/
 │   ├── adr/             # 000-template.md (Architecture Decision Records)
-│   ├── guides/          # zod, testing, error-handling, deploy-ci, mcp
+│   ├── guides/          # zod, testing, e2e, error-handling, deploy-ci, mcp
 │   ├── runbooks/        # operação por agentes: deploy, envs, flags, MCP, rollback (ADR-013)
 │   └── superpowers/
 │       ├── specs/        # _TEMPLATE.md
 │       └── plans/        # _TEMPLATE.md
-├── scripts/             # check-runbooks.mjs (npm run check:runbooks)
+├── scripts/             # check-runbooks.mjs, check-cenarios.mjs, e2e/ (rastreabilidade e regressão)
+├── tests/e2e/           # support/ e baseline/ (Playwright; cenários da spec, ADR-016)
 ├── .githooks/           # trava da main (reference-transaction, pre-push), ativada por `npm install`
 ├── hooks/               # check-dependencies, git-freshness (SessionStart); protect-main (PreToolUse)
 ├── eslint.config.mjs    # flat config auto-contido (typescript-eslint)
@@ -45,7 +46,9 @@ práticas, o pipeline de skills (superpowers) e o tooling de qualidade.
 5. **Complete os runbooks** de `docs/runbooks/` (todo `<preencher>`, data de verificação)
    e troque o CI para `npm run check:runbooks -- --strict` — ver ADR-013.
 6. **Node ≥ 20** (os hooks em `hooks/` rodam com `node`); `npm install` para o tooling; use `npm run lint`, `npm run type-check`,
-   `npm test`, `npm run check:runbooks`, `npm run format`.
+   `npm test`, `npm run check:runbooks`, `npm run format`; E2E com `npm run test:e2e`
+   (Playwright), `npm run check:cenarios` (cenários × testes) e `npm run docs:gerar` (ajuda dos
+   cenários `@doc`, só contra o app local) — ver o [guia de E2E](./docs/guides/e2e-guide.md).
 7. Ao adicionar o app — **web** (ex.: Next.js) ou **nativo iOS** (Expo/React
    Native) — inclua as deps de runtime e estenda os configs (eslint/tsconfig)
    para o framework. Os padrões de app nativo estão em `ARCHITECTURE.md`
@@ -64,6 +67,13 @@ O PR usa `.github/pull_request_template.md` (`Spec:`, tabela `Spec × código`, 
 humano), validado pelo `PR gate`. O merge é _squash_; o título do PR define a versão SemVer, e a
 cada merge sai uma tag `vX.Y.Z` e uma GitHub Release (o CHANGELOG). O gate opcional `Spec × código`
 com Claude liga com `SPEC_GATE` (runbook `docs/runbooks/spec-gate.md`). Ver ADR-014.
+
+## Testes E2E, regressão e ajuda
+
+Os cenários de teste nascem na spec (revisados pela QA) e viram testes Playwright ligados pelo ID.
+Todo PR roda o check obrigatório `Regressão (UAT)` (app local no template; Preview da Vercel no
+projeto, runbook `docs/runbooks/e2e-uat-configurar.md`), e os cenários `@doc` geram a ajuda em
+`/ajuda`. Ver [ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md).
 
 ## Sync com o template
 

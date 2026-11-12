@@ -21,6 +21,8 @@ brainstorming → writing-plans → [mvp-development | ddd-service-development] 
 
 Nunca pule o brainstorming em features novas. A spec que ele produz é o contrato
 para tudo que vem depois.
+Ela inclui os **cenários de teste** (revisados pela QA), que viram os testes Playwright da
+implementação e entram na regressão ([ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md)).
 
 ## Skills por Fase
 
@@ -38,22 +40,22 @@ para tudo que vem depois.
 
 ### Construção — Implementação
 
-| Skill                                     | Origem      | Papel                                                                                                            |
-| ----------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
-| `mvp-development`                         | Projeto     | Perfil `mvp-primeiro` (antes da promoção). Módulos com Service enxuto + REST + MCP; sem aggregates/repositórios. |
-| `ddd-service-development`                 | Projeto     | Perfil `completo-direto` ou promovido. Módulos com DDD tático + Service + REST + MCP.                            |
-| `superpowers:test-driven-development`     | Superpowers | Testes antes da implementação — vale para todo código.                                                           |
-| `superpowers:systematic-debugging`        | Superpowers | Diagnóstico estruturado antes de qualquer correção.                                                              |
-| `superpowers:executing-plans`             | Superpowers | Executa o plano tarefa a tarefa, com revisões.                                                                   |
-| `superpowers:subagent-driven-development` | Superpowers | Alternativa: despacha subagentes em paralelo por tarefa.                                                         |
+| Skill                                     | Origem      | Papel                                                                                                                                                                                                           |
+| ----------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mvp-development`                         | Projeto     | Perfil `mvp-primeiro` (antes da promoção). Módulos com Service enxuto + REST + MCP; sem aggregates/repositórios. Teste Playwright de cada cenário da spec antes da tela/rota; `npm run docs:gerar` antes do PR. |
+| `ddd-service-development`                 | Projeto     | Perfil `completo-direto` ou promovido. Módulos com DDD tático + Service + REST + MCP. Teste Playwright de cada cenário da spec antes da tela/rota; `npm run docs:gerar` antes do PR.                            |
+| `superpowers:test-driven-development`     | Superpowers | Testes antes da implementação — vale para todo código.                                                                                                                                                          |
+| `superpowers:systematic-debugging`        | Superpowers | Diagnóstico estruturado antes de qualquer correção.                                                                                                                                                             |
+| `superpowers:executing-plans`             | Superpowers | Executa o plano tarefa a tarefa, com revisões.                                                                                                                                                                  |
+| `superpowers:subagent-driven-development` | Superpowers | Alternativa: despacha subagentes em paralelo por tarefa.                                                                                                                                                        |
 
 ### Revisão — Verificação
 
-| Skill                                        | Origem      | Papel                                                                                                                                                                                                     |
-| -------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `superpowers:verification-before-completion` | Superpowers | Checagens antes de declarar concluído ou abrir PR, incluindo a conferência local spec × código e o template de PR ([ADR-014](./docs/adr/template/014-release-management.md)).                             |
-| `superpowers:requesting-code-review`         | Superpowers | Estrutura o pedido de revisão.                                                                                                                                                                            |
-| `superpowers:finishing-a-development-branch` | Superpowers | Encerra a branch: só **push + PR** é válido (merge local e descartar não são oferecidos) — ver regra 0 do `CLAUDE.md`. O PR usa o template, com a conferência spec × código feita e o UAT **desmarcado**. |
+| Skill                                        | Origem      | Papel                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `superpowers:verification-before-completion` | Superpowers | Checagens antes de declarar concluído ou abrir PR, incluindo a conferência local spec × código (todo cenário `@regressao` tem teste: `npm run check:cenarios`, `npm run test:e2e`) e o template de PR ([ADR-014](./docs/adr/template/014-release-management.md), [ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md)). |
+| `superpowers:requesting-code-review`         | Superpowers | Estrutura o pedido de revisão.                                                                                                                                                                                                                                                                                                       |
+| `superpowers:finishing-a-development-branch` | Superpowers | Encerra a branch: só **push + PR** é válido (merge local e descartar não são oferecidos) — ver regra 0 do `CLAUDE.md`. O PR usa o template, com a conferência spec × código feita e o UAT **desmarcado**.                                                                                                                            |
 
 ### Operação — Deploy e Configuração
 
