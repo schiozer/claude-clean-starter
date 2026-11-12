@@ -9,7 +9,7 @@ const alertas = (page: Page) => page.getByRole('alert').filter({ hasText: /\S/ }
 
 test(
   'CT-RES-001 criar um recurso e vê-lo na lista',
-  { tag: ['@e2e', '@regressao', '@doc', '@demo'] },
+  { tag: ['@e2e', '@regressao', '@doc', '@demo', '@treinamento'] },
   async ({ page }) => {
     const titulo = tituloUnico('Plano de estudos')
     const campo = page.getByLabel('Título')

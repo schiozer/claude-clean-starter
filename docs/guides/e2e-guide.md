@@ -218,6 +218,28 @@ conhecidas:
 
 ---
 
+## 8. Demos e treinamento
+
+Vídeos gravados pelo Playwright e publicados no Bunny ([ADR-017](../adr/template/017-bunny-videos-demos-treinamento.md)).
+
+- **Marcar**: no `Destino` do cenário, `@demo` (vídeo da versão, só os cenários da spec do PR) e/ou
+  `@treinamento` (todos os cenários do projeto, em trilhas por perfil). Ex.:
+  `Tipo: @e2e Destino: @doc @demo @treinamento`.
+- **O que é gravado**: `video: 'on'` com `slowMo`, uma legenda sobreposta com o texto do passo
+  atual, em desktop e mobile. Grava sempre contra o app construído a partir da tag, nunca contra UAT
+  ou Prod.
+- **Rodar local**: `npm run demos:gravar -- --grep CT-RES-001` (`E2E_DEMOS=1`, projetos `desktop` e
+  `mobile`); os vídeos ficam em `.e2e/demos/`.
+- **Rodar de novo uma versão**: Actions → `Demos & Treinamento` → Run workflow, com a tag
+  (`vX.Y.Z`), ou `gh workflow run demos-treinamento.yml -f tag=vX.Y.Z`. Precisa de `DEMOS_BUNNY=on`
+  no repositório (runbook [`bunny-habilitar.md`](../runbooks/bunny-habilitar.md)).
+- **`/ajuda`**: com `DEMOS_BUNNY=on` e `BUNNY_CATALOGO_URL`, mostra os vídeos do catálogo (cache de
+  300 s, timeout de 3 s). Itens do `time interno` usam embed assinado e são omitidos sem
+  `BUNNY_STREAM_TOKEN_KEY`. Sem catálogo, ou com falha, a página mostra "Vídeos indisponíveis no
+  momento." e mantém a documentação; com o toggle desligado, só a documentação.
+
+---
+
 ## Adoção
 
 - O `/template-sync` **semeia** uma vez só os arquivos inertes que faltarem
@@ -240,6 +262,7 @@ conhecidas:
 ## Ver Também
 
 - [ADR-016](../adr/template/016-testes-e2e-nascidos-da-spec.md) — a decisão
+- [ADR-017](../adr/template/017-bunny-videos-demos-treinamento.md) — vídeos de demo e treinamento (Bunny)
 - [Guia de testes](./testing-guide.md) — unit e integração
 - [`docs/rnf.md`](../rnf.md) — baseline do projeto
 - [Runbook `deploy-uat.md`](../runbooks/deploy-uat.md) — aguardar `Regressão (UAT)` antes de liberar o UAT

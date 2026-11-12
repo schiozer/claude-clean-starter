@@ -79,9 +79,8 @@ Spec completa: `docs/superpowers/specs/2026-11-09-e2e-regressao-docs-design.md` 
    `main` pelo CI). O app a serve em `/ajuda`, com guard por perfil (`time interno` exige o escopo
    `ajuda:interno`) e imagens por rota autenticada, nunca de `public/`. A captura mascara campos
    sensíveis e falha se um segredo conhecido aparecer na tela.
-9. **Demos e treinamento em vídeo** ficam para o **Plano 2** (ADR-017 futuro, Bunny Stream, toggle
-   `DEMOS_BUNNY`). As tags `@demo`/`@treinamento` já podem ser escritas na spec; nada as consome
-   ainda.
+9. **Demos e treinamento em vídeo** são tratados no [ADR-017](./017-bunny-videos-demos-treinamento.md)
+   (Bunny Stream, toggle `DEMOS_BUNNY`). As tags `@demo`/`@treinamento` já podem ser escritas na spec; o ADR-017 as consome.
 10. **Toggle (ADR-006)**: regressão e documentação **sem toggle** (sempre).
 
 ## Consequências

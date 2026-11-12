@@ -62,7 +62,7 @@ Segue o baseline ([`docs/rnf.md`](../../../../docs/rnf.md)).
 
 ### CT-RES-001 — Criar um recurso e vê-lo na lista
 
-Tipo: @e2e Destino: @doc @demo
+Tipo: @e2e Destino: @doc @demo @treinamento
 Critério: CA-1 Perfil: usuário final
 
 Dado que estou logado como usuário final

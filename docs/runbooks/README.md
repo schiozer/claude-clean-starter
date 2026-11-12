@@ -24,6 +24,7 @@ passo a passo, com classe de risco e verificação em cada passo. Regras em
 | [mcp-habilitar-e-conectar.md](./mcp-habilitar-e-conectar.md) | Configurar Auth0 para o MCP e conectar o ChatGPT                                                                               |
 | [spec-gate.md](./spec-gate.md)                               | Ligar/desligar o gate opcional `Spec × código` com Claude (`SPEC_GATE`, `ANTHROPIC_API_KEY`)                                   |
 | [e2e-uat-configurar.md](./e2e-uat-configurar.md)             | **Opcional** (só com `E2E_TARGET=preview`): usuários de teste, PATs e segredos para a `Regressão (UAT)` rodar contra o Preview |
+| [bunny-habilitar.md](./bunny-habilitar.md)                   | **Opcional** (`DEMOS_BUNNY`): library, storage zone, segredos `BUNNY_*` e envs para os vídeos de demo/treinamento na `/ajuda`  |
 
 ## Classes de risco (resumo)
 

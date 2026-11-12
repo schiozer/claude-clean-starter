@@ -39,6 +39,9 @@
 > `/template-sync adotar` a partir do template; depois, `/template-sync` a cada Release (aviso
 > semanal na issue `template-sync`).
 >
+> **Adoção — demos** ([ADR-017](./docs/adr/template/017-bunny-videos-demos-treinamento.md)): `DEMOS_BUNNY`
+> nasce desligado; para ligar, runbook [`bunny-habilitar.md`](./docs/runbooks/bunny-habilitar.md).
+>
 > **Adoção — E2E** ([ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md)): o
 > `/template-sync` semeia só `tests/e2e/auth.setup.ts` e `docs/rnf.md` (nunca sobrescreve); crie
 > `playwright.config.ts` (com o `webServer` do app) e `tests/e2e/cenarios.config.json` pelo
