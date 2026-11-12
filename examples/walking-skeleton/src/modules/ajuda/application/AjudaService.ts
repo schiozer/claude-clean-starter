@@ -15,6 +15,7 @@ import { getAjudaSchema, imagemAjudaSchema } from './schemas'
 
 const LEITURA = 'ajuda:read'
 const INTERNO = 'ajuda:interno'
+const INTERNO_PERFIL = 'time interno'
 
 /**
  * Ajuda gerada dos cenários `@doc` (spec e2e-regressao-docs §9.1). Página `time interno` exige
@@ -60,16 +61,19 @@ export class AjudaService {
     const embeds = this.makeEmbeds(indice.libraryId)
     return {
       estado: 'ok',
-      demo: this.demoDe(indice, embeds, doc),
+      demo: this.demoDe(indice, embeds, doc, actor),
       treinamento: this.treinamentoDe(indice, embeds, actor),
     }
   }
 
-  private demoDe(indice: CatalogoIndice, embeds: IEmbeds, doc: AjudaDoc) {
+  /** Fail-closed: é interno se o doc OU o vídeo do catálogo for `time interno`. */
+  private demoDe(indice: CatalogoIndice, embeds: IEmbeds, doc: AjudaDoc, actor: AuthUser) {
     const demo = indice.demos[doc.id]
     const videoId = demo?.videos.desktop || demo?.videos.mobile
     if (!demo || !videoId) return null
-    const embedUrl = embeds.url(videoId, { assinado: doc.perfil === 'time interno' })
+    const interno = doc.perfil === INTERNO_PERFIL || demo.perfil === INTERNO_PERFIL
+    if (interno && !hasScope(actor, INTERNO)) return null
+    const embedUrl = embeds.url(videoId, { assinado: interno })
     return embedUrl ? { versao: demo.versao, embedUrl, titulo: demo.titulo } : null
   }
 
@@ -80,9 +84,10 @@ export class AjudaService {
   ): VideoDoTreinamento[] {
     const itens: VideoDoTreinamento[] = []
     for (const trilha of indice.treinamento?.trilhas ?? []) {
-      const interno = trilha.perfil === 'time interno'
-      if (interno && !hasScope(actor, INTERNO)) continue
       for (const item of trilha.itens) {
+        // Fail-closed: é interno se a trilha OU o item for `time interno`.
+        const interno = trilha.perfil === INTERNO_PERFIL || item.perfil === INTERNO_PERFIL
+        if (interno && !hasScope(actor, INTERNO)) continue
         const videoId = item.videos.desktop || item.videos.mobile
         const embedUrl = videoId ? embeds.url(videoId, { assinado: interno }) : null
         if (embedUrl) itens.push({ id: item.id, titulo: item.titulo, embedUrl })
@@ -92,7 +97,7 @@ export class AjudaService {
   }
 
   private podeVer(actor: AuthUser, doc: AjudaDoc): boolean {
-    return doc.perfil !== 'time interno' || hasScope(actor, INTERNO)
+    return doc.perfil !== INTERNO_PERFIL || hasScope(actor, INTERNO)
   }
 
   private async docVisivel(actor: AuthUser, id: string): Promise<AjudaDoc> {

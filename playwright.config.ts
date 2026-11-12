@@ -3,14 +3,12 @@
 // app; os testes vêm dos globs `testes` de `tests/e2e/cenarios.config.json`.
 import { readFileSync } from 'node:fs'
 import { defineConfig, devices } from '@playwright/test'
-import { e2eEnv, perfis } from './tests/e2e/support'
+import { e2eEnv, modoDemos, perfis } from './tests/e2e/support'
 
 const env = e2eEnv()
 const CI = Boolean(process.env.CI)
 /** `docs:gerar` sempre sobe um app novo: banco em memória limpo, capturas sem dados de outra execução. */
 const DOCS = process.env.E2E_DOCS === '1'
-/** `demos:gravar`: vídeo de todo teste, em câmera lenta, contra um app novo e sem retentativa. */
-const DEMOS = process.env.E2E_DEMOS === '1'
 const PORTA_LOCAL = 3100
 
 /**
@@ -45,67 +43,67 @@ const { testes } = JSON.parse(
 
 const NAVEGADOR = /@e2e|@usabilidade/
 
-export default defineConfig({
-  testDir: '.',
-  testMatch: testes,
-  forbidOnly: CI,
-  retries: CI && !DEMOS ? 1 : 0,
-  failOnFlakyTests: CI,
-  reporter: DEMOS
-    ? [['list'], ['./tests/e2e/support/demosReporter.ts']]
-    : CI
-      ? [['list'], ['html', { open: 'never' }]]
-      : [['list']],
-  use: {
-    baseURL: env.baseUrl ?? `http://localhost:${PORTA_LOCAL}`,
-    trace: 'retain-on-failure',
-    video: DEMOS ? 'on' : 'retain-on-failure',
-    ...(DEMOS ? { launchOptions: { slowMo: 500 } } : {}),
-    // Bypass da Vercel (modo preview): não vai em `extraHTTPHeaders`, que o mandaria a toda origem
-    // (Auth0, CDN, terceiros). O `test` de `tests/e2e/support` o põe só nas requisições ao `baseURL`.
-  },
-  projects: [
-    { name: 'setup', testMatch: /auth\.setup\.ts/, use: { browserName: 'chromium' } },
-    // `@rnf` com sessão ou navegador usa `test.use({ storageState: perfis.usuario, ... })`.
-    { name: 'sistemico', grep: /@sistemico|@rnf/, dependencies: ['setup'] },
-    {
-      name: 'desktop',
-      grep: NAVEGADOR,
-      dependencies: ['setup'],
-      use: {
-        browserName: 'chromium',
-        viewport: { width: 1280, height: 800 },
-        storageState: perfis.usuario,
-      },
+// `modoDemos` (gerenciado pelo template): com `E2E_DEMOS=1` (`demos:gravar`) liga vídeo de todo
+// teste em câmera lenta, sem retentativa, o reporter do manifesto e um app novo; fora dele, nada muda.
+export default defineConfig(
+  modoDemos({
+    testDir: '.',
+    testMatch: testes,
+    forbidOnly: CI,
+    retries: CI ? 1 : 0,
+    failOnFlakyTests: CI,
+    reporter: CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
+    use: {
+      baseURL: env.baseUrl ?? `http://localhost:${PORTA_LOCAL}`,
+      trace: 'retain-on-failure',
+      video: 'retain-on-failure',
+      // Bypass da Vercel (modo preview): não vai em `extraHTTPHeaders`, que o mandaria a toda origem
+      // (Auth0, CDN, terceiros). O `test` de `tests/e2e/support` o põe só nas requisições ao `baseURL`.
     },
-    {
-      name: 'mobile',
-      grep: NAVEGADOR,
-      dependencies: ['setup'],
-      use: {
-        ...devices['iPhone 13'],
-        defaultBrowserType: 'chromium',
-        storageState: perfis.usuario,
-      },
-    },
-  ],
-  webServer: env.baseUrl
-    ? undefined
-    : {
-        command: `npm --prefix examples/walking-skeleton run build && npm --prefix examples/walking-skeleton run start -- -p ${PORTA_LOCAL}`,
-        url: `http://localhost:${PORTA_LOCAL}`,
-        env: {
-          APP_ENV: 'e2e',
-          RESOURCES_ENABLED: 'on',
-          // Localmente o `reuseExistingServer` pode reaproveitar um dev server sem este env; nesse
-          // caso o CT-AJU-002 falha. Saída: parar o servidor antes.
-          DEMOS_BUNNY: 'on',
-          BUNNY_CATALOGO_URL: 'http://127.0.0.1:9/catalogo/index.json',
-          MCP_RESOURCE_URL: `http://localhost:${PORTA_LOCAL}/api/mcp`,
-          ...LOCAL_SOMENTE_TESTE,
-          E2E_FAULTS_SECRET: process.env.E2E_FAULTS_SECRET ?? LOCAL_SOMENTE_TESTE.E2E_FAULTS_SECRET,
+    projects: [
+      { name: 'setup', testMatch: /auth\.setup\.ts/, use: { browserName: 'chromium' } },
+      // `@rnf` com sessão ou navegador usa `test.use({ storageState: perfis.usuario, ... })`.
+      { name: 'sistemico', grep: /@sistemico|@rnf/, dependencies: ['setup'] },
+      {
+        name: 'desktop',
+        grep: NAVEGADOR,
+        dependencies: ['setup'],
+        use: {
+          browserName: 'chromium',
+          viewport: { width: 1280, height: 800 },
+          storageState: perfis.usuario,
         },
-        reuseExistingServer: !CI && !DOCS && !DEMOS,
-        timeout: 180_000,
       },
-})
+      {
+        name: 'mobile',
+        grep: NAVEGADOR,
+        dependencies: ['setup'],
+        use: {
+          ...devices['iPhone 13'],
+          defaultBrowserType: 'chromium',
+          storageState: perfis.usuario,
+        },
+      },
+    ],
+    webServer: env.baseUrl
+      ? undefined
+      : {
+          command: `npm --prefix examples/walking-skeleton run build && npm --prefix examples/walking-skeleton run start -- -p ${PORTA_LOCAL}`,
+          url: `http://localhost:${PORTA_LOCAL}`,
+          env: {
+            APP_ENV: 'e2e',
+            RESOURCES_ENABLED: 'on',
+            // Localmente o `reuseExistingServer` pode reaproveitar um dev server sem este env; nesse
+            // caso o CT-AJU-002 falha. Saída: parar o servidor antes.
+            DEMOS_BUNNY: 'on',
+            BUNNY_CATALOGO_URL: 'http://127.0.0.1:9/catalogo/index.json',
+            MCP_RESOURCE_URL: `http://localhost:${PORTA_LOCAL}/api/mcp`,
+            ...LOCAL_SOMENTE_TESTE,
+            E2E_FAULTS_SECRET:
+              process.env.E2E_FAULTS_SECRET ?? LOCAL_SOMENTE_TESTE.E2E_FAULTS_SECRET,
+          },
+          reuseExistingServer: !CI && !DOCS,
+          timeout: 180_000,
+        },
+  })
+)

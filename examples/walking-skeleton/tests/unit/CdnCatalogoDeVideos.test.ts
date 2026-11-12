@@ -5,7 +5,7 @@ import type { Clock } from '@/shared/kernel'
 const INDICE = {
   formato: 1,
   atualizadoEm: '2026-11-12T00:00:00.000Z',
-  libraryId: 'lib',
+  libraryId: '123',
   versoes: ['v1.0.0'],
   demos: {},
   treinamento: null,

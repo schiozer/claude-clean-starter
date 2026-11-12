@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 // Publica as demos/treinamento de uma versão no Bunny (vídeo + catálogo) e atualiza a Release.
 // Segredos só aparecem pelo nome, nunca pelo valor.
-import { appendFileSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadIndice } from '../e2e/config.mjs'
@@ -10,6 +17,7 @@ import { makeReleaseApi } from '../release.mjs'
 import {
   CAMINHO_INDICE,
   caminhoDaVersao,
+  compararSemver,
   lerIndice,
   makeBunnyStorage,
   montarIndice,
@@ -52,15 +60,29 @@ export async function publicarDemos({ selecao, manifesto, host, storage, library
     .filter((id, i, todos) => todos.indexOf(id) === i && gravados(id).length === 0)
   if (faltando.length > 0) throw new Error(`demos: sem vídeo gravado para ${faltando.join(', ')}`)
 
+  const textoAnterior = await storage.ler(CAMINHO_INDICE)
+  const anterior = lerIndice(textoAnterior)
+  if (textoAnterior !== null && anterior === null) {
+    throw new Error(`demos: ${CAMINHO_INDICE} inválido — corrija ou apague antes de publicar`)
+  }
+  // Rerun de uma tag mais antiga que a última publicada: o treinamento é "o atual" (spec §9.2) e
+  // não volta para trás; só a coleção e o catálogo da versão são (re)gravados.
+  const versaoAntiga = (anterior?.versoes ?? []).some(
+    (publicada) => compararSemver(publicada, selecao.versao) > 0
+  )
+
+  /** Vídeos de mesmo título substituídos: só saem depois de o índice novo estar gravado. */
+  const obsoletos = []
   const enviar = async (colecao, item) => {
     const videos = {}
     for (const video of gravados(item.id)) {
-      const { videoId } = await host.upload({
+      const enviado = await host.upload({
         colecao,
         titulo: `${item.id} — ${item.titulo} (${video.projeto})`,
         arquivo: video.arquivo,
       })
-      videos[video.projeto] = videoId
+      videos[video.projeto] = enviado.videoId
+      obsoletos.push(...enviado.obsoletos)
     }
     return { ...item, videos }
   }
@@ -71,9 +93,7 @@ export async function publicarDemos({ selecao, manifesto, host, storage, library
     for (const item of selecao.demos) demos.push(await enviar(colecao, item))
   }
 
-  return host.replaceCollection('Treinamento', async (colecao) => {
-    const treinamento = []
-    for (const item of selecao.treinamento) treinamento.push(await enviar(colecao, item))
+  const gravarCatalogo = async (treinamento) => {
     /** @type {CatalogoVersao} */
     const catalogo = {
       formato: 1,
@@ -86,11 +106,20 @@ export async function publicarDemos({ selecao, manifesto, host, storage, library
     // Se a gravação do índice falhar, o catalogo/<versao>.json órfão e os vídeos da versão ficam;
     // o rerun sobrescreve o catálogo e faz upsert dos vídeos por título.
     await storage.gravar(caminhoDaVersao(selecao.versao), `${JSON.stringify(catalogo, null, 2)}\n`)
-    const anterior = lerIndice(await storage.ler(CAMINHO_INDICE))
     const indice = montarIndice({ anterior, versao: catalogo, treinamento, agora })
     await storage.gravar(CAMINHO_INDICE, `${JSON.stringify(indice, null, 2)}\n`)
     return { catalogo, indice }
-  })
+  }
+
+  const resultado = versaoAntiga
+    ? await gravarCatalogo(null)
+    : await host.replaceCollection('Treinamento', async (colecao) => {
+        const treinamento = []
+        for (const item of selecao.treinamento) treinamento.push(await enviar(colecao, item))
+        return gravarCatalogo(treinamento)
+      })
+  for (const videoId of obsoletos) await host.deleteVideo(videoId)
+  return resultado
 }
 
 /**
@@ -98,7 +127,10 @@ export async function publicarDemos({ selecao, manifesto, host, storage, library
  * @param {Pick<import('./video-host.mjs').IVideoHost, 'embedUrl'>} host
  */
 export function notasDasDemos(catalogo, host) {
-  const linhas = catalogo.demos.map((demo) => {
+  // Só `usuário final`: link de `time interno` nunca vai para a Release (spec §9.2). Com token auth
+  // ligado no Bunny (vale para a library toda) estes links não tocam; o caminho é a /ajuda.
+  const publicas = catalogo.demos.filter((demo) => demo.perfil === 'usuário final')
+  const linhas = publicas.map((demo) => {
     const videoId = demo.videos.desktop ?? demo.videos.mobile
     return `- [${demo.id} — ${demo.titulo}](${videoId ? host.embedUrl(videoId) : ''})`
   })
@@ -113,6 +145,19 @@ export const avisoDeFalha = (runUrl) =>
 export function comSecaoDeDemos(corpo, secao) {
   const inicio = corpo.indexOf(MARCADOR)
   return inicio === -1 ? `${corpo}\n\n${secao}` : `${corpo.slice(0, inicio)}${secao}`
+}
+
+/**
+ * @param {string} caminho
+ * @returns {{ videos: { id: string, projeto: string, arquivo: string, ok: boolean }[] }}
+ */
+export function lerManifesto(caminho) {
+  if (!existsSync(caminho)) {
+    throw new Error(
+      'demos: manifesto ausente — rode demos:gravar com o modo demos (modoDemos) no playwright.config.ts'
+    )
+  }
+  return JSON.parse(readFileSync(caminho, 'utf8'))
 }
 
 const exigir = (nome) => {
@@ -167,7 +212,7 @@ async function cli(comando) {
       host: process.env.BUNNY_STORAGE_HOST || undefined,
     })
     const selecao = JSON.parse(readFileSync(resolve(CAMINHO_SELECAO), 'utf8'))
-    const manifesto = JSON.parse(readFileSync(resolve(CAMINHO_MANIFESTO), 'utf8'))
+    const manifesto = lerManifesto(resolve(CAMINHO_MANIFESTO))
     const { catalogo } = await publicarDemos({
       selecao,
       manifesto,

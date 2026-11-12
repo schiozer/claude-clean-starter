@@ -148,7 +148,7 @@ describe('AjudaService', () => {
     const indice = (): CatalogoIndice => ({
       formato: 1,
       atualizadoEm: '2026-11-12T00:00:00.000Z',
-      libraryId: 'lib',
+      libraryId: '123',
       versoes: ['v1.2.0'],
       demos: {
         'CT-RES-001': {
@@ -202,34 +202,65 @@ describe('AjudaService', () => {
       expect({ ...dto, videos: base.videos }).toEqual(base)
     })
 
-    it('usuário final: demo pública (desktop senão mobile) e só a trilha dele', async () => {
-      const dto = await comVideos(indice(), 'k').get(usuario, { id: PUBLICO.id })
+    it('usuário final sem tokenKey: demo pública (desktop senão mobile) e só a trilha dele', async () => {
+      const dto = await comVideos(indice()).get(usuario, { id: PUBLICO.id })
       expect(dto.videos).toEqual({
         estado: 'ok',
         demo: {
           versao: 'v1.2.0',
-          embedUrl: 'https://iframe.mediadelivery.net/embed/lib/m1',
+          embedUrl: 'https://iframe.mediadelivery.net/embed/123/m1',
           titulo: 'Título de CT-RES-001',
         },
         treinamento: [
           {
             id: 'CT-RES-001',
             titulo: 'Título de CT-RES-001',
-            embedUrl: 'https://iframe.mediadelivery.net/embed/lib/d1',
+            embedUrl: 'https://iframe.mediadelivery.net/embed/123/d1',
           },
         ],
       })
+    })
+
+    it('com tokenKey todo embed sai assinado, inclusive o de usuário final (library inteira)', async () => {
+      const dto = await comVideos(indice(), 'k').get(usuario, { id: PUBLICO.id })
+      if (dto.videos.estado !== 'ok') throw new Error('esperava ok')
+      expect(dto.videos.demo?.embedUrl).toMatch(/\/embed\/123\/m1\?token=[0-9a-f]{64}&expires=/)
+      expect(dto.videos.treinamento[0]?.embedUrl).toMatch(/\/embed\/123\/d1\?token=/)
     })
 
     it('time interno com tokenKey: demo e treinamento assinados, itens sem vídeo omitidos', async () => {
       const dto = await comVideos(indice(), 'k').get(interno, { id: INTERNO.id })
       if (dto.videos.estado !== 'ok') throw new Error('esperava ok')
       expect(dto.videos.demo?.embedUrl).toMatch(
-        /\/embed\/lib\/d6\?token=[0-9a-f]{64}&expires=1700003600$/
+        /\/embed\/123\/d6\?token=[0-9a-f]{64}&expires=1700003600$/
       )
       expect(dto.videos.treinamento.map((t) => t.id)).toEqual(['CT-RES-001', 'CT-RES-006'])
-      expect(dto.videos.treinamento[1]?.embedUrl).toContain('token=')
-      expect(dto.videos.treinamento[0]?.embedUrl).not.toContain('token=')
+      expect(dto.videos.treinamento.every((t) => t.embedUrl.includes('token='))).toBe(true)
+    })
+
+    it('item time interno numa trilha usuário final: some para quem não tem ajuda:interno', async () => {
+      const i = indice()
+      i.treinamento!.trilhas[0]!.itens.push(item('CT-RES-008', 'time interno', { desktop: 'd8' }))
+      const semEscopo = await comVideos(i, 'k').get(usuario, { id: PUBLICO.id })
+      if (semEscopo.videos.estado !== 'ok') throw new Error('esperava ok')
+      expect(semEscopo.videos.treinamento.map((t) => t.id)).toEqual(['CT-RES-001'])
+      const semChave = await comVideos(i).get(interno, { id: PUBLICO.id })
+      if (semChave.videos.estado !== 'ok') throw new Error('esperava ok')
+      expect(semChave.videos.treinamento.map((t) => t.id)).toEqual(['CT-RES-001'])
+    })
+
+    it('demo time interno num doc usuário final: exige ajuda:interno e assinatura', async () => {
+      const i = indice()
+      i.demos['CT-RES-001'] = { ...i.demos['CT-RES-001']!, perfil: 'time interno' }
+      const semEscopo = await comVideos(i, 'k').get(usuario, { id: PUBLICO.id })
+      if (semEscopo.videos.estado !== 'ok') throw new Error('esperava ok')
+      expect(semEscopo.videos.demo).toBeNull()
+      const semChave = await comVideos(i).get(interno, { id: PUBLICO.id })
+      if (semChave.videos.estado !== 'ok') throw new Error('esperava ok')
+      expect(semChave.videos.demo).toBeNull()
+      const ok = await comVideos(i, 'k').get(interno, { id: PUBLICO.id })
+      if (ok.videos.estado !== 'ok') throw new Error('esperava ok')
+      expect(ok.videos.demo?.embedUrl).toContain('token=')
     })
 
     it('time interno sem tokenKey → demo null e itens internos fora (fail-closed)', async () => {

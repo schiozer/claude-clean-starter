@@ -71,12 +71,16 @@ describe('workflow demos-treinamento.yml', () => {
 
   it('tem a expressão do job, timeout, permissões e checkout sem credenciais', () => {
     expect(yml).toContain(
-      "if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'"
+      "if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)"
     )
     expect(yml).toContain('timeout-minutes: 60')
     expect(yml).toMatch(/^permissions:\n {2}contents: write\n {2}pull-requests: read\n/m)
     expect(yml).toContain('fetch-depth: 0')
-    expect(yml).toContain('persist-credentials: false')
+    const checkouts = yml.split('uses: actions/checkout@').slice(1)
+    expect(checkouts.length).toBeGreaterThanOrEqual(2)
+    for (const checkout of checkouts) {
+      expect(checkout.split(/\n {6}- /)[0]).toContain('persist-credentials: false')
+    }
   })
 
   it('guarda o CLI ausente em tags antigas', () => {

@@ -54,8 +54,8 @@ export const resourceHandlers = {
 
 // Módulo ajuda: páginas geradas por `npm run docs:gerar` em docs/ajuda/ (no bundle do servidor via
 // `outputFileTracingIncludes`). Sem tool MCP: a spec da ajuda não pede (ADR-012).
-// Vídeos (Bunny) só com `DEMOS_BUNNY=on` e `BUNNY_CATALOGO_URL`; o embed assinado (time interno)
-// usa `BUNNY_STREAM_TOKEN_KEY` e, sem ela, o vídeo não aparece.
+// Vídeos (Bunny) só com `DEMOS_BUNNY=on` e `BUNNY_CATALOGO_URL`; com `BUNNY_STREAM_TOKEN_KEY` todo
+// embed sai assinado (token auth é da library inteira); sem ela, vídeo de time interno não aparece.
 const catalogoUrl = process.env.BUNNY_CATALOGO_URL
 const videosDaAjuda =
   process.env.DEMOS_BUNNY === 'on' && catalogoUrl
@@ -117,7 +117,10 @@ const verifierFor = (config: McpConfig) =>
   new CompositeTokenVerifier(
     personalTokenVerifier,
     config.issuerBaseUrl
-      ? new Auth0JwtVerifier({ issuer: config.issuerBaseUrl.href, audience: config.resourceUrl.href })
+      ? new Auth0JwtVerifier({
+          issuer: config.issuerBaseUrl.href,
+          audience: config.resourceUrl.href,
+        })
       : null
   )
 

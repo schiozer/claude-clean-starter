@@ -1,10 +1,16 @@
 import { z } from 'zod'
 import { PERFIS_AJUDA } from './dto'
 
-/** Espelha os typedefs de `scripts/demos/catalogo.mjs` (publicado em `catalogo/index.json`). */
+/**
+ * Espelha os typedefs de `scripts/demos/catalogo.mjs` (publicado em `catalogo/index.json`). Os IDs
+ * do Bunny entram na URL do embed: `libraryId` só dígitos e `videoId` só `[A-Za-z0-9-]` (guid).
+ */
+const libraryIdSchema = z.string().regex(/^\d+$/)
+const videoIdSchema = z.string().regex(/^[A-Za-z0-9-]+$/)
+
 const videosDoCenarioSchema = z.object({
-  desktop: z.string().optional(),
-  mobile: z.string().optional(),
+  desktop: videoIdSchema.optional(),
+  mobile: videoIdSchema.optional(),
 })
 
 export const itemDoCatalogoSchema = z.object({
@@ -19,7 +25,7 @@ export const itemDoCatalogoSchema = z.object({
 export const catalogoIndiceSchema = z.object({
   formato: z.literal(1),
   atualizadoEm: z.string(),
-  libraryId: z.string(),
+  libraryId: libraryIdSchema,
   versoes: z.array(z.string()),
   demos: z.record(itemDoCatalogoSchema.extend({ versao: z.string() })),
   treinamento: z

@@ -12,7 +12,7 @@ export {
   type VideoDoTreinamento,
   type VideosDaAjuda,
 } from './application/dto'
-export type { CatalogoIndice } from './application/catalogo'
+export { catalogoIndiceSchema, type CatalogoIndice } from './application/catalogo'
 export type { IEmbeds, IVideosDaAjuda } from './application/IVideosDaAjuda'
 export type { IAjudaSource } from './application/IAjudaSource'
 export { AjudaService } from './application/AjudaService'

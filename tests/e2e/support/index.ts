@@ -16,6 +16,7 @@ export { AXE_TAGS, checarA11y } from './axe'
 export { credencialAuth0, entrar, loginAuth0, loginDev, perfis } from './auth'
 export type { Perfil } from './auth'
 export { cabecalhosDeBypass, e2eEnv } from './env'
+export { REPORTER_DEMOS, modoDemos } from './modoDemos'
 export type { E2eEnv, Env } from './env'
 
 // `npm run docs:gerar` (`E2E_DOCS=1`): screenshot por passo dos cenários `@doc` no projeto desktop

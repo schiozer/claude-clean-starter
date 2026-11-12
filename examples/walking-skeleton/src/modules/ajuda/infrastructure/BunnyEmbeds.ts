@@ -5,8 +5,9 @@ import type { Clock } from '@/shared/kernel'
 const VALIDADE_S = 3600
 
 /**
- * Embed do Bunny Stream. Assinado exige `tokenKey` (env `BUNNY_STREAM_TOKEN_KEY`); sem ela
- * devolve `null` (fail-closed), nunca uma URL pública no lugar.
+ * Embed do Bunny Stream. O token auth do Bunny vale para a library inteira: com `tokenKey` (env
+ * `BUNNY_STREAM_TOKEN_KEY`) **todo** embed sai assinado. Sem ela, o que exige assinatura (time
+ * interno) devolve `null` (fail-closed, nunca uma URL pública no lugar) e o resto sai público.
  */
 export class BunnyEmbeds implements IEmbeds {
   private readonly libraryId: string
@@ -21,8 +22,7 @@ export class BunnyEmbeds implements IEmbeds {
 
   url(videoId: string, { assinado }: { assinado: boolean }): string | null {
     const base = `https://iframe.mediadelivery.net/embed/${this.libraryId}/${videoId}`
-    if (!assinado) return base
-    if (!this.tokenKey) return null
+    if (!this.tokenKey) return assinado ? null : base
     const expires = Math.floor(this.clock.now().getTime() / 1000) + VALIDADE_S
     const token = createHash('sha256')
       .update(this.tokenKey + videoId + String(expires))

@@ -6,9 +6,13 @@ import { promises as fs } from 'node:fs'
  * @typedef {{
  *   ensureCollection(nome: string): Promise<{ id: string }>,
  *   replaceCollection<T>(nome: string, preencher: (id: string) => Promise<T>): Promise<T>,
- *   upload(input: { colecao: string, titulo: string, arquivo: string }): Promise<{ videoId: string }>,
+ *   upload(input: { colecao: string, titulo: string, arquivo: string }):
+ *     Promise<{ videoId: string, obsoletos: string[] }>,
+ *   deleteVideo(videoId: string): Promise<void>,
  *   embedUrl(videoId: string): string,
  * }} IVideoHost
+ * `upload` não apaga nada: devolve em `obsoletos` os vídeos anteriores de mesmo título, que quem
+ * publica apaga (`deleteVideo`) só depois de gravar o índice que deixa de apontá-los.
  */
 
 const PAGE_SIZE = 100
@@ -89,7 +93,12 @@ export function makeBunnyStreamVideoHost({
       try {
         result = await preencher(nova.id)
       } catch (error) {
-        await deleteCollectionWithVideos(nova.id)
+        // A falha do cleanup não pode mascarar o erro original (a coleção órfã fica no Bunny).
+        try {
+          await deleteCollectionWithVideos(nova.id)
+        } catch {
+          // ignora: relança o original abaixo
+        }
         throw error
       }
       for (const antiga of antigas) await deleteCollectionWithVideos(antiga.guid)
@@ -101,12 +110,15 @@ export function makeBunnyStreamVideoHost({
         json: { title: titulo, collectionId: colecao },
       })
       await call('PUT', `/videos/${created.guid}`, { bytes: await readFile(arquivo) })
-      // Upsert: só depois do envio bem-sucedido some a versão anterior do mesmo título.
-      const antigos = (await listVideos(colecao, titulo)).filter(
-        (video) => video.title === titulo && video.guid !== created.guid
-      )
-      for (const antigo of antigos) await call('DELETE', `/videos/${antigo.guid}`)
-      return { videoId: created.guid }
+      // Upsert: os anteriores de mesmo título viram `obsoletos`; quem publica os apaga depois.
+      const obsoletos = (await listVideos(colecao, titulo))
+        .filter((video) => video.title === titulo && video.guid !== created.guid)
+        .map((video) => video.guid)
+      return { videoId: created.guid, obsoletos }
+    },
+
+    async deleteVideo(videoId) {
+      await call('DELETE', `/videos/${videoId}`)
     },
 
     embedUrl: (videoId) => embedUrlFor(libraryId, videoId),
@@ -115,13 +127,14 @@ export function makeBunnyStreamVideoHost({
 
 /**
  * Fake em memória com a mesma semântica; `ops` registra a ordem das operações.
- * @param {{ libraryId?: string }} [opts]
+ * `falharAoApagarColecao` simula falha no cleanup de coleção (testes).
+ * @param {{ libraryId?: string, falharAoApagarColecao?: boolean }} [opts]
  * @returns {IVideoHost & {
  *   ops: string[],
  *   colecoes: Map<string, { nome: string, videos: Map<string, string> }>,
  * }}
  */
-export function makeFakeVideoHost({ libraryId = 'lib-fake' } = {}) {
+export function makeFakeVideoHost({ libraryId = 'lib-fake', falharAoApagarColecao = false } = {}) {
   /** @type {string[]} */
   const ops = []
   /** @type {Map<string, { nome: string, videos: Map<string, string> }>} */
@@ -137,6 +150,7 @@ export function makeFakeVideoHost({ libraryId = 'lib-fake' } = {}) {
   }
 
   const remove = (id) => {
+    if (falharAoApagarColecao) throw new Error('fake-video-host: falha ao apagar coleção')
     const colecao = colecoes.get(id)
     if (!colecao) return
     for (const titulo of colecao.videos.values()) ops.push(`delete-video:${titulo}`)
@@ -165,7 +179,11 @@ export function makeFakeVideoHost({ libraryId = 'lib-fake' } = {}) {
       try {
         result = await preencher(nova.id)
       } catch (error) {
-        remove(nova.id)
+        try {
+          remove(nova.id)
+        } catch {
+          // ignora: relança o original abaixo
+        }
         throw error
       }
       for (const id of antigas) remove(id)
@@ -178,12 +196,19 @@ export function makeFakeVideoHost({ libraryId = 'lib-fake' } = {}) {
       const videoId = `vid-${++vidSeq}`
       alvo.videos.set(videoId, titulo)
       ops.push(`upload:${alvo.nome}:${titulo}`)
-      for (const [id, existente] of [...alvo.videos]) {
-        if (existente !== titulo || id === videoId) continue
-        alvo.videos.delete(id)
+      const obsoletos = [...alvo.videos]
+        .filter(([id, existente]) => existente === titulo && id !== videoId)
+        .map(([id]) => id)
+      return { videoId, obsoletos }
+    },
+
+    async deleteVideo(videoId) {
+      for (const colecao of colecoes.values()) {
+        const titulo = colecao.videos.get(videoId)
+        if (titulo === undefined) continue
+        colecao.videos.delete(videoId)
         ops.push(`delete-video:${titulo}`)
       }
-      return { videoId }
     },
 
     embedUrl: (videoId) => embedUrlFor(libraryId, videoId),

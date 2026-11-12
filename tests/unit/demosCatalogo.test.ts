@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   CAMINHO_INDICE,
   caminhoDaVersao,
+  compararSemver,
   lerIndice,
   makeBunnyStorage,
   makeFakeStorage,
@@ -75,6 +76,37 @@ describe('montarIndice', () => {
     expect(repetido.versoes).toEqual(['v1.10.0', 'v1.9.0', 'v1.2.0'])
   })
 
+  it('versão mais antiga não sobrescreve a demo de uma versão mais nova', () => {
+    const anterior = indiceAnterior(['v1.3.0'], {
+      'CT-RES-001': { ...item('CT-RES-001', 'usuário final', 'novo'), versao: 'v1.3.0' },
+    })
+    const indice = montarIndice({
+      anterior,
+      versao: versao('v1.2.0', [item('CT-RES-001', 'usuário final', 'velho'), item('CT-RES-009')]),
+      treinamento: [],
+      agora,
+    })
+    expect(indice.demos['CT-RES-001']).toMatchObject({ versao: 'v1.3.0', titulo: 'novo' })
+    expect(indice.demos['CT-RES-009'].versao).toBe('v1.2.0')
+    expect(indice.versoes).toEqual(['v1.3.0', 'v1.2.0'])
+  })
+
+  it('treinamento null mantém o treinamento do índice anterior', () => {
+    const treinamento = { versao: 'v1.3.0', trilhas: [{ perfil: 'usuário final', itens: [] }] }
+    const anterior = { ...indiceAnterior(['v1.3.0']), treinamento }
+    const indice = montarIndice({
+      anterior,
+      versao: versao('v1.2.0', []),
+      treinamento: null,
+      agora,
+    })
+    expect(indice.treinamento).toEqual(treinamento)
+    expect(
+      montarIndice({ anterior: null, versao: versao('v1.2.0', []), treinamento: null, agora })
+        .treinamento
+    ).toBeNull()
+  })
+
   it('agrupa o treinamento por perfil, usuário final primeiro, itens por id', () => {
     const indice = montarIndice({
       anterior: null,
@@ -85,6 +117,14 @@ describe('montarIndice', () => {
     const trilhas = indice.treinamento!.trilhas
     expect(trilhas.map((t) => t.perfil)).toEqual(['usuário final', 'time interno'])
     expect(trilhas[0].itens.map((i) => i.id)).toEqual(['CT-RES-001', 'CT-RES-003'])
+  })
+})
+
+describe('compararSemver', () => {
+  it('compara por SemVer (positivo se a > b)', () => {
+    expect(compararSemver('v1.10.0', 'v1.9.0')).toBeGreaterThan(0)
+    expect(compararSemver('v1.2.0', 'v1.3.0')).toBeLessThan(0)
+    expect(compararSemver('v1.2.0', 'v1.2.0')).toBe(0)
   })
 })
 

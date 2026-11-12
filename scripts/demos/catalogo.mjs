@@ -128,16 +128,22 @@ const parseSemver = (versao) =>
     .split('.')
     .map((parte) => Number.parseInt(parte, 10) || 0)
 
-/** Comparador SemVer decrescente (`vX.Y.Z`). */
-const compararSemverDesc = (a, b) => {
+/**
+ * Comparador SemVer (`vX.Y.Z`): positivo se `a` > `b`, negativo se menor, 0 se igual.
+ * @param {string} a
+ * @param {string} b
+ */
+export const compararSemver = (a, b) => {
   const pa = parseSemver(a)
   const pb = parseSemver(b)
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pb[i] ?? 0) - (pa[i] ?? 0)
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
     if (diff !== 0) return diff
   }
   return 0
 }
+
+const compararSemverDesc = (a, b) => compararSemver(b, a)
 
 const posicaoDoPerfil = (perfil) => {
   const pos = ORDEM_PERFIL.indexOf(perfil)
@@ -158,10 +164,12 @@ const montarTrilhas = (itens) => {
 }
 
 /**
+ * Mescla a versão no índice. A demo de um cenário só é trocada por uma versão >= a que está lá
+ * (rerun de tag antiga não regride). `treinamento: null` mantém o treinamento do `anterior`.
  * @param {{
  *   anterior: CatalogoIndice | null,
  *   versao: CatalogoVersao,
- *   treinamento: ItemDoCatalogo[],
+ *   treinamento: ItemDoCatalogo[] | null,
  *   agora: Date,
  * }} opts
  * @returns {CatalogoIndice}
@@ -171,13 +179,20 @@ export function montarIndice({ anterior, versao, treinamento, agora }) {
     compararSemverDesc
   )
   const demos = { ...(anterior?.demos ?? {}) }
-  for (const demo of versao.demos) demos[demo.id] = { ...demo, versao: versao.versao }
+  for (const demo of versao.demos) {
+    const atual = demos[demo.id]
+    if (atual && compararSemver(versao.versao, atual.versao) < 0) continue
+    demos[demo.id] = { ...demo, versao: versao.versao }
+  }
   return {
     formato: 1,
     atualizadoEm: agora.toISOString(),
     libraryId: versao.libraryId,
     versoes,
     demos,
-    treinamento: { versao: versao.versao, trilhas: montarTrilhas(treinamento) },
+    treinamento:
+      treinamento === null
+        ? (anterior?.treinamento ?? null)
+        : { versao: versao.versao, trilhas: montarTrilhas(treinamento) },
   }
 }

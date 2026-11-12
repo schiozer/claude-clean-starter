@@ -10,13 +10,27 @@ describe('makeFakeVideoHost', () => {
     expect(host.ops).toEqual(['ensure:v1.2.0', 'create:v1.2.0', 'ensure:v1.2.0'])
   })
 
-  it('upload com o mesmo título faz upsert', async () => {
+  it('upload com o mesmo título devolve os obsoletos; deleteVideo os apaga depois', async () => {
     const host = makeFakeVideoHost()
     const { id } = await host.ensureCollection('v1.2.0')
-    await host.upload({ colecao: id, titulo: 'a', arquivo: 'a.webm' })
+    const first = await host.upload({ colecao: id, titulo: 'a', arquivo: 'a.webm' })
+    expect(first.obsoletos).toEqual([])
     const second = await host.upload({ colecao: id, titulo: 'a', arquivo: 'a.webm' })
+    expect(second.obsoletos).toEqual([first.videoId])
     const videos = host.colecoes.get(id)!.videos
+    expect([...videos.keys()]).toEqual([first.videoId, second.videoId])
+    await host.deleteVideo(first.videoId)
     expect([...videos.keys()]).toEqual([second.videoId])
+    expect(host.ops.at(-1)).toBe('delete-video:a')
+  })
+
+  it('replaceCollection: falha no cleanup não mascara o erro original', async () => {
+    const host = makeFakeVideoHost({ falharAoApagarColecao: true })
+    await expect(
+      host.replaceCollection('Treinamento', async () => {
+        throw new Error('original')
+      })
+    ).rejects.toThrow('original')
   })
 
   it('replaceCollection troca a coleção só depois do preenchimento', async () => {
@@ -122,7 +136,7 @@ describe('makeBunnyStreamVideoHost', () => {
     expect(JSON.parse(calls[1].body as string)).toEqual({ name: 'v1.2.0' })
   })
 
-  it('upload cria, envia os bytes e só então apaga o antigo de mesmo título', async () => {
+  it('upload cria, envia os bytes e devolve (sem apagar) os antigos de mesmo título', async () => {
     const { calls, fetchFn } = makeFetch((c) => {
       if (c.method === 'POST') return { json: { guid: 'novo' } }
       if (c.method === 'GET') {
@@ -141,6 +155,7 @@ describe('makeBunnyStreamVideoHost', () => {
     const host = makeBunnyStreamVideoHost({ apiKey: 'k', libraryId: '123', fetchFn, readFile })
     expect(await host.upload({ colecao: 'c1', titulo: 'a', arquivo: 'a.webm' })).toEqual({
       videoId: 'novo',
+      obsoletos: ['velho'],
     })
     const seq = calls.map((c) => `${c.method} ${c.url.replace(BASE, '')}`)
     expect(seq[0]).toBe('POST /videos')
@@ -148,10 +163,30 @@ describe('makeBunnyStreamVideoHost', () => {
     expect(seq[1]).toBe('PUT /videos/novo')
     expect(calls[1].headers['content-type']).toBe('application/octet-stream')
     expect(Buffer.from(calls[1].body as Buffer).toString()).toBe('bytes')
-    expect(seq.slice(2)).toEqual([
-      'GET /videos?collection=c1&search=a&itemsPerPage=100',
+    expect(seq.slice(2)).toEqual(['GET /videos?collection=c1&search=a&itemsPerPage=100'])
+  })
+
+  it('deleteVideo apaga pelo guid', async () => {
+    const { calls, fetchFn } = makeFetch(() => ({}))
+    const host = makeBunnyStreamVideoHost({ apiKey: 'k', libraryId: '123', fetchFn, readFile })
+    await host.deleteVideo('velho')
+    expect(calls.map((c) => `${c.method} ${c.url.replace(BASE, '')}`)).toEqual([
       'DELETE /videos/velho',
     ])
+  })
+
+  it('replaceCollection: falha no cleanup não mascara o erro original', async () => {
+    const { fetchFn } = makeFetch((c) => {
+      if (c.method === 'POST') return { json: { guid: 'nova' } }
+      if (c.method === 'DELETE') return { status: 500 }
+      return { json: { items: [] } }
+    })
+    const host = makeBunnyStreamVideoHost({ apiKey: 'k', libraryId: '123', fetchFn, readFile })
+    await expect(
+      host.replaceCollection('Treinamento', async () => {
+        throw new Error('original')
+      })
+    ).rejects.toThrow('original')
   })
 
   it('replaceCollection apaga a nova se preencher lançar', async () => {
