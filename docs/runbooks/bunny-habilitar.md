@@ -38,7 +38,7 @@ novo ao rotacionar qualquer credencial do Bunny.
 
 1. [R1] No Bunny Stream, criar a **library** `<preencher: nome da library>` e anotar o `BUNNY_LIBRARY_ID` (número da library).
    Verificar: o humano confirma a library no painel e o ID anotado.
-2. [R1] No Bunny Storage, criar a **storage zone** `<preencher: nome da storage zone>` (anotar nome e host, `BUNNY_STORAGE_ZONE` e `BUNNY_STORAGE_HOST`) e uma **pull zone** ligada a ela (a URL da CDN será `<preencher: https://cdn do catálogo>`).
+2. [R1] No Bunny Storage, criar a **storage zone** `<preencher: nome da storage zone>` (anotar o nome, `BUNNY_STORAGE_ZONE`, e — só se a zona for regional — o host, `BUNNY_STORAGE_HOST`) e uma **pull zone** ligada a ela (a URL da CDN será `<preencher: https://cdn do catálogo>`).
    Verificar: a pull zone aparece ligada à storage zone no painel.
 3. [R1] Na pull zone, criar uma **Edge Rule** de cache de 60 s para `*/catalogo/index.json` (o índice muda a cada versão; os `vX.Y.Z.json` são imutáveis).
    Verificar: a regra aparece listada na pull zone.

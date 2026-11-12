@@ -52,8 +52,11 @@ aponta podem morar no git. Além disso:
    "Vídeos indisponíveis no momento." e mantém a documentação. Janela de cache: depois de uma
    publicação, o app pode servir o índice anterior por até ~300 s (cache do app) + 60 s (Edge Rule
    da CDN). Como a coleção `Treinamento` antiga é apagada logo após gravar o índice, nessa janela os
-   vídeos de treinamento podem aparecer quebrados até o cache vencer; as demos da versão não são
-   afetadas (coleção própria, vídeos obsoletos só somem após o índice novo).
+   vídeos de treinamento podem aparecer quebrados até o cache vencer. Na primeira publicação de uma
+   versão as demos não são afetadas; num rerun, as demos regravadas podem aparecer quebradas na
+   mesma janela (os vídeos obsoletos são apagados logo após o índice novo). Se apagar um obsoleto
+   falhar, o catálogo já está consistente, mas o job fica vermelho e avisa a Release: rode de novo
+   (o rerun recolhe os órfãos como obsoletos).
 7. Segredos `BUNNY_*` só no GitHub e na Vercel, configurados pelo runbook
    [`bunny-habilitar.md`](../../runbooks/bunny-habilitar.md) (R2).
 
