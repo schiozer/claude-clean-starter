@@ -16,6 +16,9 @@ export const PROJETO_DOCS = 'desktop'
 /** Elementos marcados assim saem tarjados no screenshot (`mask` do Playwright). */
 export const SELETOR_SENSIVEL = '[data-sensivel]'
 
+/** Campos cujo `.value` também é varrido em busca de segredo. */
+const CAMPOS = 'input, textarea'
+
 /** Variáveis cujo valor nunca pode aparecer numa tela capturada. */
 const ehSegredo = (nome: string): boolean =>
   /^E2E_.*SECRET/.test(nome) ||
@@ -62,10 +65,15 @@ export const makeGanchoDeDocs = ({
     const pasta = join(dir, contextoDe(id), id)
     if (indice === 0) rmSync(pasta, { recursive: true, force: true })
 
-    const segredo = contemSegredo(await page.content(), env)
+    // Fail-closed: varre o DOM inteiro, inclusive `[data-sensivel]` (a máscara só tarja a imagem),
+    // e o `.value` dos campos, que o `content()` não serializa quando o valor veio do `fill`.
+    const valores = await page
+      .locator(CAMPOS)
+      .evaluateAll((els) => els.map((e) => ('value' in e ? String(e.value) : '')))
+    const segredo = contemSegredo([await page.content(), ...valores].join('\n'), env)
     if (segredo) {
       throw new Error(
-        `docs: a tela do passo ${indice + 1} de ${id} mostra o valor de ${segredo}; marque o campo com data-sensivel ou não o exiba`
+        `docs: a tela do passo ${indice + 1} de ${id} mostra o valor de ${segredo}; não exiba o valor na tela; campos \`data-sensivel\` são tarjados, mas o valor não pode estar no DOM`
       )
     }
     mkdirSync(pasta, { recursive: true })

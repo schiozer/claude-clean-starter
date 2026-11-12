@@ -84,6 +84,9 @@ describe('AjudaService', () => {
 
   it('doc inexistente → NotFoundError', async () => {
     await expect(service.get(interno, { id: 'CT-RES-999' })).rejects.toThrow(NotFoundError)
+    await expect(service.get(interno, { id: 'CT-RES-999' })).rejects.toThrow(
+      'Página de ajuda não encontrada'
+    )
   })
 
   it('id fora do padrão CT-<CTX>-NNN → ValidationError, sem ler a fonte', async () => {
@@ -109,6 +112,9 @@ describe('AjudaService', () => {
   it('passo fora do doc → NotFoundError, sem ler a imagem', async () => {
     const imagem = vi.spyOn(source, 'imagem')
     await expect(service.imagem(usuario, { id: PUBLICO.id, n: 3 })).rejects.toThrow(NotFoundError)
+    await expect(service.imagem(usuario, { id: PUBLICO.id, n: 3 })).rejects.toThrow(
+      'Imagem não encontrada'
+    )
     expect(imagem).not.toHaveBeenCalled()
   })
 

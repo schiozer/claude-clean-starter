@@ -30,9 +30,9 @@ export class AjudaService {
     requireScope(actor, LEITURA)
     const { id, n } = this.validar(imagemAjudaSchema, input)
     const doc = await this.docVisivel(actor, id)
-    if (n > doc.passos.length) throw new NotFoundError('Imagem')
+    if (n > doc.passos.length) throw new NotFoundError('Imagem', 'Imagem não encontrada')
     const imagem = await this.source.imagem(id, n)
-    if (!imagem) throw new NotFoundError('Imagem')
+    if (!imagem) throw new NotFoundError('Imagem', 'Imagem não encontrada')
     return imagem
   }
 
@@ -42,7 +42,8 @@ export class AjudaService {
 
   private async docVisivel(actor: AuthUser, id: string): Promise<AjudaDoc> {
     const doc = await this.source.get(id)
-    if (!doc || !this.podeVer(actor, doc)) throw new NotFoundError('Página de ajuda')
+    if (!doc || !this.podeVer(actor, doc))
+      throw new NotFoundError('Página de ajuda', 'Página de ajuda não encontrada')
     return doc
   }
 

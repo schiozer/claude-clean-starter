@@ -55,6 +55,14 @@ describe('FsAjudaSource', () => {
     expect(await new FsAjudaSource(dir).get('../RES/CT-RES-001')).toBeNull()
   })
 
+  it('imagem com id de traversal → null, mesmo existindo o arquivo fora da pasta', async () => {
+    escrever('x/01.png', 'png')
+    escrever('RES/CT-RES-001/01.png', 'png')
+    const source = new FsAjudaSource(join(dir, 'RES'))
+    expect(await source.imagem('../x', 1)).toBeNull()
+    expect(await source.imagem('../RES/CT-RES-001', 1)).toBeNull()
+  })
+
   it('JSON cujo id não bate com o arquivo → null', async () => {
     escrever('RES/CT-RES-001.json', JSON.stringify(doc('CT-RES-002')))
     expect(await new FsAjudaSource(dir).get('CT-RES-001')).toBeNull()

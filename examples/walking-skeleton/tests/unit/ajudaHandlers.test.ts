@@ -77,6 +77,13 @@ describe('bordas da ajuda', () => {
     expect((await handlers(usuario).imagem(req, params('CT-RES-001', 'x'))).status).toBe(400)
   })
 
+  it.each(['..%2Fx', '../x', '..%2F..%2Fdocs%2Fajuda%2FRES%2FCT-RES-001', 'CT-RES-001/..'])(
+    'imagem com id de traversal %s → 400, sem ler arquivo',
+    async (id) => {
+      expect((await handlers(usuario).imagem(req, params(id, '1'))).status).toBe(400)
+    }
+  )
+
   it('imagem: sem ajuda:read → 403', async () => {
     const res = await handlers(makeActor({ scopes: [] })).imagem(req, params('CT-RES-001', '1'))
     expect(res.status).toBe(403)

@@ -7,8 +7,11 @@ import { dado } from '../../../../../tests/e2e/support'
 /**
  * Título gravado de um cenário: o texto da spec + um sufixo único. Desktop, mobile e repetições
  * dividem o mesmo usuário e a mesma lista; sem o sufixo, dois testes veriam o recurso um do outro.
+ * No `docs:gerar` (`E2E_DOCS=1`) fica só o texto da spec: as capturas da ajuda são apresentáveis e
+ * estáveis, e o app é sempre novo (`reuseExistingServer` desligado no `playwright.config.ts`).
  */
 export const tituloUnico = (texto: string): string => {
+  if (process.env.E2E_DOCS === '1') return dado(texto)
   const { project, repeatEachIndex, retry } = test.info()
   const sufixo = `${project.name}-${repeatEachIndex}${retry}-${Date.now().toString(36).slice(-5)}`
   return dado(`${texto} ${sufixo}`)

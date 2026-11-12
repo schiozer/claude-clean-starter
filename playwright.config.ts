@@ -7,6 +7,8 @@ import { e2eEnv, perfis } from './tests/e2e/support'
 
 const env = e2eEnv()
 const CI = Boolean(process.env.CI)
+/** `docs:gerar` sempre sobe um app novo: banco em memória limpo, capturas sem dados de outra execução. */
+const DOCS = process.env.E2E_DOCS === '1'
 const PORTA_LOCAL = 3100
 
 /**
@@ -98,7 +100,7 @@ export default defineConfig({
           ...LOCAL_SOMENTE_TESTE,
           E2E_FAULTS_SECRET: process.env.E2E_FAULTS_SECRET ?? LOCAL_SOMENTE_TESTE.E2E_FAULTS_SECRET,
         },
-        reuseExistingServer: !CI,
+        reuseExistingServer: !CI && !DOCS,
         timeout: 180_000,
       },
 })

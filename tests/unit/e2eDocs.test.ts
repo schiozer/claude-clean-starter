@@ -49,13 +49,18 @@ describe('nomeDaImagem', () => {
 
 interface FakePage {
   html: string
+  /** `.value` dos `input`/`textarea` (o `content()` não serializa o que o `fill` digitou). */
+  valores: string[]
   shots: { path: string; mask: unknown[] }[]
 }
 
 const fakePage = (estado: FakePage): Page =>
   ({
     content: async () => estado.html,
-    locator: (seletor: string) => ({ seletor }),
+    locator: (seletor: string) => ({
+      seletor,
+      evaluateAll: async () => (seletor === 'input, textarea' ? estado.valores : []),
+    }),
     screenshot: async (opts: { path: string; mask: unknown[] }) => {
       estado.shots.push(opts)
       mkdirSync(join(opts.path, '..'), { recursive: true })
@@ -96,7 +101,7 @@ describe('makeGanchoDeDocs', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'ajuda-'))
-    estado = { html: '<p>ok</p>', shots: [] }
+    estado = { html: '<p>ok</p>', valores: [], shots: [] }
   })
   afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
@@ -114,7 +119,7 @@ describe('makeGanchoDeDocs', () => {
       join(dir, 'RES/CT-RES-001/01.png'),
       join(dir, 'RES/CT-RES-001/02.png'),
     ])
-    expect(estado.shots[0]!.mask).toEqual([{ seletor: '[data-sensivel]' }])
+    expect(estado.shots[0]!.mask).toMatchObject([{ seletor: '[data-sensivel]' }])
     expect(JSON.parse(readFileSync(join(dir, 'RES/CT-RES-001.json'), 'utf8'))).toEqual({
       id: 'CT-RES-001',
       titulo: 'Criar um recurso e vê-lo na lista',
@@ -139,6 +144,21 @@ describe('makeGanchoDeDocs', () => {
       gancho('desktop', { DEV_PERSONAL_TOKEN: PAT })(ctx(0, fakePage(estado)))
     ).rejects.toThrow(/DEV_PERSONAL_TOKEN/)
     expect(estado.shots).toEqual([])
+  })
+
+  it('segredo digitado num campo (só no .value, fora do HTML) → também falha', async () => {
+    estado.valores = ['Plano de estudos', PAT]
+    await expect(
+      gancho('desktop', { DEV_PERSONAL_TOKEN: PAT })(ctx(0, fakePage(estado)))
+    ).rejects.toThrow(/DEV_PERSONAL_TOKEN/)
+    expect(estado.shots).toEqual([])
+  })
+
+  it('a mensagem diz para não exibir o valor (data-sensivel só tarja, o DOM continua varrido)', async () => {
+    estado.html = `<input data-sensivel value="${PAT}">`
+    await expect(
+      gancho('desktop', { DEV_PERSONAL_TOKEN: PAT })(ctx(0, fakePage(estado)))
+    ).rejects.toThrow(/não exiba o valor na tela; campos `data-sensivel` são tarjados/)
   })
 
   it('a mensagem de erro nunca traz o valor do segredo', async () => {

@@ -22,8 +22,9 @@ export class ValidationError extends AppError {
 }
 
 export class NotFoundError extends AppError {
-  constructor(resource: string) {
-    super(`${resource} não encontrado`, 'NOT_FOUND', 404)
+  /** `mensagem` substitui o padrão quando o recurso pede outra concordância ("Página … encontrada"). */
+  constructor(resource: string, mensagem = `${resource} não encontrado`) {
+    super(mensagem, 'NOT_FOUND', 404)
   }
 }
 
