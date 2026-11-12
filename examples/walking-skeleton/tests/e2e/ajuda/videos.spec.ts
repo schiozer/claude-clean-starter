@@ -4,6 +4,8 @@ import { jornada, expect, test } from '../../../../../tests/e2e/support'
 
 const PUBLICA = 'Criar um recurso e vê-lo na lista'
 
+test.skip(!!process.env.E2E_BASE_URL, 'depende do catálogo inacessível do webServer local')
+
 test(
   'CT-AJU-002 ver a ajuda quando os vídeos estão indisponíveis',
   { tag: ['@e2e', '@regressao'] },

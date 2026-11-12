@@ -97,6 +97,8 @@ export default defineConfig({
         env: {
           APP_ENV: 'e2e',
           RESOURCES_ENABLED: 'on',
+          // Localmente o `reuseExistingServer` pode reaproveitar um dev server sem este env; nesse
+          // caso o CT-AJU-002 falha. Saída: parar o servidor antes.
           DEMOS_BUNNY: 'on',
           BUNNY_CATALOGO_URL: 'http://127.0.0.1:9/catalogo/index.json',
           MCP_RESOURCE_URL: `http://localhost:${PORTA_LOCAL}/api/mcp`,
