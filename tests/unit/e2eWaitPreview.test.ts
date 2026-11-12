@@ -20,8 +20,11 @@ const makeApi = (
     expect(path).toContain(`/deployments?sha=${SHA}`)
     return deployments(clock.t)
   })
-  return { call, paginate: vi.fn() }
+  return { call }
 }
+
+const httpErro = (status: number) =>
+  Object.assign(new Error(`GitHub API GET /deployments falhou: HTTP ${status}`), { status })
 
 /** Relógio falso: `sleep` só avança o tempo, nunca espera de verdade. */
 const makeClock = () => {
@@ -150,5 +153,63 @@ describe('waitPreview', () => {
     expect(await waitPreview({ api, sha: SHA, now, sleep })).toEqual({
       url: 'https://novo.vercel.app',
     })
+  })
+
+  it('success sem environment_url nem target_url → lança "Deploy de preview sem URL" na hora', async () => {
+    const { clock, now, sleep } = makeClock()
+    const api = makeApi(
+      () => [preview(1)],
+      () => [{ state: 'success' }],
+      clock
+    )
+    await expect(waitPreview({ api, sha: SHA, now, sleep })).rejects.toThrow(
+      /Deploy de preview sem URL/
+    )
+    expect(sleep).not.toHaveBeenCalled()
+  })
+
+  it('5xx e 403/429 da API → tenta no próximo ciclo e devolve quando responde', async () => {
+    for (const status of [500, 502, 403, 429]) {
+      const { clock, now, sleep } = makeClock()
+      const api = makeApi(
+        (t) => {
+          if (t < 30_000) throw httpErro(status)
+          return [preview(1)]
+        },
+        () => [{ state: 'success', environment_url: 'https://ok.vercel.app' }],
+        clock
+      )
+      expect(await waitPreview({ api, sha: SHA, now, sleep })).toEqual({
+        url: 'https://ok.vercel.app',
+      })
+      expect(clock.t).toBe(30_000)
+    }
+  })
+
+  it('erro transitório até o prazo → timeout com o último erro', async () => {
+    const { clock, now, sleep } = makeClock()
+    const api = makeApi(
+      () => {
+        throw httpErro(503)
+      },
+      () => [],
+      clock
+    )
+    await expect(
+      waitPreview({ api, sha: SHA, now, sleep, timeoutMs: 60_000, intervalMs: 15_000 })
+    ).rejects.toThrow(/Nenhum deploy de preview .* em 1 min .*HTTP 503/)
+  })
+
+  it('outros erros HTTP (404) não são tentados de novo', async () => {
+    const { clock, now, sleep } = makeClock()
+    const api = makeApi(
+      () => {
+        throw httpErro(404)
+      },
+      () => [],
+      clock
+    )
+    await expect(waitPreview({ api, sha: SHA, now, sleep })).rejects.toThrow(/HTTP 404/)
+    expect(sleep).not.toHaveBeenCalled()
   })
 })

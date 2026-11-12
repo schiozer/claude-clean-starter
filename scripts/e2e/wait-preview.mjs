@@ -21,6 +21,11 @@ const maisRecente = (a, b) =>
 
 const minutos = (ms) => `${Math.round(ms / 60_000)} min`
 
+/** 5xx e 403/429 (rate limit) da API do GitHub: tenta de novo no próximo ciclo, até o prazo. */
+const transitorio = (error) =>
+  typeof error?.status === 'number' &&
+  (error.status >= 500 || error.status === 403 || error.status === 429)
+
 /**
  * @param {{
  *   api: { call: (method: string, path: string) => Promise<unknown> },
@@ -39,7 +44,10 @@ export async function waitPreview({
 }) {
   const prazo = now() + timeoutMs
   let viuDeploy = false
-  for (;;) {
+  let ultimoErro = ''
+
+  /** Uma consulta: `{ url }` se pronto, `null` se ainda não; lança se falhou. */
+  const consultar = async () => {
     const deployments = /** @type {Deployment[]} */ (
       await api.call('GET', `/deployments?sha=${encodeURIComponent(sha)}&per_page=100`)
     )
@@ -47,26 +55,37 @@ export async function waitPreview({
       .filter((d) => typeof d.environment === 'string' && d.environment.startsWith('Preview'))
       .sort(maisRecente)
       .at(-1)
-    if (deploy) {
-      viuDeploy = true
-      // a API devolve os status do mais novo para o mais antigo.
-      const statuses = /** @type {DeploymentStatus[]} */ (
-        await api.call('GET', `/deployments/${deploy.id}/statuses?per_page=1`)
-      )
-      const atual = statuses?.[0]
-      if (atual?.state === 'success') {
-        const url = atual.environment_url || atual.target_url
-        if (url) return { url }
-      }
-      if (atual && FALHOU.includes(atual.state)) {
-        throw new Error(`Deploy de preview falhou para ${sha} (status: ${atual.state})`)
-      }
+    if (!deploy) return null
+    viuDeploy = true
+    // a API devolve os status do mais novo para o mais antigo.
+    const statuses = /** @type {DeploymentStatus[]} */ (
+      await api.call('GET', `/deployments/${deploy.id}/statuses?per_page=1`)
+    )
+    const atual = statuses?.[0]
+    if (atual?.state === 'success') {
+      const url = atual.environment_url || atual.target_url
+      if (!url) throw new Error(`Deploy de preview sem URL para ${sha} (status success sem URL)`)
+      return { url }
+    }
+    if (atual && FALHOU.includes(atual.state)) {
+      throw new Error(`Deploy de preview falhou para ${sha} (status: ${atual.state})`)
+    }
+    return null
+  }
+
+  for (;;) {
+    try {
+      const pronto = await consultar()
+      if (pronto) return pronto
+    } catch (error) {
+      if (!transitorio(error)) throw error
+      ultimoErro = ` (último erro da API: ${error.message})`
     }
     if (now() >= prazo) {
       throw new Error(
-        viuDeploy
+        (viuDeploy
           ? `Deploy de preview para ${sha} não ficou pronto em ${minutos(timeoutMs)}`
-          : `Nenhum deploy de preview para ${sha} em ${minutos(timeoutMs)}`
+          : `Nenhum deploy de preview para ${sha} em ${minutos(timeoutMs)}`) + ultimoErro
       )
     }
     await sleep(Math.min(intervalMs, Math.max(prazo - now(), 0)))

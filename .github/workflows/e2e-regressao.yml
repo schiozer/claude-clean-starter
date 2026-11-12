@@ -23,6 +23,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      - name: Recusar PR de fork no modo preview
+        if: vars.E2E_TARGET == 'preview' && github.event.pull_request.head.repo.fork
+        run: |
+          echo "::error::PR de fork não recebe os segredos do UAT (bypass da Vercel, PATs, usuários de teste). A Regressão (UAT) precisa rodar a partir de uma branch deste repositório: peça a um mantenedor para abrir o PR a partir de uma branch daqui."
+          exit 1
+
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
@@ -56,8 +62,9 @@ jobs:
         id: grep
         run: node scripts/e2e/grep-regressao.mjs
 
-      # Segredos só no modo preview: no modo local ficam vazios e o playwright.config.ts preenche
-      # os PATs e o segredo de falhas do app local.
+      # Segredos só no modo preview. No modo local ficam vazios e o playwright.config.ts usa as
+      # constantes de teste `LOCAL_SOMENTE_TESTE` (já públicas, versionadas, inócuas fora do app
+      # efêmero do runner).
       - name: Regressão (Playwright)
         run: npm run test:e2e -- --grep "$E2E_GREP"
         env:
@@ -83,10 +90,10 @@ jobs:
         continue-on-error: true
         run: npm run check:cenarios
 
-      # Sensível: traces/relatório do Playwright guardam o header de bypass da Vercel e o
-      # `x-e2e-secret`; artefato curto (7 dias), nunca publicado em lugar público.
+      # Modo local: o relatório completo só contém as constantes `LOCAL_SOMENTE_TESTE` (públicas e
+      # inócuas fora do app efêmero do runner) → artefato completo, 7 dias. Repo privado idem.
       - name: Publicar relatórios
-        if: always()
+        if: always() && (vars.E2E_TARGET != 'preview' || github.event.repository.private)
         uses: actions/upload-artifact@v4
         with:
           name: regressao-uat-${{ github.run_id }}
@@ -98,27 +105,41 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Preview em repo público: qualquer usuário logado baixa artefatos, e os traces/relatório do
+      # Playwright guardam o bypass da Vercel e o `x-e2e-secret` → sobe só a rastreabilidade.
+      - name: Publicar rastreabilidade (sem traces)
+        if: always() && vars.E2E_TARGET == 'preview' && !github.event.repository.private
+        uses: actions/upload-artifact@v4
+        with:
+          name: regressao-uat-${{ github.run_id }}
+          path: .e2e/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+
       # Upsert por marcador (não `gh pr comment --edit-last`): o `Spec × código` comenta com o
       # mesmo bot e não pode ser sobrescrito. PR de fork (token só leitura) não derruba o check.
       - name: Comentar o resultado no PR
-        if: always()
+        if: always() && job.status != 'cancelled'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
           STATUS: ${{ job.status }}
           ALVO: ${{ steps.preview.outputs.url || 'app local (webServer)' }}
+          SEM_RELATORIO: ${{ vars.E2E_TARGET == 'preview' && !github.event.repository.private }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           MARKER='<!-- e2e-regressao -->'
-          case "$STATUS" in
-            success) RESULTADO='verde' ;;
-            cancelled) RESULTADO='cancelada' ;;
-            *) RESULTADO='vermelha' ;;
-          esac
+          if [ "$STATUS" = 'success' ]; then RESULTADO='verde'; else RESULTADO='vermelha'; fi
+          if [ "$SEM_RELATORIO" = 'true' ]; then
+            ARTEFATOS="Rastreabilidade nos artefatos do [run]($RUN_URL) (7 dias); relatório do Playwright não publicado (repositório público, modo preview — reproduza localmente ou veja o log do run)."
+          else
+            ARTEFATOS="Relatório do Playwright e rastreabilidade nos artefatos do [run]($RUN_URL) (7 dias)."
+          fi
           BODY="$MARKER
           **Regressão (UAT)**: $RESULTADO — alvo: $ALVO.
-          Relatório do Playwright e rastreabilidade nos artefatos do [run]($RUN_URL) (7 dias)."
+          $ARTEFATOS"
           ID=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
             --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | contains(\"$MARKER\"))) | .id" | tail -n 1)
           if [ -n "$ID" ]; then
