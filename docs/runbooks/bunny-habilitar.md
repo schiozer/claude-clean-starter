@@ -26,6 +26,7 @@ novo ao rotacionar qualquer credencial do Bunny.
 - Pelo menos uma Release (tag `vX.Y.Z`) criada pelo workflow `Release`.
 - Humano com admin no repositório e no projeto Vercel.
 - `bootstrap-ambientes.md` executado (projeto Vercel existente).
+- O `playwright.config.ts` do projeto envolve a config com `modoDemos` (`defineConfig(modoDemos({ ... }))`, de `tests/e2e/support`) — ver a [Adoção do guia de E2E](../guides/e2e-guide.md#adoção). Sem ele, o `demos:gravar` não escreve o manifesto e o `demos:publicar` falha com "manifesto ausente".
 
 ## Pre-flight
 
@@ -41,11 +42,11 @@ novo ao rotacionar qualquer credencial do Bunny.
    Verificar: a pull zone aparece ligada à storage zone no painel.
 3. [R1] Na pull zone, criar uma **Edge Rule** de cache de 60 s para `*/catalogo/index.json` (o índice muda a cada versão; os `vX.Y.Z.json` são imutáveis).
    Verificar: a regra aparece listada na pull zone.
-4. [R2] Gravar os segredos no GitHub: para cada nome, o humano roda `gh secret set <NOME> --repo <preencher: owner/repo>` num terminal separado e digita o valor no prompt: `BUNNY_STREAM_API_KEY`, `BUNNY_LIBRARY_ID`, `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD`, `BUNNY_STORAGE_HOST`.
-   Verificar: `gh secret list --repo <preencher: owner/repo>` lista os cinco **nomes** (o valor nunca aparece).
-5. [R2] Habilitar o **token authentication** da library (embed assinado do perfil `time interno`) e gravar a chave na Vercel: o humano roda `vercel env add BUNNY_STREAM_TOKEN_KEY production --scope <preencher: team Vercel>` (e `preview`, se o UAT mostrar vídeo) e digita o valor no prompt ([segredos-e-env.md](./segredos-e-env.md)). Sem a chave, os itens do `time interno` são omitidos.
+4. [R2] Gravar os segredos no GitHub: para cada nome, o humano roda `gh secret set <NOME> --repo <preencher: owner/repo>` num terminal separado e digita o valor no prompt: `BUNNY_STREAM_API_KEY`, `BUNNY_LIBRARY_ID`, `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_PASSWORD` e, **opcional** (só para storage zone regional; o padrão é `storage.bunnycdn.com`), `BUNNY_STORAGE_HOST`.
+   Verificar: `gh secret list --repo <preencher: owner/repo>` lista os quatro **nomes** obrigatórios, mais `BUNNY_STORAGE_HOST` se usado (o valor nunca aparece).
+5. [R2] Habilitar o **token authentication** da library (exigido pelo perfil `time interno`) e gravar a chave na Vercel: o humano roda `vercel env add BUNNY_STREAM_TOKEN_KEY production --scope <preencher: team Vercel>` (e `preview`, se o UAT mostrar vídeo) e digita o valor no prompt ([segredos-e-env.md](./segredos-e-env.md)). O token auth vale para a **library toda**: ligado, o app assina **todo** embed (inclusive `usuário final`) e os links das notas da Release (não assinados) deixam de tocar — o caminho para assistir passa a ser a `/ajuda`. Sem a chave (token auth desligado), os itens do `time interno` são omitidos e os de `usuário final` saem públicos.
    Verificar: `vercel env ls --scope <preencher: team Vercel>` lista o **nome** `BUNNY_STREAM_TOKEN_KEY`.
-6. [R1] Ligar o app: na Vercel, `DEMOS_BUNNY=on` e `BUNNY_CATALOGO_URL=<preencher: https://cdn do catálogo>/catalogo/index.json` (`vercel env add <NOME> preview --scope <preencher: team Vercel>`; em Prod, a mesma operação vira R2). Redeploy do ambiente.
+6. [R1] Ligar o app na Vercel, um comando por nome (o valor é digitado no prompt): `vercel env add DEMOS_BUNNY preview --scope <preencher: team Vercel>` com `on`, e `vercel env add BUNNY_CATALOGO_URL preview --scope <preencher: team Vercel>` com `<preencher: https://cdn do catálogo>/catalogo/index.json`. Em Prod, os mesmos dois comandos com `production` viram R2. Redeploy do ambiente.
    Verificar: `vercel env ls --scope <preencher: team Vercel>` lista os dois nomes.
 7. [R1] Ligar o job: `gh variable set DEMOS_BUNNY --body on --repo <preencher: owner/repo>`.
    Verificar: `gh variable list --repo <preencher: owner/repo>` mostra `DEMOS_BUNNY` = `on`.
@@ -55,7 +56,7 @@ novo ao rotacionar qualquer credencial do Bunny.
 - Disparar o job com a última tag: `gh workflow run demos-treinamento.yml --repo <preencher: owner/repo> -f tag=<última tag vX.Y.Z>` e acompanhar com `gh run watch` (verde, com o passo `Publicar no Bunny` executado).
 - Conferir o catálogo pela CDN: `curl -s <preencher: https://cdn do catálogo>/catalogo/index.json` traz a versão publicada em `versoes`.
 - Abrir a `/ajuda` do ambiente (cache de até 300 s): o vídeo aparece; sem catálogo, a página mostra "Vídeos indisponíveis no momento." e mantém a documentação.
-- A Release da tag tem a seção com os links das demos.
+- A Release da tag tem a seção com os links das demos (só `usuário final`; com token auth ligado, assista pela `/ajuda`).
 
 ## Rollback
 

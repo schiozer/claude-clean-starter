@@ -21,15 +21,25 @@ aponta podem morar no git. Além disso:
 ## Decisão
 
 1. **Bunny Stream** é a plataforma de vídeo, atrás da interface `IVideoHost` (`upload`,
-   `ensureCollection`, `replaceCollection`, `embedUrl`), com a implementação `BunnyStreamVideoHost`
-   e um fake em memória nos testes (mesmo isolamento do Neon e do Auth0).
+   `deleteVideo`, `ensureCollection`, `replaceCollection`, `embedUrl`), com a implementação
+   `BunnyStreamVideoHost` e um fake em memória nos testes (mesmo isolamento do Neon e do Auth0).
 2. **Catálogo versionado no Bunny Storage**, servido pela CDN: um arquivo imutável por versão
    (`catalogo/vX.Y.Z.json`) e o `catalogo/index.json`, **gravado por último**. Uma publicação que
-   falha no meio nunca deixa o índice apontando para vídeo ausente. O workflow usa `concurrency`
-   sem cancelar para duas gravações não disputarem o índice.
-3. **Embed conforme o perfil**: público para `usuário final`; **assinado** (token authentication do
-   Bunny, URL assinada no servidor com `BUNNY_STREAM_TOKEN_KEY`) para `time interno`. Sem a chave,
-   esses itens são omitidos (fail-closed).
+   falha no meio nunca deixa o índice apontando para vídeo ausente: o upload é um _upsert_ por
+   título, mas os vídeos anteriores de mesmo título só são apagados **depois** de o índice novo
+   estar gravado, e a coleção `Treinamento` antiga só sai depois do índice. O workflow usa
+   `concurrency` sem cancelar para duas gravações não disputarem o índice. Um `index.json`
+   existente mas inválido para a publicação antes de qualquer upload (corrija ou apague). O rerun
+   de uma tag **mais antiga** que a última publicada grava só a coleção e o catálogo daquela versão:
+   não troca a coleção `Treinamento` nem regride o treinamento ou as demos que vieram de uma versão
+   mais nova no índice.
+3. **Embed conforme o perfil, com token auth da library inteira**: o token authentication do Bunny
+   vale para **todos** os vídeos da library, não por vídeo. Por isso, com `BUNNY_STREAM_TOKEN_KEY`
+   configurada, o app assina **todo** embed (URL assinada no servidor, validade de 1 h). Sem a
+   chave, o que é `time interno` (pelo doc **ou** pelo item do catálogo, fail-closed) é omitido e o
+   `usuário final` sai público. As notas da Release listam **só** demos `usuário final` (link de
+   `time interno` nunca vai para a Release), e esses links não assinados só tocam com o token auth
+   **desligado**; ligado, o caminho para assistir é a `/ajuda`.
 4. **Toggle `DEMOS_BUNNY`** ([ADR-006](./006-processo-de-feature-e-feature-toggle.md)), nascendo
    **desligado**: variável do repositório (workflow) e env do app (a `/ajuda`). Desligado, o job
    termina verde com aviso e a ajuda mostra só a documentação.
@@ -39,7 +49,11 @@ aponta podem morar no git. Além disso:
    cenários `@demo` da spec do PR da versão (coleção `vX.Y.Z`); treinamento = todos os
    `@treinamento`, em trilhas por perfil, com a coleção substituída a cada versão.
 6. A `/ajuda` lê o índice com cache de 300 s e timeout de 3 s. Sem catálogo ou com falha, mostra
-   "Vídeos indisponíveis no momento." e mantém a documentação.
+   "Vídeos indisponíveis no momento." e mantém a documentação. Janela de cache: depois de uma
+   publicação, o app pode servir o índice anterior por até ~300 s (cache do app) + 60 s (Edge Rule
+   da CDN). Como a coleção `Treinamento` antiga é apagada logo após gravar o índice, nessa janela os
+   vídeos de treinamento podem aparecer quebrados até o cache vencer; as demos da versão não são
+   afetadas (coleção própria, vídeos obsoletos só somem após o índice novo).
 7. Segredos `BUNNY_*` só no GitHub e na Vercel, configurados pelo runbook
    [`bunny-habilitar.md`](../../runbooks/bunny-habilitar.md) (R2).
 

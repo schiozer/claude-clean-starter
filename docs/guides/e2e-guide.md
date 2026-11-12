@@ -59,8 +59,8 @@ E o campo "Título" fica vazio
   `@usabilidade`.
 - **Destino** (zero ou mais): `@regressao`, `@doc`, `@demo`, `@treinamento`. `@regressao` é
   **implícito**; para tirar um cenário da regressão escreva `Fora da regressão: <motivo>`.
-  `@demo` e `@treinamento` podem ser escritos, mas ainda não geram vídeo (Plano 2, ADR-017
-  futuro).
+  `@demo` e `@treinamento` geram vídeo no Bunny (ver [§8](#8-demos-e-treinamento) e
+  [ADR-017](../adr/template/017-bunny-videos-demos-treinamento.md)).
 - **Critério** liga a um ou mais `CA-n`; **Perfil** é `usuário final` ou `time interno` (separa
   a ajuda).
 - **Passos** começam por `Dado`, `Quando`, `Então`, `E` ou `Mas`. Dados de exemplo são fictícios e
@@ -229,13 +229,16 @@ Vídeos gravados pelo Playwright e publicados no Bunny ([ADR-017](../adr/templat
   atual, em desktop e mobile. Grava sempre contra o app construído a partir da tag, nunca contra UAT
   ou Prod.
 - **Rodar local**: `npm run demos:gravar -- --grep CT-RES-001` (`E2E_DEMOS=1`, projetos `desktop` e
-  `mobile`); os vídeos ficam em `.e2e/demos/`.
+  `mobile`); os vídeos ficam em `test-results/` e o manifesto que os lista em
+  `.e2e/demos/manifesto.json`. O modo demos vem do `modoDemos` no `playwright.config.ts`.
 - **Rodar de novo uma versão**: Actions → `Demos & Treinamento` → Run workflow, com a tag
   (`vX.Y.Z`), ou `gh workflow run demos-treinamento.yml -f tag=vX.Y.Z`. Precisa de `DEMOS_BUNNY=on`
   no repositório (runbook [`bunny-habilitar.md`](../runbooks/bunny-habilitar.md)).
 - **`/ajuda`**: com `DEMOS_BUNNY=on` e `BUNNY_CATALOGO_URL`, mostra os vídeos do catálogo (cache de
-  300 s, timeout de 3 s). Itens do `time interno` usam embed assinado e são omitidos sem
-  `BUNNY_STREAM_TOKEN_KEY`. Sem catálogo, ou com falha, a página mostra "Vídeos indisponíveis no
+  300 s, timeout de 3 s). O token auth do Bunny vale para a library toda: com
+  `BUNNY_STREAM_TOKEN_KEY` todo embed sai assinado; sem ela, os itens do `time interno` são
+  omitidos e os de `usuário final` saem públicos. As notas da Release só listam demos de
+  `usuário final`. Sem catálogo, ou com falha, a página mostra "Vídeos indisponíveis no
   momento." e mantém a documentação; com o toggle desligado, só a documentação.
 
 ---
@@ -252,6 +255,11 @@ Vídeos gravados pelo Playwright e publicados no Bunny ([ADR-017](../adr/templat
 - Para ligar: crie o `playwright.config.ts` a partir do do template, com o `webServer` subindo o
   app do projeto, e o `tests/e2e/cenarios.config.json` com os `specs`, as `paginas` e o `ajuda` do
   projeto. Ajuste o baseline de `docs/rnf.md`: todo requisito precisa de um teste com o mesmo ID.
+- Vídeos de demo/treinamento: envolva a config com o helper sincronizado `modoDemos`
+  (`export default defineConfig(modoDemos({ ... }))`, importado de `./tests/e2e/support`). Com
+  `E2E_DEMOS=1` ele liga vídeo, câmera lenta, o reporter do manifesto, sem retentativa e sem
+  reaproveitar servidor; fora disso, não muda nada. Sem ele o `demos:publicar` falha com "manifesto
+  ausente" (runbook [`bunny-habilitar.md`](../runbooks/bunny-habilitar.md)).
 - Importe `test` e `expect` de `tests/e2e/support`, não de `@playwright/test`: é o `test` do
   suporte que manda o bypass da Vercel só para a origem do preview. A regra
   `no-restricted-imports` do ESLint barra o import errado em `tests/e2e/**` (tipos e `devices`

@@ -73,7 +73,10 @@ com Claude liga com `SPEC_GATE` (runbook `docs/runbooks/spec-gate.md`). Ver ADR-
 Os cenários de teste nascem na spec (revisados pela QA) e viram testes Playwright ligados pelo ID.
 Todo PR roda o check obrigatório `Regressão (UAT)` (app local no template; Preview da Vercel no
 projeto, runbook `docs/runbooks/e2e-uat-configurar.md`), e os cenários `@doc` geram a ajuda em
-`/ajuda`. Ver [ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md).
+`/ajuda`. Ver [ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md). Os cenários
+`@demo`/`@treinamento` viram vídeos gravados pelo Playwright depois de cada Release e publicados no
+Bunny (`npm run demos:gravar`, toggle `DEMOS_BUNNY`, runbook `docs/runbooks/bunny-habilitar.md`) —
+ver [ADR-017](./docs/adr/template/017-bunny-videos-demos-treinamento.md).
 
 ## Sync com o template
 
