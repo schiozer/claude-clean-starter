@@ -10,7 +10,11 @@ import {
 
 const agora = new Date('2026-11-12T10:00:00.000Z')
 
-const item = (id: string, perfil = 'usuário final', titulo = id) => ({
+const item = (
+  id: string,
+  perfil: 'usuário final' | 'time interno' = 'usuário final',
+  titulo = id
+) => ({
   id,
   titulo,
   contexto: 'resources',
