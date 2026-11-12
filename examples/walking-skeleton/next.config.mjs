@@ -12,6 +12,11 @@ const csp = (isDev) =>
 
 /** @type {(phase: string) => import('next').NextConfig} */
 const nextConfig = (phase) => ({
+  // A ajuda lê docs/ajuda/ em tempo de execução (gerado por `npm run docs:gerar`): entra no bundle.
+  outputFileTracingIncludes: {
+    '/api/ajuda/**': ['./docs/ajuda/**'],
+    '/ajuda/**': ['./docs/ajuda/**'],
+  },
   async headers() {
     return [
       {

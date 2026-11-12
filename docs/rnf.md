@@ -70,7 +70,12 @@ Como os testes genéricos do baseline encontram a sessão e as rotas deste app. 
 | ---------- | -------- |
 | /          | Início   |
 | /resources | Recursos |
+| /ajuda     | Ajuda    |
 
 ## Exclusões
 
 - `/dev-login`
+- `/ajuda/[id]`
+
+`/ajuda/[id]` é rota dinâmica (um ID por página de ajuda gerada): o baseline não sabe qual abrir; o
+cenário CT-AJU-001 (`examples/walking-skeleton/docs/specs/ajuda.md`) a cobre pelo teclado e pelo axe.

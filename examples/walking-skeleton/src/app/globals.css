@@ -61,3 +61,34 @@ input {
   padding: var(--space);
   border-radius: var(--radius);
 }
+
+/* Ajuda (/ajuda): links da lista e da volta como alvos de toque; screenshot sem rolagem lateral. */
+.ajuda-lista a,
+.ajuda-voltar {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--size-touch-target);
+}
+
+.ajuda-passo {
+  margin: 0;
+}
+
+.ajuda-passo img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.ajuda-nav {
+  display: flex;
+  gap: var(--space);
+  margin-top: var(--space);
+}
+
+button[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

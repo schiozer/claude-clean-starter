@@ -1,4 +1,10 @@
 // API pública dos helpers de E2E (gerenciada pelo template). Testes importam só daqui.
+import { join } from 'node:path'
+import { test } from '@playwright/test'
+import { makeGanchoDeDocs } from './docs'
+import { RAIZ, indiceAtual } from './indice'
+import { registrarGanchoDePasso } from './jornada'
+
 export { jornada, registrarGanchoDePasso } from './jornada'
 export type { GanchoDePasso, PassoCtx, Passos } from './jornada'
 export { dado } from './dado'
@@ -9,3 +15,13 @@ export { credencialAuth0, entrar, loginAuth0, loginDev, perfis } from './auth'
 export type { Perfil } from './auth'
 export { e2eEnv } from './env'
 export type { E2eEnv, Env } from './env'
+
+// `npm run docs:gerar` (`E2E_DOCS=1`): screenshot por passo dos cenários `@doc` no projeto desktop
+// e página de ajuda em `ajuda` do `cenarios.config.json`. Uma vez por worker (módulo em cache).
+if (process.env.E2E_DOCS === '1') {
+  const { ajuda } = indiceAtual().config
+  if (!ajuda) throw new Error('docs:gerar: defina "ajuda" em tests/e2e/cenarios.config.json')
+  registrarGanchoDePasso(
+    makeGanchoDeDocs({ dir: join(RAIZ, ajuda), projeto: () => test.info().project.name })
+  )
+}

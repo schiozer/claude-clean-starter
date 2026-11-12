@@ -1,5 +1,8 @@
 // src/composition.ts
 // Único arquivo que importa infrastructure/: instancia repositórios, services e bordas.
+import { join } from 'node:path'
+import { AjudaService, makeAjudaHandlers } from '@/modules/ajuda'
+import { FsAjudaSource } from '@/modules/ajuda/infrastructure/FsAjudaSource'
 import { ResourceService, makeResourceHandlers, makeResourceTools } from '@/modules/resources'
 import { InMemoryResourceRepository } from '@/modules/resources/infrastructure/InMemoryResourceRepository'
 import {
@@ -46,6 +49,11 @@ export const resourceHandlers = {
   GET: withRouteTimeout(rawResourceHandlers.GET, apiTimeoutMs, 'api/resources:GET'),
   POST: withRouteTimeout(rawResourceHandlers.POST, apiTimeoutMs, 'api/resources:POST'),
 }
+
+// Módulo ajuda: páginas geradas por `npm run docs:gerar` em docs/ajuda/ (no bundle do servidor via
+// `outputFileTracingIncludes`). Sem tool MCP: a spec da ajuda não pede (ADR-012).
+const ajudaService = new AjudaService(new FsAjudaSource(join(process.cwd(), 'docs', 'ajuda')))
+export const ajudaHandlers = makeAjudaHandlers(ajudaService, resolveSessionActor)
 
 // Borda MCP (bearer: OAuth Auth0 ou token pessoal)
 export const personalTokens = new InMemoryPersonalTokenStore(systemClock)

@@ -10,12 +10,12 @@ describe('StubAuthProvider + makeSessionResolver', () => {
     delete process.env.APP_ENV
   })
 
-  it('no Dev local resolve o dev-user com escopos de resources', async () => {
+  it('no Dev local resolve o dev-user com escopos de resources e de toda a ajuda', async () => {
     process.env.APP_ENV = 'development'
     expect(await resolve(req)).toEqual({
       id: 'dev-user',
       tenantId: 'dev-tenant',
-      scopes: ['resources:read', 'resources:write'],
+      scopes: ['resources:read', 'resources:write', 'ajuda:read', 'ajuda:interno'],
       via: 'session',
     })
   })

@@ -31,6 +31,7 @@
     "tests/unit/checkRunbooks.test.ts",
     "tests/unit/docsLinks.test.ts",
     "tests/unit/e2eCenarios.test.ts",
+    "tests/unit/e2eDocs.test.ts",
     "tests/unit/e2eEnv.test.ts",
     "tests/unit/e2eRnf.test.ts",
     "tests/unit/e2eTestes.test.ts",
