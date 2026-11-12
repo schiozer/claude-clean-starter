@@ -39,6 +39,26 @@ describe('skill template-sync', () => {
     }
   )
 
+  const SEMEADOS = [
+    'playwright.config.ts',
+    'tests/e2e/cenarios.config.json',
+    'tests/e2e/auth.setup.ts',
+    'docs/rnf.md',
+  ]
+
+  it('o sync semeia os arquivos do projeto ausentes, sem sobrescrever', () => {
+    const steps = section('sync')
+    for (const arquivo of SEMEADOS) expect(steps).toContain(`\`${arquivo}\``)
+    expect(steps).toMatch(/[Nn]unca sobrescreva/)
+    expect(steps).toContain('test -e')
+    expect(steps.indexOf('test -e')).toBeLessThan(steps.indexOf('npm run check:runbooks'))
+  })
+
+  it('o adotar também semeia (segue o passo do sync)', () => {
+    expect(section('adotar')).toMatch(/semeia/)
+    expect(section('adotar')).toMatch(/passos 8 a 14/)
+  })
+
   it('a skill explica o conflito binário', () => {
     expect(section('sync')).toMatch(/`binary`/)
   })

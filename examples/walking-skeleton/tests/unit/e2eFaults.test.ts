@@ -56,6 +56,24 @@ describe('e2eFault', () => {
     expect(e2eFault(reqFalha(secret, fault), env)).toBe(esperado)
   })
 
+  it.each(['e2e', 'uat', 'dev', 'development'])(
+    'APP_ENV=%s (allowlist) abre o portão',
+    (appEnv) => {
+      const env = { APP_ENV: appEnv, E2E_FAULTS_SECRET: 's'.repeat(16) }
+      expect(e2eFault(reqFalha('s'.repeat(16), 'throw'), env)).toBe('throw')
+      expect(e2eDelayMs(req('s'.repeat(16), '500'), env)).toBe(500)
+    }
+  )
+
+  it.each(['production', 'prod', 'PROD', 'staging', 'UAT', ' uat', ''])(
+    'APP_ENV=%j (fora da allowlist) fecha o portão',
+    (appEnv) => {
+      const env = { APP_ENV: appEnv, E2E_FAULTS_SECRET: 's'.repeat(16) }
+      expect(e2eFault(reqFalha('s'.repeat(16), 'throw'), env)).toBeNull()
+      expect(e2eDelayMs(req('s'.repeat(16), '500'), env)).toBe(0)
+    }
+  )
+
   it('sem header de falha → null', () => {
     const env = { APP_ENV: 'uat', E2E_FAULTS_SECRET: 's'.repeat(16) }
     expect(e2eFault(new Request('http://localhost/'), env)).toBeNull()

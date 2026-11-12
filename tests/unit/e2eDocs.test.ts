@@ -20,6 +20,7 @@ describe('contemSegredo', () => {
     ['E2E_FAULTS_SECRET', 'segredo-de-falhas-123'],
     ['E2E_USUARIO_SENHA', 'senha-do-usuario'],
     ['E2E_INTERNO_SENHA', 'senha-do-interno'],
+    ['VERCEL_AUTOMATION_BYPASS_SECRET', 'bypass-da-vercel-123'],
   ])('acha %s', (nome, valor) => {
     expect(contemSegredo(`<div>${valor}</div>`, { [nome]: valor })).toBe(nome)
   })

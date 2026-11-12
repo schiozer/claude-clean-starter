@@ -89,8 +89,7 @@ passos **não são redigitados**: `jornada(id, passos, { page })` lê o cenário
 `test.step` por passo, chamando a função cuja chave é o texto do passo (sem a palavra inicial).
 
 ```typescript
-import { expect, test } from '@playwright/test'
-import { dado, jornada } from '../support' // ajuste o caminho relativo até tests/e2e/support
+import { dado, expect, jornada, test } from '../support' // ajuste o caminho relativo até tests/e2e/support
 
 test(
   'CT-RES-001 criar um recurso e vê-lo na lista',
@@ -149,12 +148,12 @@ CI o servidor já de pé é reaproveitado.
 
 ### Modo `e2e` local × modo preview
 
-|                    | Local (padrão; template e projeto antes do bootstrap) | Preview (`E2E_TARGET=preview`, projeto com UAT)             |
-| ------------------ | ----------------------------------------------------- | ----------------------------------------------------------- |
-| Alvo               | app subido pelo `webServer` (`APP_ENV=e2e`)           | Preview da Vercel do SHA do PR (`E2E_BASE_URL`)             |
-| Login (`setup`)    | stub `/dev-login?perfil=…` (`E2E_AUTH` vazio)         | Universal Login do Auth0 (`E2E_AUTH=auth0`)                 |
-| PATs e segredos    | `LOCAL_SOMENTE_TESTE` do `playwright.config.ts`       | segredos do GitHub (runbook `e2e-uat-configurar.md`)        |
-| Proteção da Vercel | —                                                     | header `x-vercel-protection-bypass` com o segredo de bypass |
+|                    | Local (padrão; template e projeto antes do bootstrap) | Preview (`E2E_TARGET=preview`, projeto com UAT)      |
+| ------------------ | ----------------------------------------------------- | ---------------------------------------------------- |
+| Alvo               | app subido pelo `webServer` (`APP_ENV=e2e`)           | Preview da Vercel do SHA do PR (`E2E_BASE_URL`)      |
+| Login (`setup`)    | stub `/dev-login?perfil=…` (`E2E_AUTH` vazio)         | Universal Login do Auth0 (`E2E_AUTH=auth0`)          |
+| PATs e segredos    | `LOCAL_SOMENTE_TESTE` do `playwright.config.ts`       | segredos do GitHub (runbook `e2e-uat-configurar.md`) |
+| Proteção da Vercel | —                                                     | header de bypass só para a origem do preview         |
 
 > **Nunca** defina `APP_ENV=e2e` num servidor que não seja o runner de CI ou a sua máquina:
 > fora da Vercel ele liga o login stub e os PATs fixos (ver consequências do ADR-016).
@@ -192,12 +191,14 @@ limpo), tira um screenshot por passo e grava `<ajuda>/<CTX>/<ID>.json` + `<ajuda
 `examples/walking-skeleton/docs/ajuda`). O app serve as páginas em `/ajuda`, separadas por perfil.
 
 - **Só contra o app local.** Nunca rode com `E2E_BASE_URL` apontando para um ambiente remoto: as
-  capturas sairiam com dados do ambiente e o comando não recusa sozinho.
+  capturas sairiam com dados do ambiente. Com `E2E_BASE_URL` definido, o comando falha antes de
+  rodar.
 - Rode antes de abrir/atualizar o PR e **commite** `docs/ajuda` na feature branch (nunca há escrita
   na `main` fora de PR). O `check:cenarios` acusa cenário `@doc` sem página ou com passos
   diferentes.
 - Elementos com `data-sensivel` saem tarjados; a captura falha se o valor de um segredo
-  (`E2E_*SECRET*`, `E2E_PAT_*`, `DEV_PERSONAL_TOKEN`, `E2E_<PERFIL>_SENHA`) aparecer na tela ou num
+  (`E2E_*SECRET*`, `E2E_PAT_*`, `DEV_PERSONAL_TOKEN`, `E2E_<PERFIL>_SENHA`,
+  `VERCEL_AUTOMATION_BYPASS_SECRET`) aparecer na tela ou num
   campo.
 - Screenshots não são comparados por pixel; o check confere a página e os passos.
 
@@ -214,6 +215,21 @@ conhecidas:
 - **Rate limit em memória**: o RNF-SEG-005 pressupõe uma instância quente por preview.
 - **Espera do Preview**: até ~15 min (`scripts/e2e/wait-preview.mjs`); deploy com erro ou timeout
   deixa o check vermelho com a mensagem.
+
+---
+
+## Adoção
+
+- O `/template-sync` **semeia** uma vez os arquivos do projeto que faltarem
+  (`playwright.config.ts`, `tests/e2e/cenarios.config.json`, `tests/e2e/auth.setup.ts`,
+  `docs/rnf.md`) e nunca os sobrescreve. Depois de semeados, são do projeto.
+- Sem `playwright.config.ts` ou `tests/e2e/cenarios.config.json`, o `Regressão (UAT)` fica verde
+  com um aviso (`E2E não configurado`) e não testa nada. Ele não substitui a configuração.
+- Ajuste o `webServer` do `playwright.config.ts` para subir o app do projeto, o `ajuda` e os
+  `specs` do `cenarios.config.json` e o baseline de `docs/rnf.md`: todo requisito precisa de um
+  teste com o mesmo ID.
+- Importe `test` e `expect` de `tests/e2e/support`, não de `@playwright/test`: é o `test` do
+  suporte que manda o bypass da Vercel só para a origem do preview.
 
 ---
 

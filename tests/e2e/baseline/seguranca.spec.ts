@@ -1,7 +1,6 @@
 // Baseline de hardening (docs/rnf.md, RNF-SEG-*): headers, cookie, fail-closed, erro sem vazamento,
 // rate limit e o 401 do MCP. Roda no projeto `sistemico` (só `request`, sem navegador).
-import { expect, test } from '@playwright/test'
-import { e2eEnv, parametro, perfis, telasExigidas } from '../support'
+import { e2eEnv, parametro, perfis, telasExigidas, expect, test } from '../support'
 import { chamarMcp, chamarTool, comTrava, exigir, parametroInteiro, parametroLista } from './apoio'
 
 test.describe('com sessão do usuário', () => {

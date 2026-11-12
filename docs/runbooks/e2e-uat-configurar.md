@@ -12,15 +12,19 @@ de cada PR, e não mais contra o app local do runner: usuários de teste no Auth
 atores de teste, segredos do GitHub e da Vercel e a variável `E2E_TARGET=preview`. Use uma vez por
 projeto, depois do `bootstrap-ambientes.md`, e de novo ao rotacionar qualquer credencial de teste.
 
+> **Opcional**: só para ligar `E2E_TARGET=preview`. Sem ele, a `Regressão (UAT)` continua rodando
+> contra o app local do runner (modo padrão do template e do projeto antes do bootstrap).
+
 > **Segredos (ADR-013 §4)**: senhas, PATs e segredos de bypass/falhas são digitados **pelo humano,
 > num terminal separado, fora da sessão do agente** (ou no dashboard). O agente nunca vê, ecoa ou
 > passa valor em argumento; só confere **nomes**.
 
 ## Pré-condições
 
-- `bootstrap-ambientes.md` executado: UAT = ambiente Preview da Vercel, com `APP_ENV=uat` (a injeção de lentidão só vale com `APP_ENV` declarado e diferente de `production`).
+- `bootstrap-ambientes.md` executado: UAT = ambiente Preview da Vercel, com `APP_ENV=uat` (a injeção de lentidão só vale com `APP_ENV` na allowlist `e2e`, `uat`, `dev`/`development`; `production`, `prod` ou qualquer outro valor a desligam).
 - O app de login web do Auth0 de UAT aceita as URLs de Preview (callback e logout), para o Universal Login funcionar na URL de cada PR.
 - O app do projeto emite PAT com escopos no UAT (`<preencher: tela/rota que emite PAT no UAT>`) e tem os escopos usados pelos testes: `resources:read`, `resources:write`, `ajuda:read`, `ajuda:interno` (ou os equivalentes do projeto).
+- Os PATs ficam **persistidos** no banco do UAT (um `I*Repository` de tokens, não em memória). O `examples/walking-skeleton` **não serve de alvo**: o `InMemoryPersonalTokenStore` perde os PATs a cada cold start ou nova instância da função, e os PATs do passo 2 deixariam de valer no meio da execução. Sem store persistente, não execute este runbook: mantenha o alvo local.
 - PRs abertos a partir de branches do próprio repositório: PR de fork não recebe segredos e, no modo preview, o job falha com erro explícito.
 - Humano com admin no repositório, no projeto Vercel e no tenant Auth0 de UAT.
 
@@ -40,18 +44,19 @@ projeto, depois do `bootstrap-ambientes.md`, e de novo ao rotacionar qualquer cr
    Verificar: o humano confirma os quatro PATs emitidos, com os escopos e a expiração acima (anotar a data de expiração no registro).
 3. [R3] Humano: na Vercel, em Project Settings → Deployment Protection, criar o _Protection Bypass for Automation_ (gera o `VERCEL_AUTOMATION_BYPASS_SECRET`; mexer na Deployment Protection é do humano — ADR-013). Guardar o valor só até o passo 5.
    Verificar: o humano confirma que o bypass existe; a Deployment Protection continua ativa para o resto do Preview.
-4. [R2] Criar o segredo de injeção de lentidão no Preview: o humano gera um valor aleatório com **ao menos 16 caracteres** (ex.: `openssl rand -hex 32`, fora da sessão) e roda `vercel env add E2E_FAULTS_SECRET preview --scope <preencher: team Vercel>`, digitando-o no prompt ([segredos-e-env.md](./segredos-e-env.md), passo 2). Nunca em `production`. Depois, redeploy do Preview (passo 3 do `segredos-e-env.md`).
+4. [R2] Criar o segredo de injeção de lentidão no ambiente **Preview** da Vercel (é o ambiente dos deploys de PR, onde roda o UAT; Production e Development ficam sem ele): o humano gera um valor aleatório com **ao menos 16 caracteres** (ex.: `openssl rand -hex 32`, fora da sessão) e roda `vercel env add E2E_FAULTS_SECRET preview --scope <preencher: team Vercel>`, digitando-o no prompt ([segredos-e-env.md](./segredos-e-env.md), passo 2). Nunca no ambiente Production. Depois, redeploy do Preview (passo 3 do `segredos-e-env.md`).
    Verificar: `vercel env ls preview --scope <preencher: team Vercel>` lista o **nome** `E2E_FAULTS_SECRET` e `vercel env ls production --scope <preencher: team Vercel>` **não** o lista.
 5. [R2] Criar os segredos do GitHub Actions: para cada nome, o humano roda `gh secret set <NOME> --repo <preencher: owner/repo>` num terminal separado e digita o valor no prompt — `VERCEL_AUTOMATION_BYPASS_SECRET`, `E2E_FAULTS_SECRET` (o mesmo valor do passo 4), `E2E_PAT_USUARIO`, `E2E_PAT_SEM_ESCOPO`, `E2E_PAT_RATE_LIMIT`, `E2E_PAT_OUTRO_ATOR`, `E2E_USUARIO_EMAIL`, `E2E_USUARIO_SENHA`, `E2E_INTERNO_EMAIL`, `E2E_INTERNO_SENHA`.
    Verificar: `gh secret list --repo <preencher: owner/repo>` lista os dez **nomes** (o valor nunca aparece).
 6. [R1] Ligar o alvo preview: `gh variable set E2E_TARGET --body preview --repo <preencher: owner/repo>` (com ela, o workflow espera o Preview do SHA, define `E2E_AUTH=auth0` e passa os segredos do passo 5).
    Verificar: `gh variable list --repo <preencher: owner/repo>` mostra `E2E_TARGET` = `preview`.
+   O bypass da Vercel vai só nas requisições à origem do Preview: no navegador, o `test` de `tests/e2e/support` (fixture `context`, rota por origem) põe `x-vercel-protection-bypass` + `x-vercel-set-bypass-cookie` só nas requisições ao `baseURL`; no `request` da API (que só fala com o `baseURL`), o header vai no `APIRequestContext`. Auth0, CDN e terceiros nunca recebem o segredo. Testes do projeto importam `test`/`expect` de `tests/e2e/support`, não de `@playwright/test`.
 7. [R1] Rodar a regressão num PR de teste (aberto a partir de uma branch do repositório): push na branch ou `gh run rerun <run-id>` (o `<run-id>` sai de `gh run list --workflow e2e-regressao.yml --branch <branch>`).
    Verificar: `gh pr checks <n>` mostra `Regressão (UAT)` `pass` e o comentário do `github-actions[bot]` diz `alvo: https://…` (a URL do Preview, não `app local (webServer)`).
 
 ## Verificação final
 
-- `E2E_TARGET=preview`; os dez segredos existem no GitHub; `E2E_FAULTS_SECRET` existe só no Preview da Vercel.
+- `E2E_TARGET=preview`; os dez segredos existem no GitHub; `E2E_FAULTS_SECRET` existe no ambiente Preview da Vercel e não existe em Production nem em Development.
 - O PR de teste tem `Regressão (UAT)` verde contra o Preview, com os artefatos `regressao-uat-<run>` conforme a visibilidade do repositório.
 - **Limitação conhecida — rate limit**: o limitador do skeleton é em memória, por instância. O RNF-SEG-005 pressupõe uma instância quente por Preview; se o 429 não aparecer de forma intermitente, confira se o Preview escalou para várias instâncias (a solução é um limitador compartilhado, ADR-010).
 - **Nunca** defina `APP_ENV=e2e` fora do runner de CI ou da máquina local: `isE2eLocalEnvironment()` (`APP_ENV === 'e2e' && !VERCEL`) não olha `NODE_ENV`; num host que não seja a Vercel ele liga o login stub e os PATs fixos.

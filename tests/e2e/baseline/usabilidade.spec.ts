@@ -2,10 +2,8 @@
 // `telasExigidas()`. Roda nos projetos `desktop` e `mobile` com a sessão do usuário; o alvo de toque só vale
 // no mobile.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Request, type Route } from '@playwright/test'
-import { checarA11y, dado, parametro, rnf, telasExigidas } from '../support'
-
-const TAG = ['@usabilidade', '@regressao']
+import { type Page, type Request, type Route } from '@playwright/test'
+import { checarA11y, dado, parametro, rnf, telasExigidas, expect, test } from '../support'
 
 const abrir = async (page: Page, rota: string): Promise<void> => {
   await page.goto(rota)
@@ -19,18 +17,22 @@ const ehChamadaDeApi = (route: Route): boolean =>
   ['fetch', 'xhr'].includes(route.request().resourceType()) &&
   new URL(route.request().url()).pathname.startsWith('/api/')
 
-test('USA-001 acessibilidade automática sem violações graves', { tag: TAG }, async ({ page }) => {
-  for (const { rota, nome } of telasExigidas()) {
-    await test.step(`${nome} (${rota})`, async () => {
-      await abrir(page, rota)
-      await checarA11y(page)
-    })
+test(
+  'USA-001 acessibilidade automática sem violações graves',
+  { tag: ['@usabilidade', '@regressao'] },
+  async ({ page }) => {
+    for (const { rota, nome } of telasExigidas()) {
+      await test.step(`${nome} (${rota})`, async () => {
+        await abrir(page, rota)
+        await checarA11y(page)
+      })
+    }
   }
-})
+)
 
 test(
   'USA-002 responsivo sem rolagem horizontal e alvo de toque',
-  { tag: TAG },
+  { tag: ['@usabilidade', '@regressao'] },
   async ({ page, isMobile }) => {
     const alvo = rnf('USA-002').valor
     if (!alvo || alvo.unidade !== 'px')
@@ -87,73 +89,81 @@ test(
 const FOCAVEIS =
   'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-test('USA-003 teclado percorre os focáveis com foco visível', { tag: TAG }, async ({ page }) => {
-  for (const { rota, nome } of telasExigidas()) {
-    await test.step(`${nome} (${rota})`, async () => {
-      await abrir(page, rota)
-      await page.waitForLoadState('networkidle')
-      // Identidade por índice (`data-e2e-foco`), não por tag/id/texto (que podem se repetir).
-      const total = await page.evaluate((seletor) => {
-        const lista = [...document.querySelectorAll(seletor)].filter(
-          (el) => el.getClientRects().length > 0
-        )
-        lista.forEach((el, i) => el.setAttribute('data-e2e-foco', String(i)))
-        return lista.length
-      }, FOCAVEIS)
-      const visitados = new Set<string>()
-      for (let i = 0; i < total; i++) {
-        await page.keyboard.press('Tab')
-        const foco = await page.evaluate(() => {
-          const el = document.activeElement
-          if (!el || el === document.body) return null
-          const cs = getComputedStyle(el)
-          // `outline: auto` é o anel padrão do navegador: não conta como o foco visível do projeto.
-          const contorno =
-            cs.outlineStyle !== 'none' &&
-            cs.outlineStyle !== 'auto' &&
-            parseFloat(cs.outlineWidth) > 0
-          return {
-            indice: el.getAttribute('data-e2e-foco'),
-            descricao: `${el.tagName.toLowerCase()} "${el.textContent?.trim() ?? ''}"`,
-            visivel: contorno || cs.boxShadow !== 'none',
-          }
-        })
-        expect(foco, `Tab ${i + 1}: algum elemento recebe o foco`).not.toBeNull()
-        if (!foco) return
-        expect(
-          foco.visivel,
-          `${foco.descricao}: foco visível do projeto (outline ou box-shadow)`
-        ).toBe(true)
-        if (foco.indice !== null) visitados.add(foco.indice)
-      }
-      expect(visitados.size, 'Tab alcança todos os focáveis').toBe(total)
-    })
+test(
+  'USA-003 teclado percorre os focáveis com foco visível',
+  { tag: ['@usabilidade', '@regressao'] },
+  async ({ page }) => {
+    for (const { rota, nome } of telasExigidas()) {
+      await test.step(`${nome} (${rota})`, async () => {
+        await abrir(page, rota)
+        await page.waitForLoadState('networkidle')
+        // Identidade por índice (`data-e2e-foco`), não por tag/id/texto (que podem se repetir).
+        const total = await page.evaluate((seletor) => {
+          const lista = [...document.querySelectorAll(seletor)].filter(
+            (el) => el.getClientRects().length > 0
+          )
+          lista.forEach((el, i) => el.setAttribute('data-e2e-foco', String(i)))
+          return lista.length
+        }, FOCAVEIS)
+        const visitados = new Set<string>()
+        for (let i = 0; i < total; i++) {
+          await page.keyboard.press('Tab')
+          const foco = await page.evaluate(() => {
+            const el = document.activeElement
+            if (!el || el === document.body) return null
+            const cs = getComputedStyle(el)
+            // `outline: auto` é o anel padrão do navegador: não conta como o foco visível do projeto.
+            const contorno =
+              cs.outlineStyle !== 'none' &&
+              cs.outlineStyle !== 'auto' &&
+              parseFloat(cs.outlineWidth) > 0
+            return {
+              indice: el.getAttribute('data-e2e-foco'),
+              descricao: `${el.tagName.toLowerCase()} "${el.textContent?.trim() ?? ''}"`,
+              visivel: contorno || cs.boxShadow !== 'none',
+            }
+          })
+          expect(foco, `Tab ${i + 1}: algum elemento recebe o foco`).not.toBeNull()
+          if (!foco) return
+          expect(
+            foco.visivel,
+            `${foco.descricao}: foco visível do projeto (outline ou box-shadow)`
+          ).toBe(true)
+          if (foco.indice !== null) visitados.add(foco.indice)
+        }
+        expect(visitados.size, 'Tab alcança todos os focáveis').toBe(total)
+      })
+    }
   }
-})
+)
 
 // Caminho feliz só pelo teclado na tela de recursos do skeleton (ajuste a tela/rótulos no projeto).
-test('USA-003 caminho feliz da tela de recursos pelo teclado', { tag: TAG }, async ({ page }) => {
-  const rota = parametro('telaComApi')
-  // Único por projeto e repetição: desktop e mobile dividem o mesmo usuário e a mesma lista.
-  const titulo = dado(`Teclado ${test.info().project.name} ${Date.now()}`)
-  await abrir(page, rota)
-  await page.waitForLoadState('networkidle')
-  const campo = page.getByLabel('Título')
-  await campo.focus()
-  await page.keyboard.type(titulo)
-  await page.keyboard.press('Tab')
-  await expect(page.getByRole('button', { name: 'Criar' }), 'Tab leva ao enviar').toBeFocused()
-  await page.keyboard.press('Enter')
-  await expect(
-    page.getByRole('listitem').filter({ hasText: titulo }),
-    'recurso criado'
-  ).toBeVisible()
-  await expect(campo, 'campo limpo após criar').toHaveValue('')
-})
+test(
+  'USA-003 caminho feliz da tela de recursos pelo teclado',
+  { tag: ['@usabilidade', '@regressao'] },
+  async ({ page }) => {
+    const rota = parametro('telaComApi')
+    // Único por projeto e repetição: desktop e mobile dividem o mesmo usuário e a mesma lista.
+    const titulo = dado(`Teclado ${test.info().project.name} ${Date.now()}`)
+    await abrir(page, rota)
+    await page.waitForLoadState('networkidle')
+    const campo = page.getByLabel('Título')
+    await campo.focus()
+    await page.keyboard.type(titulo)
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('button', { name: 'Criar' }), 'Tab leva ao enviar').toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(
+      page.getByRole('listitem').filter({ hasText: titulo }),
+      'recurso criado'
+    ).toBeVisible()
+    await expect(campo, 'campo limpo após criar').toHaveValue('')
+  }
+)
 
 test(
   'USA-004 estados de loading, erro funcional e erro técnico',
-  { tag: TAG },
+  { tag: ['@usabilidade', '@regressao'] },
   async ({ page }) => {
     let exercitadas = 0
     for (const { rota, nome } of telasExigidas()) {
@@ -216,28 +226,32 @@ test(
   }
 )
 
-test('USA-005 botões só-ícone têm nome acessível', { tag: TAG }, async ({ page }) => {
-  for (const { rota, nome } of telasExigidas()) {
-    await test.step(`${nome} (${rota})`, async () => {
-      await abrir(page, rota)
-      await page.waitForLoadState('networkidle')
-      const semNome = await page.evaluate(() =>
-        [...document.querySelectorAll('button, [role="button"]')]
-          .filter((el) => (el as HTMLElement).innerText.trim() === '')
-          .filter(
-            (el) =>
-              !el.getAttribute('aria-label')?.trim() &&
-              !el.getAttribute('aria-labelledby')?.trim() &&
-              !el.getAttribute('title')?.trim()
-          )
-          .map((el) => el.outerHTML.slice(0, 120))
-      )
-      expect(semNome, 'botão só-ícone sem aria-label').toEqual([])
-      const { violations } = await new AxeBuilder({ page }).withRules(['button-name']).analyze()
-      expect(
-        violations.map((v) => v.id),
-        'axe button-name'
-      ).toEqual([])
-    })
+test(
+  'USA-005 botões só-ícone têm nome acessível',
+  { tag: ['@usabilidade', '@regressao'] },
+  async ({ page }) => {
+    for (const { rota, nome } of telasExigidas()) {
+      await test.step(`${nome} (${rota})`, async () => {
+        await abrir(page, rota)
+        await page.waitForLoadState('networkidle')
+        const semNome = await page.evaluate(() =>
+          [...document.querySelectorAll('button, [role="button"]')]
+            .filter((el) => (el as HTMLElement).innerText.trim() === '')
+            .filter(
+              (el) =>
+                !el.getAttribute('aria-label')?.trim() &&
+                !el.getAttribute('aria-labelledby')?.trim() &&
+                !el.getAttribute('title')?.trim()
+            )
+            .map((el) => el.outerHTML.slice(0, 120))
+        )
+        expect(semNome, 'botão só-ícone sem aria-label').toEqual([])
+        const { violations } = await new AxeBuilder({ page }).withRules(['button-name']).analyze()
+        expect(
+          violations.map((v) => v.id),
+          'axe button-name'
+        ).toEqual([])
+      })
+    }
   }
-})
+)

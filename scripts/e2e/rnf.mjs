@@ -12,8 +12,8 @@ const MS_POR_UNIDADE = { ms: 1, s: 1000, min: 60_000, h: 3_600_000, d: 86_400_00
 /**
  * @typedef {{
  *   id: string, categoria: string, requisito: string,
- *   valor: { numero: number, unidade: Unidade } | null
- * }} Requisito
+ *   valor: { numero: number, unidade: Unidade } | null, linha: number
+ * }} Requisito `linha`: linha (1-based) da tabela no `docs/rnf.md`.
  */
 
 const celulas = (linha) =>
@@ -104,7 +104,7 @@ export const parseRnf = (markdown, path) => {
           unidade: /** @type {Unidade} */ (v[2]),
         }
       }
-      requisitos.push({ id, categoria, requisito, valor })
+      requisitos.push({ id, categoria, requisito, valor, linha: n })
     })
 
   return { requisitos, telas, exclusoes, parametros, erros }

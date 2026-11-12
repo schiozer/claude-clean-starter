@@ -106,8 +106,8 @@ Spec completa: `docs/superpowers/specs/2026-11-09-e2e-regressao-docs-design.md` 
   sem guarda de `NODE_ENV`. Na Vercel é inerte; num host que não seja a Vercel, `APP_ENV=e2e`
   liga o login stub e os PATs fixos. **Nunca** defina `APP_ENV=e2e` fora do runner de CI ou da
   máquina local.
-- **Injeção de lentidão** (`x-e2e-delay-ms` + `x-e2e-secret`) só vale com `APP_ENV` declarado e
-  diferente de `production` e `E2E_FAULTS_SECRET` com ao menos 16 caracteres; em Prod é inerte,
+- **Injeção de lentidão** (`x-e2e-delay-ms` + `x-e2e-secret`) só vale com `APP_ENV` na allowlist
+  (`e2e`, `uat`, `dev`, `development`) e `E2E_FAULTS_SECRET` com ao menos 16 caracteres; em Prod é inerte,
   com teste.
 - **Dívida**: tour guiado no app, regressão visual por pixel, WebKit/Firefox e teste de carga
   ficam como itens futuros da spec (§11).

@@ -17,6 +17,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { globToRegExp, listarArquivos, loadIndice, rotaDaPagina } from './e2e/config.mjs'
 import { diffPassos, normalizarPasso } from './e2e/cenarios.mjs'
+import { ID_USABILIDADE } from './e2e/rnf.mjs'
 import { scanTestes } from './e2e/testes.mjs'
 import { parseSpecLine } from './pr-gate.mjs'
 
@@ -36,6 +37,19 @@ export const RELATORIO_PATH = '.e2e/rastreabilidade.md'
 const local = (path, linha) => (linha ? `${path}:${linha}` : path)
 
 const celula = (texto) => texto.replace(/\|/g, '\\|').replace(/\n/g, ' ')
+
+/** Tags de um teste de RNF/USA (baseline ou declarado na spec): o tipo e `@regressao`. */
+const tagsDoRequisito = (id) => [ID_USABILIDADE.test(id) ? '@usabilidade' : '@rnf', '@regressao']
+
+/** `faltando: …; sobrando: …` entre as tags esperadas e as do teste; `null` se iguais. */
+const diffTags = (esperadas, tags) => {
+  const faltando = esperadas.filter((t) => !tags.includes(t))
+  const sobrando = tags.filter((t) => !esperadas.includes(t))
+  const partes = []
+  if (faltando.length > 0) partes.push(`faltando: ${faltando.join(', ')}`)
+  if (sobrando.length > 0) partes.push(`sobrando: ${sobrando.join(', ')}`)
+  return partes.length > 0 ? partes.join('; ') : null
+}
 
 /**
  * @param {{
@@ -85,6 +99,18 @@ export function checkCenarios({
           r.linha,
           `teste órfão: ${r.id} não existe como cenário, RNF ou USA em nenhuma spec nem no baseline`
         )
+        continue
+      }
+      // Tag errada (ex.: `@rfn`) tiraria o teste da regressão em silêncio: sempre erro.
+      const esperadas = tagsDoRequisito(r.id)
+      const diff = diffTags(esperadas, r.tags)
+      if (diff) {
+        reportar(
+          true,
+          r.path,
+          r.linha,
+          `tags de ${r.id} inválidas (esperado: ${esperadas.join(' ')}) — ${diff}`
+        )
       }
       continue
     }
@@ -124,18 +150,13 @@ export function checkCenarios({
         problemas.push('passos divergentes')
       }
     }
-    const tagsEsperadas = [c.tipo, ...c.destinos]
-    const faltando = tagsEsperadas.filter((t) => !r.tags.includes(t))
-    const sobrando = r.tags.filter((t) => !tagsEsperadas.includes(t))
-    if (faltando.length > 0 || sobrando.length > 0) {
-      const partes = []
-      if (faltando.length > 0) partes.push(`faltando: ${faltando.join(', ')}`)
-      if (sobrando.length > 0) partes.push(`sobrando: ${sobrando.join(', ')}`)
+    const diffDeTags = diffTags([c.tipo, ...c.destinos], r.tags)
+    if (diffDeTags) {
       reportar(
         bloqueia,
         r.path,
         r.linha,
-        `tags de ${c.id} diferem do tipo/destinos do cenário — ${partes.join('; ')}`
+        `tags de ${c.id} diferem do tipo/destinos do cenário — ${diffDeTags}`
       )
       problemas.push('tag divergente')
     }
@@ -175,6 +196,18 @@ export function checkCenarios({
           problemas.push('doc divergente')
         }
       }
+    }
+  }
+
+  const rnfPath = indice.config.rnf || 'docs/rnf.md'
+  for (const r of indice.rnf.requisitos) {
+    if (!refsPorId.has(r.id)) {
+      reportar(
+        true,
+        rnfPath,
+        r.linha,
+        `${r.id} do baseline sem teste com o mesmo ID (tags: ${tagsDoRequisito(r.id).join(' ')})`
+      )
     }
   }
 
@@ -289,9 +322,10 @@ const resolverSpec = (argv, env, avisos) => {
 const paginasNovasDoPr = (root, base, globs, avisos) => {
   if (!base) return []
   try {
+    // `--no-renames`: página renomeada no PR conta como nova (o destino aparece como `A`).
     const saida = execFileSync(
       'git',
-      ['diff', '--name-only', '--diff-filter=A', `origin/${base}...HEAD`],
+      ['diff', '--name-only', '--no-renames', '--diff-filter=A', `origin/${base}...HEAD`],
       { cwd: root, encoding: 'utf8' }
     )
     const regexes = globs.map(globToRegExp)

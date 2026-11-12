@@ -1,8 +1,8 @@
 // Baseline de performance (docs/rnf.md, RNF-PRF-*): orçamento por requisição da API do caminho
 // feliz e LCP das telas no perfil mobile. Roda no projeto `sistemico`, com a sessão do usuário e o
 // iPhone de referência em Chromium (o mesmo do projeto `mobile`).
-import { devices, expect, test, type Page } from '@playwright/test'
-import { parametro, perfis, rnfMs, telasExigidas } from '../support'
+import { devices, type Page } from '@playwright/test'
+import { parametro, perfis, rnfMs, telasExigidas, expect, test } from '../support'
 import { orcamentoComMargem } from './apoio'
 
 test.use({ ...devices['iPhone 13'], defaultBrowserType: 'chromium', storageState: perfis.usuario })

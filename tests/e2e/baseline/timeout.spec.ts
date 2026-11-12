@@ -1,7 +1,6 @@
 // Baseline de timeout (docs/rnf.md, RNF-TMO-*): o prazo da rota de API (injeção de lentidão só
 // fora de Prod) e a UI que desiste da chamada. Roda no projeto `sistemico`.
-import { expect, test } from '@playwright/test'
-import { e2eEnv, parametro, perfis, rnfMs } from '../support'
+import { e2eEnv, parametro, perfis, rnfMs, expect, test } from '../support'
 import { exigir } from './apoio'
 
 test(

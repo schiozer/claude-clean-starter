@@ -97,6 +97,15 @@ describe('parseCenarios', () => {
     expect(resultado.erros[0].path).toBe('s.md')
   })
 
+  it.each(['-', '–', '--'])("heading com '%s' no lugar de '—' sugere o travessão", (traco) => {
+    const md = bloco([`### CT-RES-001 ${traco} Criar um recurso`, 'Tipo: @e2e', 'Dado x'])
+    const { erros } = parseCenarios(md, 's.md')
+    expect(erros).toHaveLength(1)
+    expect(erros[0].linha).toBe(3)
+    expect(erros[0].mensagem).toMatch(/use '—' \(travessão\)/)
+    expect(erros[0].mensagem).toContain('### CT-RES-001 — Criar um recurso')
+  })
+
   it('ignora blocos ### fora da seção Cenários de teste', () => {
     const md = `## 3. Fluxo\n\n### qualquer coisa sem formato\ntexto solto\n\n${SPEC}\n## 9. Outro\n\n### outro heading\nlixo\n`
     const { cenarios, erros } = parseCenarios(md, 's.md')

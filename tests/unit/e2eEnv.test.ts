@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { e2eEnv } from '../e2e/support/env'
+import { cabecalhosDeBypass, e2eEnv, origemDoAlvo } from '../e2e/support/env'
 
 describe('e2eEnv', () => {
   it('sem variáveis: alvo local, login dev e nada de segredo', () => {
@@ -13,9 +13,25 @@ describe('e2eEnv', () => {
     })
   })
 
-  it('E2E_AUTH=auth0 liga o Universal Login; outro valor cai no dev', () => {
+  it('E2E_AUTH=auth0 liga o Universal Login; vazio ou dev usa o login dev', () => {
     expect(e2eEnv({ E2E_AUTH: 'auth0' }).auth).toBe('auth0')
-    expect(e2eEnv({ E2E_AUTH: 'qualquer' }).auth).toBe('dev')
+    expect(e2eEnv({ E2E_AUTH: ' auth0 ' }).auth).toBe('auth0')
+    expect(e2eEnv({ E2E_AUTH: 'dev' }).auth).toBe('dev')
+    expect(e2eEnv({ E2E_AUTH: '' }).auth).toBe('dev')
+  })
+
+  it.each(['qualquer', 'Auth0', 'devv'])('E2E_AUTH=%s (desconhecido) lança erro claro', (valor) => {
+    expect(() => e2eEnv({ E2E_AUTH: valor })).toThrow(
+      `E2E_AUTH='${valor}' inválido: use 'dev' (ou vazio) ou 'auth0'`
+    )
+  })
+
+  it('docs:gerar (E2E_DOCS=1) com E2E_BASE_URL falha cedo: só roda local', () => {
+    expect(() => e2eEnv({ E2E_DOCS: '1', E2E_BASE_URL: 'https://app-git-x.vercel.app' })).toThrow(
+      /docs:gerar só roda local/
+    )
+    expect(e2eEnv({ E2E_DOCS: '1', E2E_BASE_URL: ' ' }).baseUrl).toBeNull()
+    expect(e2eEnv({ E2E_BASE_URL: 'https://app-git-x.vercel.app' }).baseUrl).not.toBeNull()
   })
 
   it('E2E_BASE_URL vazio ou só espaços → null (sobe o webServer local)', () => {
@@ -65,5 +81,29 @@ describe('e2eEnv', () => {
         E2E_PAT_OUTRO_ATOR: ' ',
       }).pat
     ).toEqual({ usuario: null, semEscopo: null, rateLimit: null, outroAtor: null })
+  })
+})
+
+describe('bypass da Vercel só para a origem do preview', () => {
+  it('sem segredo de bypass (modo local) → sem cabeçalhos', () => {
+    expect(cabecalhosDeBypass(e2eEnv({}))).toBeNull()
+    expect(cabecalhosDeBypass(e2eEnv({ E2E_BASE_URL: 'https://app-git-x.vercel.app' }))).toBeNull()
+  })
+
+  it('com segredo → os dois cabeçalhos da Vercel', () => {
+    const env = e2eEnv({ VERCEL_AUTOMATION_BYPASS_SECRET: 'bypass-123' })
+    expect(cabecalhosDeBypass(env)).toEqual({
+      'x-vercel-protection-bypass': 'bypass-123',
+      'x-vercel-set-bypass-cookie': 'true',
+    })
+  })
+
+  it('origemDoAlvo casa só a origem exata do baseURL (Auth0, CDN e terceiros ficam de fora)', () => {
+    const doAlvo = origemDoAlvo('https://app-git-x.vercel.app/')
+    expect(doAlvo(new URL('https://app-git-x.vercel.app/api/resources?x=1'))).toBe(true)
+    expect(doAlvo(new URL('https://tenant.us.auth0.com/u/login'))).toBe(false)
+    expect(doAlvo(new URL('https://cdn.example.com/app-git-x.vercel.app/a.js'))).toBe(false)
+    expect(doAlvo(new URL('https://app-git-x.vercel.app.evil.com/'))).toBe(false)
+    expect(doAlvo(new URL('http://app-git-x.vercel.app/'))).toBe(false)
   })
 })

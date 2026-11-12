@@ -1,7 +1,6 @@
 // Cenário de listagem como time interno (spec examples/walking-skeleton/docs/specs/resources.md §8).
 // Roda nos projetos `desktop` e `mobile`, com a sessão do perfil interno (`perfis.interno`).
-import { expect, test } from '@playwright/test'
-import { e2eEnv, jornada, perfis } from '../../../../../tests/e2e/support'
+import { e2eEnv, jornada, perfis, expect, test } from '../../../../../tests/e2e/support'
 import { abrirRecursos } from './apoio'
 
 test.use({ storageState: perfis.interno })

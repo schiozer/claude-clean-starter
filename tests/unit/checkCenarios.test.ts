@@ -81,12 +81,31 @@ const doc = (passos = PASSOS_PUBLICAR) => ({
   passos: passos.map((texto, i) => ({ texto, imagem: `${i + 1}.png` })),
 })
 
+/** Teste do baseline do `RNF_MD` (RNF-SEG-001): o `rodar` sempre o inclui, salvo `baseline: []`. */
+const BASELINE = ref({
+  id: 'RNF-SEG-001',
+  titulo: 'RNF-SEG-001 headers',
+  tags: ['@rnf', '@regressao'],
+  passos: null,
+  path: 'tests/e2e/baseline/seguranca.spec.ts',
+  linha: 5,
+})
+
 type Entrada = Partial<Parameters<typeof checkCenarios>[0]>
-const rodar = (entrada: Entrada & { specs?: Spec[] } = {}) => {
-  const { specs = [{ path: SPEC_PR, markdown: spec(PUBLICAR) }], ...resto } = entrada
+type Ref = ReturnType<typeof ref>
+const rodar = (
+  entrada: Entrada & { specs?: Spec[]; rnf?: string | null; baseline?: Ref[] } = {}
+) => {
+  const {
+    specs = [{ path: SPEC_PR, markdown: spec(PUBLICAR) }],
+    rnf = RNF_MD,
+    refs = [ref()],
+    baseline = [BASELINE],
+    ...resto
+  } = entrada
   return checkCenarios({
-    indice: indiceDe(specs),
-    refs: [ref()],
+    indice: indiceDe(specs, rnf),
+    refs: [...refs, ...baseline],
     ajudaFiles: new Map([['CT-RES-001', doc()]]),
     paginas: [],
     specDoPr: SPEC_PR,
@@ -192,13 +211,48 @@ describe('checkCenarios', () => {
 
   it('teste de RNF do baseline ou declarado em spec não é órfão', () => {
     const md = spec(PUBLICAR, 'RNF-TMO-010: upload até 30 s')
-    const refs = [
-      ref(),
-      ref({ id: 'RNF-SEG-001', tags: ['@rnf'], passos: null }),
-      ref({ id: 'RNF-TMO-010', tags: ['@rnf'], passos: null }),
-    ]
+    const refs = [ref(), ref({ id: 'RNF-TMO-010', tags: ['@rnf', '@regressao'], passos: null })]
     const r = rodar({ specs: [{ path: SPEC_PR, markdown: md }], refs })
     expect(r.erros).toEqual([])
+  })
+
+  it('requisito do docs/rnf.md sem teste com o mesmo ID → sempre erro, com a linha', () => {
+    const r = rodar({ baseline: [], specDoPr: null })
+    expect(r.erros).toEqual([
+      'docs/rnf.md:5: RNF-SEG-001 do baseline sem teste com o mesmo ID (tags: @rnf @regressao)',
+    ])
+  })
+
+  it('requisito de usabilidade sem teste pede @usabilidade', () => {
+    const rnf = RNF_MD.replace(
+      '| RNF-SEG-001 | Hardening | Headers | — |',
+      '| RNF-SEG-001 | Hardening | Headers | — |\n| USA-001 | Usabilidade | Foco visível | — |'
+    )
+    const r = rodar({ rnf })
+    expect(r.erros).toEqual([
+      'docs/rnf.md:6: USA-001 do baseline sem teste com o mesmo ID (tags: @usabilidade @regressao)',
+    ])
+  })
+
+  it.each([
+    [['@rfn', '@regressao'], 'faltando: @rnf; sobrando: @rfn'],
+    [['@rnf'], 'faltando: @regressao'],
+    [['@rnf', '@regressao', '@e2e'], 'sobrando: @e2e'],
+    [['@usabilidade', '@regressao'], 'faltando: @rnf; sobrando: @usabilidade'],
+  ])('teste do baseline com tags %j → sempre erro (%s)', (tags, detalhe) => {
+    const r = rodar({ baseline: [{ ...BASELINE, tags }], specDoPr: null })
+    expect(r.erros).toEqual([
+      `tests/e2e/baseline/seguranca.spec.ts:5: tags de RNF-SEG-001 inválidas (esperado: @rnf @regressao) — ${detalhe}`,
+    ])
+  })
+
+  it('teste de RNF declarado em spec também exige @rnf + @regressao', () => {
+    const md = spec(PUBLICAR, 'RNF-TMO-010: upload até 30 s')
+    const refs = [ref(), ref({ id: 'RNF-TMO-010', tags: ['@rnf'], passos: null })]
+    const r = rodar({ specs: [{ path: SPEC_PR, markdown: md }], refs })
+    expect(r.erros).toEqual([
+      expect.stringMatching(/RNF-TMO-010 inválidas .* faltando: @regressao$/),
+    ])
   })
 
   it.each([

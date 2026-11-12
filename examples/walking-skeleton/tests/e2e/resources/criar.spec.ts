@@ -1,7 +1,7 @@
 // Cenários de criação de recurso (spec examples/walking-skeleton/docs/specs/resources.md §8).
 // Rodam nos projetos `desktop` e `mobile`, com a sessão do usuário final (`perfis.usuario`).
-import { expect, test, type Page } from '@playwright/test'
-import { jornada } from '../../../../../tests/e2e/support'
+import { type Page } from '@playwright/test'
+import { jornada, expect, test } from '../../../../../tests/e2e/support'
 import { abrirRecursos, tituloUnico } from './apoio'
 
 /** Alertas com conteúdo: o anunciador de rota do Next é um `role="alert"` vazio. */

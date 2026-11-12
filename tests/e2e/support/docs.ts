@@ -24,11 +24,12 @@ const ehSegredo = (nome: string): boolean =>
   /^E2E_.*SECRET/.test(nome) ||
   nome.startsWith('E2E_PAT_') ||
   nome === 'DEV_PERSONAL_TOKEN' ||
+  nome === 'VERCEL_AUTOMATION_BYPASS_SECRET' ||
   /^E2E_.+_SENHA$/.test(nome)
 
 /**
- * Nome da 1ª variável de segredo (`E2E_*SECRET*`, `E2E_PAT_*`, `DEV_PERSONAL_TOKEN`, senha de
- * perfil `E2E_<PERFIL>_SENHA`) cujo valor aparece no texto; `null` se nenhuma. Devolve o nome,
+ * Nome da 1ª variável de segredo (`E2E_*SECRET*`, `E2E_PAT_*`, `DEV_PERSONAL_TOKEN`,
+ * `VERCEL_AUTOMATION_BYPASS_SECRET`, senha de perfil `E2E_<PERFIL>_SENHA`) cujo valor aparece no texto; `null` se nenhuma. Devolve o nome,
  * nunca o valor.
  */
 export const contemSegredo = (texto: string, env: Env): string | null => {

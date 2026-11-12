@@ -13,6 +13,8 @@ const PALAVRA_INICIAL = new RegExp(`^(?:${PALAVRAS_PASSO})\\s+`)
 const CHAVES = ['Tipo', 'Destino', 'Critério', 'Perfil', 'Fora da regressão', 'Aposentado']
 const CHAVE = new RegExp(`(${CHAVES.join('|')}):`, 'g')
 const HEADING = /^###\s+(\S+)\s+—\s+(.+?)\s*$/
+/** Erro comum de digitação: hífen, meia-risca ou `--` no lugar do travessão. */
+const HEADING_COM_HIFEN = /^###\s+(\S+)\s+(-{1,2}|–)\s+(.+?)\s*$/
 
 /** @typedef {{ path: string, linha: number, mensagem: string }} Erro */
 /**
@@ -93,7 +95,13 @@ const processarBloco = (bloco, path, cenarios, erros) => {
   const m = HEADING.exec(bloco.heading)
   const id = m?.[1] ?? ''
   const titulo = m?.[2] ?? ''
-  if (!m) erro(bloco.linha, "heading fora do formato '### <ID> — <título>' (ID ausente)")
+  const hifen = m ? null : bloco.heading.match(HEADING_COM_HIFEN)
+  if (hifen)
+    erro(
+      bloco.linha,
+      `heading com '${hifen[2]}' no lugar de '—': use '—' (travessão) — '### ${hifen[1]} — ${hifen[3]}'`
+    )
+  else if (!m) erro(bloco.linha, "heading fora do formato '### <ID> — <título>' (ID ausente)")
   else if (!ID_CENARIO.test(id)) erro(bloco.linha, `ID '${id}' fora do padrão CT-XXX-000`)
 
   let tipos = []

@@ -38,6 +38,11 @@
 > **Adoção — sync com o template** ([ADR-015](./docs/adr/template/015-template-sync.md)): rode
 > `/template-sync adotar` a partir do template; depois, `/template-sync` a cada Release (aviso
 > semanal na issue `template-sync`).
+>
+> **Adoção — E2E** ([ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md)): o
+> `/template-sync` semeia `playwright.config.ts`, `tests/e2e/cenarios.config.json`,
+> `tests/e2e/auth.setup.ts` e `docs/rnf.md` se faltarem (nunca sobrescreve); sem eles o
+> `Regressão (UAT)` só avisa. Ajuste-os pelo [guia de E2E](./docs/guides/e2e-guide.md#adoção).
 
 ---
 

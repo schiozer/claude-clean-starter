@@ -35,24 +35,50 @@ jobs:
           # histórico completo: os cenários do PR saem do diff com origin/<base>.
           fetch-depth: 0
 
+      # Projeto derivado que ainda não adotou o E2E: o sync traz os arquivos do template, mas
+      # `playwright.config.ts` e `tests/e2e/cenarios.config.json` são do projeto. Sem eles o job
+      # termina verde com aviso (o check é obrigatório e não pode alarmar em todo merge); os passos
+      # seguintes são pulados. Guia de E2E, seção Adoção.
+      - name: Detectar a configuração do E2E
+        id: config
+        run: |
+          FALTANDO=''
+          for ARQUIVO in playwright.config.ts tests/e2e/cenarios.config.json; do
+            [ -f "$ARQUIVO" ] || FALTANDO="$FALTANDO $ARQUIVO"
+          done
+          if [ -z "$FALTANDO" ]; then
+            echo 'configurado=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'configurado=false' >> "$GITHUB_OUTPUT"
+          echo "::warning::E2E não configurado — ver docs/guides/e2e-guide.md, Adoção (faltando:$FALTANDO). A Regressão (UAT) foi pulada."
+          {
+            echo '### Regressão (UAT): E2E não configurado — ver docs/guides/e2e-guide.md, Adoção'
+            echo ''
+            echo "Faltando:$FALTANDO. Nenhum teste rodou; o check fica verde até o projeto adotar o E2E."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/setup-node@v5
+        if: steps.config.outputs.configurado == 'true'
         with:
           node-version: '20'
 
       - name: Instalar dependências
+        if: steps.config.outputs.configurado == 'true'
         run: npm ci
 
       - name: Instalar dependências do app de exemplo
-        if: hashFiles('examples/walking-skeleton/package.json') != ''
+        if: steps.config.outputs.configurado == 'true' && hashFiles('examples/walking-skeleton/package.json') != ''
         working-directory: examples/walking-skeleton
         run: npm ci
 
       - name: Instalar o Chromium do Playwright
+        if: steps.config.outputs.configurado == 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Aguardar o deploy Preview da Vercel
         id: preview
-        if: vars.E2E_TARGET == 'preview'
+        if: steps.config.outputs.configurado == 'true' && vars.E2E_TARGET == 'preview'
         run: node scripts/e2e/wait-preview.mjs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -60,12 +86,14 @@ jobs:
 
       - name: Filtro da regressão (@regressao + cenários do PR)
         id: grep
+        if: steps.config.outputs.configurado == 'true'
         run: node scripts/e2e/grep-regressao.mjs
 
       # Segredos só no modo preview. No modo local ficam vazios e o playwright.config.ts usa as
       # constantes de teste `LOCAL_SOMENTE_TESTE` (já públicas, versionadas, inócuas fora do app
       # efêmero do runner).
       - name: Regressão (Playwright)
+        if: steps.config.outputs.configurado == 'true'
         run: npm run test:e2e -- --grep "$E2E_GREP"
         env:
           CI: '1'
@@ -86,14 +114,14 @@ jobs:
 
       # Só para o relatório de rastreabilidade: quem bloqueia é o passo do `PR gate`.
       - name: Cenários × testes (relatório)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.config.outputs.configurado == 'true' }}
         continue-on-error: true
         run: npm run check:cenarios
 
       # Modo local: o relatório completo só contém as constantes `LOCAL_SOMENTE_TESTE` (públicas e
       # inócuas fora do app efêmero do runner) → artefato completo, 7 dias. Repo privado idem.
       - name: Publicar relatórios
-        if: always() && (vars.E2E_TARGET != 'preview' || github.event.repository.private)
+        if: always() && steps.config.outputs.configurado == 'true' && (vars.E2E_TARGET != 'preview' || github.event.repository.private)
         uses: actions/upload-artifact@v4
         with:
           name: regressao-uat-${{ github.run_id }}
@@ -108,7 +136,7 @@ jobs:
       # Preview em repo público: qualquer usuário logado baixa artefatos, e os traces/relatório do
       # Playwright guardam o bypass da Vercel e o `x-e2e-secret` → sobe só a rastreabilidade.
       - name: Publicar rastreabilidade (sem traces)
-        if: always() && vars.E2E_TARGET == 'preview' && !github.event.repository.private
+        if: always() && steps.config.outputs.configurado == 'true' && vars.E2E_TARGET == 'preview' && !github.event.repository.private
         uses: actions/upload-artifact@v4
         with:
           name: regressao-uat-${{ github.run_id }}
@@ -120,7 +148,7 @@ jobs:
       # Upsert por marcador (não `gh pr comment --edit-last`): o `Spec × código` comenta com o
       # mesmo bot e não pode ser sobrescrito. PR de fork (token só leitura) não derruba o check.
       - name: Comentar o resultado no PR
-        if: always() && job.status != 'cancelled'
+        if: always() && steps.config.outputs.configurado == 'true' && job.status != 'cancelled'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

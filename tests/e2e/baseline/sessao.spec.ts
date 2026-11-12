@@ -1,6 +1,6 @@
 // Baseline de sessão (docs/rnf.md, RNF-SES-*): prazo de inatividade do cookie, sessão inválida que
 // volta à origem após o login e logout que invalida no servidor. Roda no projeto `sistemico`.
-import { expect, test, type Page } from '@playwright/test'
+import { type Page } from '@playwright/test'
 import {
   credencialAuth0,
   e2eEnv,
@@ -9,6 +9,8 @@ import {
   perfis,
   rnfMs,
   telasExigidas,
+  expect,
+  test,
 } from '../support'
 
 const cookieDeSessao = <C extends { name: string }>(cookies: C[]): C => {
@@ -90,7 +92,9 @@ test(
     const logout = await page.request.post(parametro('rotaDeLogout'))
     expect(logout.ok(), `logout: HTTP ${logout.status()}`).toBe(true)
 
-    await contexto.clearCookies()
+    // Só o cookie de sessão: os demais (ex.: o de bypass da Vercel no modo preview) ficam, senão
+    // o 401 viria da proteção do deploy, não do app.
+    await contexto.clearCookies({ name: antiga.name })
     await contexto.addCookies([antiga])
     expect((await page.request.get(rota)).status(), 'cookie antigo reaproveitado').toBe(401)
   }

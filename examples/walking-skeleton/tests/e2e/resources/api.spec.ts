@@ -1,8 +1,14 @@
 // Cenários sistêmicos do módulo `resources` (spec examples/walking-skeleton/docs/specs/resources.md
 // §8): REST e MCP sem navegador, no projeto `sistemico`. Nunca usa o PAT do rate limit (reservado
 // ao RNF-SEG-005) nem o PAT sem escopo.
-import { expect, test } from '@playwright/test'
-import { e2eEnv, jornada, perfis } from '../../../../../tests/e2e/support'
+import {
+  cabecalhosDeBypass,
+  e2eEnv,
+  jornada,
+  perfis,
+  expect,
+  test,
+} from '../../../../../tests/e2e/support'
 import {
   chamarMcp,
   exigir,
@@ -19,7 +25,7 @@ test.describe('com sessão do usuário final', () => {
   test(
     'CT-RES-004 a api lista só os recursos do ator e recusa quem não está logado',
     { tag: ['@sistemico', '@regressao'] },
-    async ({ request, playwright, baseURL, extraHTTPHeaders }) => {
+    async ({ request, playwright, baseURL }) => {
       const titulo = tituloUnico('Plano de estudos')
       const tituloSemSessao = tituloUnico('Sem sessão')
       const outroAtor = exigir(e2eEnv().pat.outroAtor, 'E2E_PAT_OUTRO_ATOR')
@@ -59,9 +65,10 @@ test.describe('com sessão do usuário final', () => {
         },
         'alguém sem sessão tenta criar um recurso em "POST /api/resources"': async () => {
           // Contexto sem cookies: o `newContext` herdaria o `storageState` do `test.use`.
+          // Mesmo `baseURL`: leva o bypass da Vercel no modo preview, como o `request` do teste.
           const anonimo = await playwright.request.newContext({
             baseURL,
-            extraHTTPHeaders,
+            extraHTTPHeaders: cabecalhosDeBypass(e2eEnv()) ?? undefined,
             storageState: { cookies: [], origins: [] },
           })
           try {

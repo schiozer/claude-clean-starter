@@ -1,7 +1,7 @@
 // Cenário da ajuda (spec examples/walking-skeleton/docs/specs/ajuda.md §8). Roda nos projetos
 // `desktop` e `mobile`, com a sessão do usuário final, sobre as páginas geradas em docs/ajuda/.
-import { expect, test, type Locator, type Page } from '@playwright/test'
-import { checarA11y, jornada } from '../../../../../tests/e2e/support'
+import { type Locator, type Page } from '@playwright/test'
+import { checarA11y, jornada, expect, test } from '../../../../../tests/e2e/support'
 
 const PUBLICA = 'Criar um recurso e vê-lo na lista'
 const INTERNA = 'Ver a lista de recursos como time interno'

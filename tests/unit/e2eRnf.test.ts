@@ -35,6 +35,7 @@ describe('parseRnf', () => {
       categoria: 'Timeout',
       requisito: 'Timeout da API',
       valor: { numero: 10000, unidade: 'ms' },
+      linha: 7,
     })
     expect(requisitos.map((r: { id: string }) => r.id)).toEqual([
       'RNF-TMO-001',

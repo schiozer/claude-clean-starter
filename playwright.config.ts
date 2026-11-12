@@ -54,14 +54,8 @@ export default defineConfig({
     baseURL: env.baseUrl ?? `http://localhost:${PORTA_LOCAL}`,
     trace: 'retain-on-failure',
     video: 'retain-on-failure',
-    ...(env.bypass
-      ? {
-          extraHTTPHeaders: {
-            'x-vercel-protection-bypass': env.bypass,
-            'x-vercel-set-bypass-cookie': 'true',
-          },
-        }
-      : {}),
+    // Bypass da Vercel (modo preview): não vai em `extraHTTPHeaders`, que o mandaria a toda origem
+    // (Auth0, CDN, terceiros). O `test` de `tests/e2e/support` o põe só nas requisições ao `baseURL`.
   },
   projects: [
     { name: 'setup', testMatch: /auth\.setup\.ts/, use: { browserName: 'chromium' } },
