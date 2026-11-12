@@ -15,7 +15,8 @@
     "prepare": "node scripts/install-git-hooks.mjs",
     "check:runbooks": "node scripts/check-runbooks.mjs",
     "check:cenarios": "node scripts/check-cenarios.mjs",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "demos:publicar": "node scripts/demos/publicar.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
