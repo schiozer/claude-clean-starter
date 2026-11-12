@@ -78,7 +78,7 @@ export const makeGanchoDeLegenda = (): GanchoDePasso => async (ctx) => {
   if (!page || !ehCenarioDeVideo(ctx.cenario)) return
   if (ctx.indice === 0) {
     await page.addInitScript(instalarLegenda, `${ctx.palavra} ${ctx.texto}`)
-    await page.evaluate(instalarLegenda)
+    await page.evaluate(instalarLegenda as () => void)
   }
   try {
     await page.evaluate(atualizarTexto, {
