@@ -1,5 +1,10 @@
 {
   "protectedBranches": ["main"],
-  "requiredChecks": ["Test & Lint (root)", "Walking Skeleton (example)", "PR gate"],
+  "requiredChecks": [
+    "Test & Lint (root)",
+    "Walking Skeleton (example)",
+    "PR gate",
+    "Regressão (UAT)"
+  ],
   "specGateCheck": "Spec × código"
 }
