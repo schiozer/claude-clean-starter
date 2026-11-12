@@ -1,0 +1,8 @@
+{
+  "specs": ["tests/e2e/support/__fixtures__/spec-jornada.md"],
+  "testes": [],
+  "paginas": [],
+  "appDir": "",
+  "ajuda": "",
+  "rnf": "tests/e2e/support/__fixtures__/rnf.md"
+}

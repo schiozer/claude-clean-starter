@@ -1,0 +1,165 @@
+name: Demos & Treinamento
+
+# Grava as demos/treinamento (`@demo`/`@treinamento`) da versão publicada e as envia ao Bunny.
+# Dispara por `workflow_run` do `Release` (uma Release criada com `GITHUB_TOKEN` não dispara
+# `release: published`) ou manualmente por `workflow_dispatch` com a tag. Atrás do toggle
+# `vars.DEMOS_BUNNY == 'on'`: desligado, o job termina verde com aviso (não é pulado). A gravação
+# é sempre contra o app construído aqui a partir do commit da tag (`webServer` do Playwright),
+# nunca contra UAT/Prod. Runbook: docs/runbooks/bunny-habilitar.md.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag da versão (vX.Y.Z)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: demos-treinamento
+  cancel-in-progress: false
+
+jobs:
+  demos:
+    name: Demos & Treinamento
+    # No workflow_run, só a Release de um push na main deste repositório (nunca de fork/PR).
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Conferir o toggle (DEMOS_BUNNY)
+        id: toggle
+        run: echo "ligado=${{ vars.DEMOS_BUNNY == 'on' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Avisar que está desligado
+        if: vars.DEMOS_BUNNY != 'on'
+        run: |
+          echo "::warning::Demos & Treinamento desligado (DEMOS_BUNNY) — ver docs/runbooks/bunny-habilitar.md"
+          echo '### Demos & Treinamento desligado (DEMOS_BUNNY) — ver docs/runbooks/bunny-habilitar.md' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v5
+        if: steps.toggle.outputs.ligado == 'true'
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        if: steps.toggle.outputs.ligado == 'true'
+        with:
+          node-version: '20'
+
+      # No dispatch a tag vem do input (via env, nunca interpolada no script); no workflow_run,
+      # do commit da Release.
+      - name: Resolver a tag
+        id: tag
+        if: steps.toggle.outputs.ligado == 'true'
+        run: |
+          if [ "$EVENT_NAME" = 'workflow_dispatch' ]; then
+            if [[ "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::Tag inválida (esperado vX.Y.Z) — nada a gravar."
+              echo 'tag=' >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+          node scripts/demos/publicar.mjs tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Avisar que não há tag
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag == ''
+        run: |
+          echo "::warning::Nenhuma tag para esta execução — nada a gravar."
+          echo '### Demos & Treinamento: sem tag, nada a gravar' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v5
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != ''
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Instalar dependências
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != ''
+        run: npm ci
+
+      - name: Instalar dependências do app de exemplo
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && hashFiles('examples/walking-skeleton/package.json') != ''
+        working-directory: examples/walking-skeleton
+        run: npm ci
+
+      - name: Instalar o Chromium do Playwright
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != ''
+        run: npx playwright install --with-deps chromium
+
+      # Tag antiga (dispatch) pode ser anterior a `scripts/demos/`: sem o CLI, termina verde com aviso.
+      - name: Avisar que a tag não tem o CLI de demos
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && hashFiles('scripts/demos/publicar.mjs') == ''
+        run: |
+          echo "::warning::A tag não tem scripts/demos/publicar.mjs (anterior às demos) — nada a gravar."
+          echo '### Demos & Treinamento: a tag é anterior às demos, nada a gravar' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Selecionar os cenários
+        id: selecao
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && hashFiles('scripts/demos/publicar.mjs') != ''
+        run: node scripts/demos/publicar.mjs selecionar
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Avisar que não há cenários
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && hashFiles('scripts/demos/publicar.mjs') != '' && steps.selecao.outputs.grep == ''
+        run: |
+          echo "::warning::nenhum cenário @demo/@treinamento nesta versão — nada a gravar."
+          echo '### Demos & Treinamento: nenhum cenário @demo/@treinamento' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Gravar as demos
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && steps.selecao.outputs.grep != ''
+        run: npm run demos:gravar -- --grep "$GREP"
+        env:
+          CI: '1'
+          GREP: ${{ steps.selecao.outputs.grep }}
+
+      - name: Publicar no Bunny
+        if: steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && steps.selecao.outputs.grep != ''
+        run: node scripts/demos/publicar.mjs publicar
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          BUNNY_STREAM_API_KEY: ${{ secrets.BUNNY_STREAM_API_KEY }}
+          BUNNY_LIBRARY_ID: ${{ secrets.BUNNY_LIBRARY_ID }}
+          BUNNY_STORAGE_ZONE: ${{ secrets.BUNNY_STORAGE_ZONE }}
+          BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
+          BUNNY_STORAGE_HOST: ${{ secrets.BUNNY_STORAGE_HOST }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Avisar a falha na Release
+        if: failure() && steps.toggle.outputs.ligado == 'true' && steps.tag.outputs.tag != '' && hashFiles('scripts/demos/publicar.mjs') != ''
+        run: node scripts/demos/publicar.mjs aviso
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Guardar os artefatos
+        if: always() && steps.toggle.outputs.ligado == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: demos-treinamento
+          path: |
+            .e2e/demos/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore

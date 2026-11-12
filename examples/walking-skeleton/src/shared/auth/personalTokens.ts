@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { isDevEnvironment } from '@/shared/appEnv'
+import { isDevEnvironment, isE2eLocalEnvironment } from '@/shared/appEnv'
 import { UnauthorizedError } from '@/shared/errors'
 import { systemClock, type Clock } from '@/shared/kernel'
 import type { AuthUser } from './AuthUser'
@@ -104,7 +104,7 @@ export class PersonalTokenVerifier implements IAccessTokenVerifier {
       record !== null &&
       record.revokedAt === null &&
       record.expiresAt > now &&
-      (!record.devOnly || isDevEnvironment(this.env))
+      (!record.devOnly || isDevEnvironment(this.env) || isE2eLocalEnvironment(this.env))
     if (!record || !isUsable) throw new UnauthorizedError('Token inválido, expirado ou revogado')
     await this.store.touch(record.id, now)
     return { id: record.userId, tenantId: record.tenantId, scopes: record.scopes, via: 'pat' }

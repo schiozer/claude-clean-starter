@@ -1,0 +1,177 @@
+name: Regressão (UAT)
+
+# Check obrigatório (spec e2e-regressao-docs §8.2): roda `@regressao` + os cenários novos/alterados
+# das specs do PR. Alvo: o Preview da Vercel do SHA do PR (`vars.E2E_TARGET == 'preview'`) ou, no
+# template / antes do bootstrap, o app local subido pelo `webServer` do Playwright.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  deployments: read
+  pull-requests: write
+
+concurrency:
+  group: e2e-regressao-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  regressao:
+    name: Regressão (UAT)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Recusar PR de fork no modo preview
+        if: vars.E2E_TARGET == 'preview' && github.event.pull_request.head.repo.fork
+        run: |
+          echo "::error::PR de fork não recebe os segredos do UAT (bypass da Vercel, PATs, usuários de teste). A Regressão (UAT) precisa rodar a partir de uma branch deste repositório: peça a um mantenedor para abrir o PR a partir de uma branch daqui."
+          exit 1
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # histórico completo: os cenários do PR saem do diff com origin/<base>.
+          fetch-depth: 0
+
+      # Projeto derivado que ainda não adotou o E2E: o sync traz os arquivos do template, mas
+      # `playwright.config.ts` e `tests/e2e/cenarios.config.json` são do projeto. Sem eles o job
+      # termina verde com aviso (o check é obrigatório e não pode alarmar em todo merge); os passos
+      # seguintes são pulados. Guia de E2E, seção Adoção.
+      - name: Detectar a configuração do E2E
+        id: config
+        run: |
+          FALTANDO=''
+          for ARQUIVO in playwright.config.ts tests/e2e/cenarios.config.json; do
+            [ -f "$ARQUIVO" ] || FALTANDO="$FALTANDO $ARQUIVO"
+          done
+          if [ -z "$FALTANDO" ]; then
+            echo 'configurado=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'configurado=false' >> "$GITHUB_OUTPUT"
+          echo "::warning::E2E não configurado — ver docs/guides/e2e-guide.md, Adoção (faltando:$FALTANDO). A Regressão (UAT) foi pulada."
+          {
+            echo '### Regressão (UAT): E2E não configurado — ver docs/guides/e2e-guide.md, Adoção'
+            echo ''
+            echo "Faltando:$FALTANDO. Nenhum teste rodou; o check fica verde até o projeto adotar o E2E."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v5
+        if: steps.config.outputs.configurado == 'true'
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências
+        if: steps.config.outputs.configurado == 'true'
+        run: npm ci
+
+      - name: Instalar dependências do app de exemplo
+        if: steps.config.outputs.configurado == 'true' && hashFiles('examples/walking-skeleton/package.json') != ''
+        working-directory: examples/walking-skeleton
+        run: npm ci
+
+      - name: Instalar o Chromium do Playwright
+        if: steps.config.outputs.configurado == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Aguardar o deploy Preview da Vercel
+        id: preview
+        if: steps.config.outputs.configurado == 'true' && vars.E2E_TARGET == 'preview'
+        run: node scripts/e2e/wait-preview.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_SHA: ${{ github.event.pull_request.head.sha }}
+
+      - name: Filtro da regressão (@regressao + cenários do PR)
+        id: grep
+        if: steps.config.outputs.configurado == 'true'
+        run: node scripts/e2e/grep-regressao.mjs
+
+      # Segredos só no modo preview. No modo local ficam vazios e o playwright.config.ts usa as
+      # constantes de teste `LOCAL_SOMENTE_TESTE` (já públicas, versionadas, inócuas fora do app
+      # efêmero do runner).
+      - name: Regressão (Playwright)
+        if: steps.config.outputs.configurado == 'true'
+        run: npm run test:e2e -- --grep "$E2E_GREP"
+        env:
+          CI: '1'
+          E2E_GREP: ${{ steps.grep.outputs.grep }}
+          E2E_BASE_URL: ${{ steps.preview.outputs.url }}
+          E2E_AUTH: ${{ vars.E2E_TARGET == 'preview' && 'auth0' || '' }}
+          E2E_RUN_PREFIX: ${{ vars.E2E_TARGET == 'preview' && github.run_id || '' }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ vars.E2E_TARGET == 'preview' && secrets.VERCEL_AUTOMATION_BYPASS_SECRET || '' }}
+          E2E_FAULTS_SECRET: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_FAULTS_SECRET || '' }}
+          E2E_PAT_USUARIO: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_PAT_USUARIO || '' }}
+          E2E_PAT_SEM_ESCOPO: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_PAT_SEM_ESCOPO || '' }}
+          E2E_PAT_RATE_LIMIT: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_PAT_RATE_LIMIT || '' }}
+          E2E_PAT_OUTRO_ATOR: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_PAT_OUTRO_ATOR || '' }}
+          E2E_USUARIO_EMAIL: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_USUARIO_EMAIL || '' }}
+          E2E_USUARIO_SENHA: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_USUARIO_SENHA || '' }}
+          E2E_INTERNO_EMAIL: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_INTERNO_EMAIL || '' }}
+          E2E_INTERNO_SENHA: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_INTERNO_SENHA || '' }}
+
+      # Só para o relatório de rastreabilidade: quem bloqueia é o passo do `PR gate`.
+      - name: Cenários × testes (relatório)
+        if: ${{ !cancelled() && steps.config.outputs.configurado == 'true' }}
+        continue-on-error: true
+        run: npm run check:cenarios
+
+      # Modo local: o relatório completo só contém as constantes `LOCAL_SOMENTE_TESTE` (públicas e
+      # inócuas fora do app efêmero do runner) → artefato completo, 7 dias. Repo privado idem.
+      - name: Publicar relatórios
+        if: always() && steps.config.outputs.configurado == 'true' && (vars.E2E_TARGET != 'preview' || github.event.repository.private)
+        uses: actions/upload-artifact@v4
+        with:
+          name: regressao-uat-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+            .e2e/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Preview em repo público: qualquer usuário logado baixa artefatos, e os traces/relatório do
+      # Playwright guardam o bypass da Vercel e o `x-e2e-secret` → sobe só a rastreabilidade.
+      - name: Publicar rastreabilidade (sem traces)
+        if: always() && steps.config.outputs.configurado == 'true' && vars.E2E_TARGET == 'preview' && !github.event.repository.private
+        uses: actions/upload-artifact@v4
+        with:
+          name: regressao-uat-${{ github.run_id }}
+          path: .e2e/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Upsert por marcador (não `gh pr comment --edit-last`): o `Spec × código` comenta com o
+      # mesmo bot e não pode ser sobrescrito. PR de fork (token só leitura) não derruba o check.
+      - name: Comentar o resultado no PR
+        if: always() && steps.config.outputs.configurado == 'true' && job.status != 'cancelled'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          STATUS: ${{ job.status }}
+          ALVO: ${{ steps.preview.outputs.url || 'app local (webServer)' }}
+          SEM_RELATORIO: ${{ vars.E2E_TARGET == 'preview' && !github.event.repository.private }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MARKER='<!-- e2e-regressao -->'
+          if [ "$STATUS" = 'success' ]; then RESULTADO='verde'; else RESULTADO='vermelha'; fi
+          if [ "$SEM_RELATORIO" = 'true' ]; then
+            ARTEFATOS="Rastreabilidade nos artefatos do [run]($RUN_URL) (7 dias); relatório do Playwright não publicado (repositório público, modo preview — reproduza localmente ou veja o log do run)."
+          else
+            ARTEFATOS="Relatório do Playwright e rastreabilidade nos artefatos do [run]($RUN_URL) (7 dias)."
+          fi
+          BODY="$MARKER
+          **Regressão (UAT)**: $RESULTADO — alvo: $ALVO.
+          $ARTEFATOS"
+          ID=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | contains(\"$MARKER\"))) | .id" | tail -n 1)
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" -f body="$BODY" > /dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$BODY" > /dev/null
+          fi

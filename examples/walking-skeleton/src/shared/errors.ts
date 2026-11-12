@@ -22,8 +22,9 @@ export class ValidationError extends AppError {
 }
 
 export class NotFoundError extends AppError {
-  constructor(resource: string) {
-    super(`${resource} não encontrado`, 'NOT_FOUND', 404)
+  /** `mensagem` substitui o padrão quando o recurso pede outra concordância ("Página … encontrada"). */
+  constructor(resource: string, mensagem = `${resource} não encontrado`) {
+    super(mensagem, 'NOT_FOUND', 404)
   }
 }
 
@@ -42,5 +43,12 @@ export class ForbiddenError extends AppError {
 export class RateLimitedError extends AppError {
   constructor(message = 'Muitas requisições. Aguarde um instante e tente novamente.') {
     super(message, 'RATE_LIMITED', 429)
+  }
+}
+
+/** Erro **técnico**: a operação estourou o prazo (rota de API ou chamada da UI). */
+export class TimeoutError extends AppError {
+  constructor(message = 'A operação demorou demais. Tente novamente.') {
+    super(message, 'TIMEOUT', 504)
   }
 }

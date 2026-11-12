@@ -1,0 +1,111 @@
+/*
+ * Identidade do skeleton por tokens semânticos (BEST_PRACTICES): componentes usam só as variáveis.
+ * Baseline de usabilidade (docs/rnf.md): alvo de toque ≥ 44 px (USA-002) e foco visível (USA-003).
+ */
+:root {
+  --color-background: #ffffff;
+  --color-foreground: #1a1a1a;
+  --color-border: #8a8a8a;
+  --color-focus: #1d4ed8;
+  --color-warning-surface: #fff7e0;
+  --color-warning-foreground: #6b4a00;
+  --color-danger-surface: #fdecec;
+  --color-danger-foreground: #9b1c1c;
+  --size-touch-target: 44px;
+  --radius: 6px;
+  --space: 0.5rem;
+}
+
+body {
+  margin: 0;
+  padding: calc(var(--space) * 2);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: system-ui, sans-serif;
+}
+
+button,
+input {
+  min-height: var(--size-touch-target);
+  font: inherit;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0 var(--space);
+}
+
+button {
+  min-width: var(--size-touch-target);
+}
+
+input {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Erro funcional: tom de aviso. Erro técnico: tom de alerta (BEST_PRACTICES, ADR-009). */
+.aviso {
+  background: var(--color-warning-surface);
+  color: var(--color-warning-foreground);
+  padding: var(--space);
+  border-radius: var(--radius);
+}
+
+.erro {
+  background: var(--color-danger-surface);
+  color: var(--color-danger-foreground);
+  padding: var(--space);
+  border-radius: var(--radius);
+}
+
+/* Ajuda (/ajuda): links da lista e da volta como alvos de toque; screenshot sem rolagem lateral. */
+.ajuda-lista a,
+.ajuda-voltar {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--size-touch-target);
+}
+
+.ajuda-passo {
+  margin: 0;
+}
+
+.ajuda-passo img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.ajuda-nav {
+  display: flex;
+  gap: var(--space);
+  margin-top: var(--space);
+}
+
+.ajuda-aviso {
+  margin-top: var(--space);
+  padding: var(--space);
+  border-radius: var(--radius);
+  background: var(--color-warning-surface);
+  color: var(--color-warning-foreground);
+}
+
+.ajuda-videos iframe {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+button[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

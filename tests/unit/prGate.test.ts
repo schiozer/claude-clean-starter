@@ -201,6 +201,8 @@ describe('workflow pr-gate.yml', () => {
     'name: PR gate',
     'contents: read',
     'ref: ${{ github.event.pull_request.head.sha }}',
+    'fetch-depth: 0',
+    'run: node scripts/check-cenarios.mjs',
   ])('contém %s', (snippet) => {
     expect(workflow).toContain(snippet)
   })

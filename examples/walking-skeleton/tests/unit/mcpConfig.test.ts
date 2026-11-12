@@ -33,6 +33,12 @@ describe('loadMcpConfig', () => {
     expect(() => loadMcpConfig({ MCP_RESOURCE_URL: 'https://x.com/api/mcp', AUTH0_ISSUER_BASE_URL: 'http://t.auth0.com/' })).toThrow('https')
     expect(loadMcpConfig({ MCP_RESOURCE_URL: 'http://localhost:3000/api/mcp', APP_ENV: 'development' }).resourceUrl.port).toBe('3000')
   })
+  it('http só no modo E2E local (APP_ENV=e2e sem VERCEL); na Vercel ou no uat → erro', () => {
+    const http = 'http://localhost:3100/api/mcp'
+    expect(loadMcpConfig({ MCP_RESOURCE_URL: http, APP_ENV: 'e2e' }).resourceUrl.href).toBe(http)
+    expect(() => loadMcpConfig({ MCP_RESOURCE_URL: http, APP_ENV: 'e2e', VERCEL: '1' })).toThrow('https')
+    expect(() => loadMcpConfig({ MCP_RESOURCE_URL: http, APP_ENV: 'uat' })).toThrow('https')
+  })
   it('MCP_RESOURCE_URL sem caminho (só o origin) → erro: o resource é a URL exata do MCP', () => {
     expect(() => loadMcpConfig({ MCP_RESOURCE_URL: 'https://uat.example.com' })).toThrow('caminho')
     expect(() => loadMcpConfig({ MCP_RESOURCE_URL: 'https://uat.example.com/' })).toThrow('caminho')

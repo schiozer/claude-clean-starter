@@ -16,6 +16,8 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          # histórico completo: o check de cenários compara com origin/<base> (páginas novas).
+          fetch-depth: 0
 
       - uses: actions/setup-node@v5
         with:
@@ -23,3 +25,11 @@ jobs:
 
       - name: Validar título, spec e seção de UAT
         run: node scripts/pr-gate.mjs
+
+      # Cenários × testes (spec e2e-regressao-docs §8.1): erro para a spec do PR, aviso para o
+      # resto. Usa `GITHUB_EVENT_PATH` (linha Spec:) e `GITHUB_BASE_REF` (páginas novas).
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Cenários × testes
+        run: node scripts/check-cenarios.mjs

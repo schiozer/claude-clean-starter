@@ -1,4 +1,4 @@
-import { isDevEnvironment } from '@/shared/appEnv'
+import { isDevEnvironment, isE2eLocalEnvironment } from '@/shared/appEnv'
 
 type Env = Record<string, string | undefined>
 
@@ -10,26 +10,31 @@ export interface McpConfig {
   resourceMetadataUrl: string
 }
 
-function parseUrl(name: string, value: string, isDev: boolean): URL {
+function parseUrl(name: string, value: string, allowHttp: boolean): URL {
   let url: URL
   try {
     url = new URL(value)
   } catch {
     throw new Error(`${name} inválida: ${value}`)
   }
-  if (!isDev && url.protocol !== 'https:') throw new Error(`${name} precisa ser https fora do Dev local`)
+  if (!allowHttp && url.protocol !== 'https:') {
+    throw new Error(`${name} precisa ser https fora do Dev local e do modo E2E local`)
+  }
   return url
 }
 
 export function loadMcpConfig(env: Env = process.env): McpConfig {
-  const isDev = isDevEnvironment(env)
+  // http só na máquina: Dev local ou o app do Playwright (`isE2eLocalEnvironment`, nunca na Vercel).
+  const allowHttp = isDevEnvironment(env) || isE2eLocalEnvironment(env)
   if (!env.MCP_RESOURCE_URL) throw new Error('MCP_RESOURCE_URL não configurada')
-  const resourceUrl = parseUrl('MCP_RESOURCE_URL', env.MCP_RESOURCE_URL, isDev)
+  const resourceUrl = parseUrl('MCP_RESOURCE_URL', env.MCP_RESOURCE_URL, allowHttp)
   if (resourceUrl.pathname === '/') {
-    throw new Error('MCP_RESOURCE_URL precisa do caminho do MCP (ex.: https://<host>/api/mcp), não só o origin')
+    throw new Error(
+      'MCP_RESOURCE_URL precisa do caminho do MCP (ex.: https://<host>/api/mcp), não só o origin'
+    )
   }
   const issuerBaseUrl = env.AUTH0_ISSUER_BASE_URL
-    ? parseUrl('AUTH0_ISSUER_BASE_URL', env.AUTH0_ISSUER_BASE_URL, isDev)
+    ? parseUrl('AUTH0_ISSUER_BASE_URL', env.AUTH0_ISSUER_BASE_URL, allowHttp)
     : null
   return {
     resourceUrl,

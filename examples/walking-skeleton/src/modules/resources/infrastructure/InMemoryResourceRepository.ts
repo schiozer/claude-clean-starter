@@ -11,9 +11,10 @@ export class InMemoryResourceRepository implements IResourceRepository {
   }
 
   async findByOwner(tenantId: string, ownerId: string, page: PageRequest): Promise<Resource[]> {
-    const owned = [...this.store.values()].filter(
-      (s) => s.tenantId === tenantId && s.ownerId === ownerId
-    )
+    // Mais novo primeiro: ordem inversa de inserção (estável; o `Map` guarda a ordem de criação).
+    const owned = [...this.store.values()]
+      .filter((s) => s.tenantId === tenantId && s.ownerId === ownerId)
+      .reverse()
     let start = 0
     if (page.cursor !== undefined) {
       const index = owned.findIndex((s) => s.id === page.cursor)

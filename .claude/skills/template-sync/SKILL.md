@@ -17,7 +17,8 @@ perder o que o projeto mudou e sem perguntar de novo o que já foi decidido. Dec
 - **Três vias**: base = template no `lastSync` do `.template-sync.json`; alvo = Release mais
   nova; projeto = HEAD. O que já foi decidido num sync não volta.
 - **Do template** = o que casa com `template-sync.manifest.json`. Fora dele, nada é tocado
-  (exceção: links para ADRs do template que mudaram de lugar, listados no PR).
+  (exceções: links para ADRs do template que mudaram de lugar, listados no PR, e os arquivos inertes
+  do projeto **ausentes** que o passo 9 semeia uma vez, sem nunca sobrescrever).
 - Tudo termina em **PR** (regra 0 do `CLAUDE.md`). Você **nunca** roda `gh pr merge` e nunca
   marca o UAT.
 
@@ -54,6 +55,14 @@ Checklist (crie uma tarefa por item):
 8. **Resumo ao humano**: quantos `write`/`delete`/`move`/`merge`/`ask`, e os `owned`.
 9. **Aplicar**: `node <clone>/scripts/template-sync.mjs apply --template <clone> --project <projeto> --plan <tmp>/plan.json > <tmp>/report.json`.
    O relatório traz `applied`, `merged`, `conflicts`, `asked`, `notes`, `linkRewrites`.
+   Depois, **semeie os arquivos inertes do projeto ausentes**: `tests/e2e/auth.setup.ts` e
+   `docs/rnf.md` ficam fora do manifesto (são do projeto) e não ligam nada sozinhos. Para cada um,
+   `test -e <projeto>/<arquivo> || cp <clone>/<arquivo> <projeto>/<arquivo>` (crie a pasta antes,
+   se faltar). **Nunca sobrescreva** um que já existe: depois de semeado, o arquivo é do projeto.
+   `playwright.config.ts` e `tests/e2e/cenarios.config.json` **não** são semeados: eles ligam o
+   check `Regressão (UAT)`, e os do template apontam para o skeleton (`examples/**`, que o sync
+   ignora), o que deixaria o PR vermelho. Se algum dos dois faltar no projeto, o gate fica verde
+   com aviso e o PR lista em **Adoção pendente**: "E2E não configurado — criar playwright.config.ts (webServer do app do projeto) e cenarios.config.json conforme docs/guides/e2e-guide.md, Adoção".
 10. **Resolver `conflicts`** arquivo a arquivo (marcadores `<<<<<<< projeto` / `>>>>>>> template`):
     - `binary` (imagem etc. mudada nos dois lados): o motor não toca o arquivo; mostre as duas
       versões ao humano junto com os `asked` e aplique a escolhida;
@@ -74,7 +83,7 @@ Checklist (crie uma tarefa por item):
     "base anterior às Releases").
 17. **Push + PR** com o template de PR (`.github/pull_request_template.md`), UAT
     **desmarcado**, título `chore(template): sync vX → vY` e no corpo as seções:
-    **Aplicados** · **Juntados** (com o porquê de cada conflito resolvido) · **Perguntados**
+    **Aplicados** · **Semeados** (arquivos inertes criados no passo 9) · **Adoção pendente** (o aviso do E2E do passo 9, se faltar `playwright.config.ts` ou `cenarios.config.json`) · **Juntados** (com o porquê de cada conflito resolvido) · **Perguntados**
     (com a decisão do humano) · **Links reescritos** · **Notas** · **Candidatos a voltar ao
     template** (melhorias do projeto que parecem genéricas — sugira `/template-sync contribuir`).
 18. **Restaurar** a conta `gh` padrão da máquina e apagar `<clone>` e `<tmp>`. Avise o humano
@@ -98,7 +107,8 @@ sessão do template:
    proteção da `main`: nada é aplicado nem commitado fora desta branch.
 6. **Plano** com a base escolhida:
    `node <clone>/scripts/template-sync.mjs plan --template <clone> --project <projeto> --target <tag> --base <sha|none> > <tmp>/plan.json`;
-   depois siga o `sync` dos passos 8 a 14.
+   depois siga o `sync` dos passos 8 a 14 (o passo 9 semeia os arquivos inertes ausentes,
+   `docs/rnf.md` e `tests/e2e/auth.setup.ts`, sem sobrescrever, e o PR lista a adoção do E2E).
 7. **ADRs copiados**: um ADR do projeto em `docs/adr/NNN-*.md` que seja cópia de um ADR do
    template (mesmo título, conteúdo quase igual) → **proponha** a remoção em favor de
    `docs/adr/template/`. Aprovado: apague a cópia e reescreva os links,
@@ -153,16 +163,17 @@ Visão dos projetos em relação ao template, na sessão do template:
 
 ## Red Flags
 
-| Pensamento                                             | Realidade                                                                      |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| "Rodo o motor do próprio projeto, é mais rápido"       | A cópia do projeto pode ser antiga. Motor e skill vêm do clone na tag alvo.    |
-| "O conflito é pequeno, fico com a versão do template"  | Preserve a intenção do projeto; traga só a novidade. Explique no PR.           |
-| "O runbook do template é mais novo, sobrescrevo"       | Valores preenchidos do projeto prevalecem; só a estrutura nova entra.          |
-| "Esse `ask` é óbvio, decido sozinho"                   | `ask` é do humano. Pergunte, numa mensagem só.                                 |
-| "O check do exemplo não serve aqui, removo"            | Itens de `examples/` são apontados no PR, nunca removidos sozinhos.            |
-| "Uso a `main` do template, tem coisa mais nova"        | O sync mira a Release mais nova, nunca um commit solto.                        |
-| "Já que estou no projeto, ajusto `src/`"               | Fora do manifesto nada é tocado (só links de ADRs movidos).                    |
-| "Contribuo como está, o nome do projeto não atrapalha" | O template é agnóstico. `check-agnostic` antes do PR.                          |
-| "Salvo a lista de projetos no repo, fica mais fácil"   | A lista fica em `~/.config/template-sync/`; o relatório é uma issue.           |
-| "PR verde, posso mergear"                              | Nunca `gh pr merge`: o merge é do humano (no projeto, merge = deploy em Prod). |
-| "Árvore suja, mas é só um arquivo"                     | Árvore suja → o sync não começa.                                               |
+| Pensamento                                               | Realidade                                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| "Rodo o motor do próprio projeto, é mais rápido"         | A cópia do projeto pode ser antiga. Motor e skill vêm do clone na tag alvo.    |
+| "O conflito é pequeno, fico com a versão do template"    | Preserve a intenção do projeto; traga só a novidade. Explique no PR.           |
+| "O runbook do template é mais novo, sobrescrevo"         | Valores preenchidos do projeto prevalecem; só a estrutura nova entra.          |
+| "Esse `ask` é óbvio, decido sozinho"                     | `ask` é do humano. Pergunte, numa mensagem só.                                 |
+| "O check do exemplo não serve aqui, removo"              | Itens de `examples/` são apontados no PR, nunca removidos sozinhos.            |
+| "Uso a `main` do template, tem coisa mais nova"          | O sync mira a Release mais nova, nunca um commit solto.                        |
+| "Já que estou no projeto, ajusto `src/`"                 | Fora do manifesto nada é tocado (só links de ADRs movidos e os semeados).      |
+| "Copio o `playwright.config.ts` do template, liga o E2E" | Ele aponta para o skeleton e deixa o PR vermelho. Liste em Adoção pendente.    |
+| "Contribuo como está, o nome do projeto não atrapalha"   | O template é agnóstico. `check-agnostic` antes do PR.                          |
+| "Salvo a lista de projetos no repo, fica mais fácil"     | A lista fica em `~/.config/template-sync/`; o relatório é uma issue.           |
+| "PR verde, posso mergear"                                | Nunca `gh pr merge`: o merge é do humano (no projeto, merge = deploy em Prod). |
+| "Árvore suja, mas é só um arquivo"                       | Árvore suja → o sync não começa.                                               |

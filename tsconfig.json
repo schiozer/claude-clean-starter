@@ -18,5 +18,5 @@
     "target": "ES2022"
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "examples"]
+  "exclude": ["node_modules", "examples", "tests/e2e", "playwright.config.ts"]
 }

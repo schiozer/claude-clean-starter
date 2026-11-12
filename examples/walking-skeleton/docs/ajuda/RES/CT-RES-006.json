@@ -1,0 +1,23 @@
+{
+  "id": "CT-RES-006",
+  "titulo": "Ver a lista de recursos como time interno",
+  "perfil": "time interno",
+  "passos": [
+    {
+      "texto": "Dado que estou logado como time interno",
+      "imagem": "01.png"
+    },
+    {
+      "texto": "Quando abro a lista de recursos",
+      "imagem": "02.png"
+    },
+    {
+      "texto": "Então vejo a tela \"Resources\"",
+      "imagem": "03.png"
+    },
+    {
+      "texto": "E vejo a lista de recursos sem erro",
+      "imagem": "04.png"
+    }
+  ]
+}

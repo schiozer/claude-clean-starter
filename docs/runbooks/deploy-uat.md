@@ -39,10 +39,12 @@ fazer o smoke test. **Não faz merge** — Prod é o [deploy-prod.md](./deploy-p
    Verificar: `vercel alias ls --scope <preencher: team Vercel>` mostra o alias → `<preview-url>`.
 7. [R0] Smoke test no alias: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: alias UAT>/` e `curl -si -X POST https://<preencher: alias UAT>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'`.
    Verificar: `200` na home e o header `WWW-Authenticate` com `resource_metadata` (é o 401 **do app**, fail-closed). Um 401 sem esse header vem da _Deployment Protection_ da Vercel → a exceção do alias UAT não está configurada ([bootstrap-ambientes.md](./bootstrap-ambientes.md)); parar.
+8. [R0] Aguardar a regressão no Preview do PR: `gh pr checks <n> --watch` até `Regressão (UAT)` ficar `pass` ([ADR-016](../adr/template/016-testes-e2e-nascidos-da-spec.md); alvo preview configurado por [e2e-uat-configurar.md](./e2e-uat-configurar.md)).
+   Verificar: `gh pr checks <n>` mostra `Regressão (UAT)` `pass`. Vermelho (inclusive `flaky`, deploy com erro ou timeout do Preview) → corrigir na branch e voltar ao passo 1; **nunca** liberar o UAT ao humano com a regressão vermelha.
 
 ## Verificação final
 
-- PR aberto e verde; alias do UAT apontando para o preview do PR; smoke test ok (home `200`, `/api/mcp` com `WWW-Authenticate` do app).
+- PR aberto e verde, incluindo `Regressão (UAT)`; alias do UAT apontando para o preview do PR; smoke test ok (home `200`, `/api/mcp` com `WWW-Authenticate` do app).
 - URL do UAT informada ao humano para o teste de aceite (site/celular).
 
 ## Rollback
@@ -55,5 +57,5 @@ fazer o smoke test. **Não faz merge** — Prod é o [deploy-prod.md](./deploy-p
 ## Registro
 
 Comentário no PR (`gh pr comment <n> --body-file <arquivo>`): runbook + `Última verificação`,
-preview e alias, resultado dos checks e do smoke test, resultado final (`ok` | `rollback` |
+preview e alias, resultado dos checks (incl. `Regressão (UAT)`) e do smoke test, resultado final (`ok` | `rollback` |
 `interrompido`).

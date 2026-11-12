@@ -69,7 +69,9 @@ export function useResources() {
   const [resources, setResources] = useState<ResourceDTO[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { void fetchResources() }, [])
+  useEffect(() => {
+    void fetchResources()
+  }, [])
 
   async function fetchResources() {
     try {
@@ -87,6 +89,24 @@ export function useResources() {
 }
 ```
 
+## Cenários da spec → Playwright
+
+A seção "8. Cenários de teste" da spec (revisada pela QA) é o contrato dos testes E2E e
+sistêmicos ([ADR-016](../../../docs/adr/template/016-testes-e2e-nascidos-da-spec.md),
+`docs/guides/e2e-guide.md`):
+
+1. **Antes da tela/rota**, escrever o teste Playwright de cada cenário: título começando pelo ID
+   (`CT-<CTX>-NNN`), tags = tipo + destinos (com `@regressao`), passos via `jornada()` com as chaves
+   iguais ao texto da spec. Rodar e ver falhar (TDD).
+2. Implementar até `npm run test:e2e -- --grep CT-<CTX>-NNN` passar nos projetos `desktop`/`mobile`
+   (ou `sistemico`).
+3. Página nova entra em "Telas" (ou "Exclusões") do `docs/rnf.md`; desvio de RNF tem teste com o
+   mesmo ID.
+4. `npm run check:cenarios -- --spec <spec>` sem erro (todo `@regressao` com teste, passos
+   iguais, `@doc` com página).
+5. **`npm run docs:gerar` antes do PR** (se houver `@doc`), contra o app local, e commitar a
+   ajuda gerada na feature branch.
+
 ## Checklist (MVP)
 
 - [ ] Perfil verificado no `CLAUDE.md`
@@ -96,6 +116,8 @@ export function useResources() {
 - [ ] Erros funcional vs técnico (ver BEST_PRACTICES)
 - [ ] Loading/erro na UI; TypeScript sem `any`
 - [ ] Testes do service (escopo, isolamento por owner) e dos hooks críticos
+- [ ] Teste Playwright de cada cenário da spec escrito antes da tela/rota; `npm run check:cenarios` ok
+- [ ] `npm run docs:gerar` rodado antes do PR e a ajuda commitada (se houver `@doc`)
 
 ## Promoção para o Completo
 

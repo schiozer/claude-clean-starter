@@ -18,6 +18,12 @@ Spec: <caminho ou n/a — motivo>
 | ------------------------------------------------- | ------------------------------- | ------ |
 |                                                   |                                 |        |
 
+## Cenários × testes
+
+<!-- Cole o relatório de rastreabilidade do job `PR gate` (passo `Cenários × testes`, resumo do job ou `.e2e/rastreabilidade.md`): cenário `CT-…` → teste → página de ajuda → status. Todo cenário `@regressao` da spec precisa de teste. -->
+
+- [ ] npm run docs:gerar rodado e docs/ajuda commitado (se houver @doc)
+
 ## Checklist
 
 - [ ] Código segue BEST_PRACTICES.md

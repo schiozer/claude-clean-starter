@@ -27,7 +27,8 @@
 > nem `release.yml`; decida o `SPEC_GATE` (gate opcional com Claude) pelo runbook
 > [`spec-gate.md`](./docs/runbooks/spec-gate.md). Ao renomear/remover jobs de CI (ex.:
 > `Walking Skeleton (example)`), atualize `requiredChecks` em `hooks/protect-main/config.json`,
-> senão todo merge alarma na `Guarda da main`.
+> senão todo merge alarma na `Guarda da main`. O `Regressão (UAT)` mantém o nome nos projetos
+> (ver [ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md)).
 >
 > **Adoção — operação** ([ADR-013](./docs/adr/template/013-governanca-operacional-e-runbooks.md)):
 > antes do primeiro deploy fora do Dev, preencha todo `<preencher>` de `docs/runbooks/`,
@@ -37,6 +38,14 @@
 > **Adoção — sync com o template** ([ADR-015](./docs/adr/template/015-template-sync.md)): rode
 > `/template-sync adotar` a partir do template; depois, `/template-sync` a cada Release (aviso
 > semanal na issue `template-sync`).
+>
+> **Adoção — demos** ([ADR-017](./docs/adr/template/017-bunny-videos-demos-treinamento.md)): `DEMOS_BUNNY`
+> nasce desligado; para ligar, runbook [`bunny-habilitar.md`](./docs/runbooks/bunny-habilitar.md).
+>
+> **Adoção — E2E** ([ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md)): o
+> `/template-sync` semeia só `tests/e2e/auth.setup.ts` e `docs/rnf.md` (nunca sobrescreve); crie
+> `playwright.config.ts` (com o `webServer` do app) e `tests/e2e/cenarios.config.json` pelo
+> [guia de E2E](./docs/guides/e2e-guide.md#adoção). Até lá o `Regressão (UAT)` só avisa.
 
 ---
 
@@ -81,6 +90,12 @@ Toda funcionalidade é **entrevistada (brainstorming) + planejada** e **sempre**
 pergunte ao usuário se ela precisa de **feature toggle** — ver
 [ADR-006](./docs/adr/template/006-processo-de-feature-e-feature-toggle.md). Nunca assuma
 silenciosamente que não precisa.
+
+A spec traz os **cenários de teste** (`CT-<CTX>-NNN`, Dado/Quando/Então) e os desvios de RNF;
+os cenários são **revisados pela QA** antes de a spec ficar `Aprovada`, e cada um vira um teste
+Playwright escrito antes da tela/rota — ver
+[ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md) e o
+[guia de E2E](./docs/guides/e2e-guide.md).
 
 Para bug fixes ou pequenas correções, use `superpowers:systematic-debugging` diretamente.
 
@@ -309,6 +324,7 @@ implementar (TDD) → testar (`npm test`) → commitar com mensagem clara → at
 - [ ] Linter sem warnings (`npm run lint`)
 - [ ] Type-check ok (`npm run type-check`)
 - [ ] Testes passando (`npm test`)
+- [ ] E2E passando (`npm run test:e2e`) e cenários × testes ok (`npm run check:cenarios`)
 - [ ] Testado manualmente (happy path + 1 erro)
 
 ---

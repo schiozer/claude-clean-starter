@@ -46,7 +46,8 @@ export class Title {
   private constructor(readonly value: string) {}
   static of(raw: string): Title {
     const v = raw.trim()
-    if (v.length < 3 || v.length > 100) throw new DomainError('Título deve ter de 3 a 100 caracteres')
+    if (v.length < 3 || v.length > 100)
+      throw new DomainError('Título deve ter de 3 a 100 caracteres')
     return new Title(v)
   }
 }
@@ -55,11 +56,17 @@ export class Title {
 ```typescript
 // application/ResourceService.ts
 export class ResourceService {
-  constructor(private repo: IResourceRepository, private clock: Clock) {}
+  constructor(
+    private repo: IResourceRepository,
+    private clock: Clock
+  ) {}
 
   async create(actor: AuthUser, input: CreateResourceInput): Promise<ResourceDTO> {
     requireScope(actor, 'resources:write')
-    const resource = Resource.create({ ownerId: actor.id, title: Title.of(input.title) }, this.clock)
+    const resource = Resource.create(
+      { ownerId: actor.id, title: Title.of(input.title) },
+      this.clock
+    )
     await this.repo.save(resource)
     return toResourceDTO(resource)
   }
@@ -91,8 +98,27 @@ Server-state (ex.: React Query) e UI-state (ex.: Zustand) só quando o problema 
   erro; posse; DTO sem campos internos).
 - **Integration**: handler REST e `tools/call` MCP chamando o service real com repo
   in-memory (ambos devem produzir o mesmo resultado e os mesmos erros).
-- **E2E**: fluxos críticos (Playwright / Maestro no nativo).
+- **E2E e sistêmicos**: um teste Playwright por cenário da spec (Maestro no nativo) — ver a
+  seção abaixo.
 - Padrão AAA; ver `docs/guides/testing-guide.md`.
+
+## Cenários da spec → Playwright
+
+A seção "8. Cenários de teste" da spec (revisada pela QA) é o contrato dos testes E2E e
+sistêmicos ([ADR-016](../../../docs/adr/template/016-testes-e2e-nascidos-da-spec.md),
+`docs/guides/e2e-guide.md`):
+
+1. **Antes da tela/rota**, escrever o teste Playwright de cada cenário: título começando pelo ID
+   (`CT-<CTX>-NNN`), tags = tipo + destinos (com `@regressao`), passos via `jornada()` com as chaves
+   iguais ao texto da spec. Rodar e ver falhar (TDD).
+2. Implementar até `npm run test:e2e -- --grep CT-<CTX>-NNN` passar nos projetos `desktop`/`mobile`
+   (ou `sistemico`).
+3. Página nova entra em "Telas" (ou "Exclusões") do `docs/rnf.md`; desvio de RNF tem teste com o
+   mesmo ID.
+4. `npm run check:cenarios -- --spec <spec>` sem erro (todo `@regressao` com teste, passos
+   iguais, `@doc` com página).
+5. **`npm run docs:gerar` antes do PR** (se houver `@doc`), contra o app local, e commitar a
+   ajuda gerada na feature branch.
 
 ## Checklist
 
@@ -104,4 +130,6 @@ Server-state (ex.: React Query) e UI-state (ex.: Zustand) só quando o problema 
 - [ ] Tool MCP: `scope`, anotações, flag (escrita desligada por padrão), descrição "quando usar"
 - [ ] Erros funcional vs técnico (ADR-009)
 - [ ] Testes unit + integration (REST e MCP)
+- [ ] Teste Playwright de cada cenário da spec escrito antes da tela/rota; `npm run check:cenarios` ok
+- [ ] `npm run docs:gerar` rodado antes do PR e a ajuda commitada (se houver `@doc`)
 - [ ] Decisões relevantes em ADR

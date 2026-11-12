@@ -1,0 +1,8 @@
+{
+  "specs": ["docs/superpowers/specs/*.md", "examples/walking-skeleton/docs/specs/*.md"],
+  "testes": ["tests/e2e/**/*.spec.ts", "examples/walking-skeleton/tests/e2e/**/*.spec.ts"],
+  "paginas": ["examples/walking-skeleton/src/app/**/page.tsx"],
+  "appDir": "examples/walking-skeleton/src/app",
+  "ajuda": "examples/walking-skeleton/docs/ajuda",
+  "rnf": "docs/rnf.md"
+}

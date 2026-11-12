@@ -12,17 +12,19 @@ passo a passo, com classe de risco e verificação em cada passo. Regras em
 
 ## Catálogo
 
-| Runbook                                                      | Quando usar                                                                                  |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| [bootstrap-ambientes.md](./bootstrap-ambientes.md)           | Uma vez por projeto: criar Vercel, Neon, Auth0, envs, alias UAT, proteção da `main`          |
-| [deploy-uat.md](./deploy-uat.md)                             | Levar uma branch ao UAT (push + PR → preview) e fazer o smoke test                           |
-| [deploy-prod.md](./deploy-prod.md)                           | Promover um PR aprovado no UAT para Prod (o **merge é do humano**)                           |
-| [rollback.md](./rollback.md)                                 | Incidente: desligar flag, promover deploy anterior, revert por PR                            |
-| [migracao-banco.md](./migracao-banco.md)                     | Aplicar migração SQL (ADR-008) em preview/UAT/Prod                                           |
-| [segredos-e-env.md](./segredos-e-env.md)                     | Criar/alterar env não-secreta; criar/rotacionar segredo                                      |
-| [feature-flags.md](./feature-flags.md)                       | Ligar/desligar flags por ambiente (incl. kill switch e escrita MCP)                          |
-| [mcp-habilitar-e-conectar.md](./mcp-habilitar-e-conectar.md) | Configurar Auth0 para o MCP e conectar o ChatGPT                                             |
-| [spec-gate.md](./spec-gate.md)                               | Ligar/desligar o gate opcional `Spec × código` com Claude (`SPEC_GATE`, `ANTHROPIC_API_KEY`) |
+| Runbook                                                      | Quando usar                                                                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| [bootstrap-ambientes.md](./bootstrap-ambientes.md)           | Uma vez por projeto: criar Vercel, Neon, Auth0, envs, alias UAT, proteção da `main`                                            |
+| [deploy-uat.md](./deploy-uat.md)                             | Levar uma branch ao UAT (push + PR → preview) e fazer o smoke test                                                             |
+| [deploy-prod.md](./deploy-prod.md)                           | Promover um PR aprovado no UAT para Prod (o **merge é do humano**)                                                             |
+| [rollback.md](./rollback.md)                                 | Incidente: desligar flag, promover deploy anterior, revert por PR                                                              |
+| [migracao-banco.md](./migracao-banco.md)                     | Aplicar migração SQL (ADR-008) em preview/UAT/Prod                                                                             |
+| [segredos-e-env.md](./segredos-e-env.md)                     | Criar/alterar env não-secreta; criar/rotacionar segredo                                                                        |
+| [feature-flags.md](./feature-flags.md)                       | Ligar/desligar flags por ambiente (incl. kill switch e escrita MCP)                                                            |
+| [mcp-habilitar-e-conectar.md](./mcp-habilitar-e-conectar.md) | Configurar Auth0 para o MCP e conectar o ChatGPT                                                                               |
+| [spec-gate.md](./spec-gate.md)                               | Ligar/desligar o gate opcional `Spec × código` com Claude (`SPEC_GATE`, `ANTHROPIC_API_KEY`)                                   |
+| [e2e-uat-configurar.md](./e2e-uat-configurar.md)             | **Opcional** (só com `E2E_TARGET=preview`): usuários de teste, PATs e segredos para a `Regressão (UAT)` rodar contra o Preview |
+| [bunny-habilitar.md](./bunny-habilitar.md)                   | **Opcional** (`DEMOS_BUNNY`): library, storage zone, segredos `BUNNY_*` e envs para os vídeos de demo/treinamento na `/ajuda`  |
 
 ## Classes de risco (resumo)
 
@@ -64,3 +66,7 @@ obrigatório (roda no CI). `npm run check:runbooks -- --strict` também exige ze
       projeto Neon, tenants Auth0) e datar `Última verificação`.
 - [ ] Trocar o passo do CI para `npm run check:runbooks -- --strict`.
 - [ ] Adicionar um runbook para cada operação recorrente nova do projeto.
+
+> O `e2e-uat-configurar.md` é **opcional**: só se o projeto ligar `E2E_TARGET=preview` (sem ele,
+> a `Regressão (UAT)` roda contra o app local do runner). Não vai usar o modo preview? Apague o
+> runbook e a linha do catálogo, para o `--strict` não cobrar os `<preencher>` dele.

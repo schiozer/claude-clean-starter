@@ -7,7 +7,7 @@ export const makeResourceTools = (service: ResourceService): AnyTool[] => [
   defineTool({
     name: 'list_resources',
     description:
-      'Lista os recursos do usuário, do mais antigo ao mais novo. Use para responder "quais são meus recursos". ' +
+      'Lista os recursos do usuário, do mais novo ao mais antigo. Use para responder "quais são meus recursos". ' +
       'Se vier nextCursor, passe-o em cursor para a próxima página.',
     input: listResourcesSchema,
     output: resourcePageSchema,

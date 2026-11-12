@@ -17,15 +17,30 @@ describe('InMemoryResourceRepository', () => {
 
   const titles = (rs: { title: { value: string } }[]) => rs.map((r) => r.title.value)
 
-  it('filtra por tenant E owner', async () => {
-    expect(titles(await repo.findByOwner('t1', 'ana', { limit: 50 }))).toEqual(['Ana 1', 'Ana 2', 'Ana 3'])
+  it('filtra por tenant E owner, do mais novo ao mais antigo', async () => {
+    expect(titles(await repo.findByOwner('t1', 'ana', { limit: 50 }))).toEqual(['Ana 3', 'Ana 2', 'Ana 1'])
   })
 
   it('respeita limit e continua do cursor', async () => {
     const first = await repo.findByOwner('t1', 'ana', { limit: 2 })
-    expect(titles(first)).toEqual(['Ana 1', 'Ana 2'])
+    expect(titles(first)).toEqual(['Ana 3', 'Ana 2'])
     const next = await repo.findByOwner('t1', 'ana', { limit: 2, cursor: first[1].id.value })
-    expect(titles(next)).toEqual(['Ana 3'])
+    expect(titles(next)).toEqual(['Ana 1'])
+  })
+
+  it('paginação por cursor percorre tudo sem perder nem repetir, com item novo no meio', async () => {
+    const vistos: string[] = []
+    let cursor: string | undefined
+    for (let i = 0; i < 10; i++) {
+      const page = await repo.findByOwner('t1', 'ana', { limit: 1, cursor })
+      if (page.length === 0) break
+      vistos.push(...titles(page))
+      cursor = page[page.length - 1].id.value
+      // Criado durante a paginação: entra no topo, não desloca as páginas seguintes.
+      if (i === 0) repo.seed([{ ownerId: 'ana', tenantId: 't1', title: 'Ana 4' }])
+    }
+    expect(vistos).toEqual(['Ana 3', 'Ana 2', 'Ana 1'])
+    expect(titles(await repo.findByOwner('t1', 'ana', { limit: 1 }))).toEqual(['Ana 4'])
   })
 
   it('cursor desconhecido → página vazia (não reinicia)', async () => {

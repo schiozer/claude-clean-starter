@@ -1,0 +1,31 @@
+{
+  "id": "CT-RES-001",
+  "titulo": "Criar um recurso e vê-lo na lista",
+  "perfil": "usuário final",
+  "passos": [
+    {
+      "texto": "Dado que estou logado como usuário final",
+      "imagem": "01.png"
+    },
+    {
+      "texto": "Quando abro a lista de recursos",
+      "imagem": "02.png"
+    },
+    {
+      "texto": "E preencho o título \"Plano de estudos\"",
+      "imagem": "03.png"
+    },
+    {
+      "texto": "E clico em \"Criar\"",
+      "imagem": "04.png"
+    },
+    {
+      "texto": "Então vejo o recurso \"Plano de estudos\" na lista",
+      "imagem": "05.png"
+    },
+    {
+      "texto": "E o campo \"Título\" fica vazio",
+      "imagem": "06.png"
+    }
+  ]
+}

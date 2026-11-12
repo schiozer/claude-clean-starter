@@ -14,7 +14,8 @@ export class StubAuthProvider implements IAuthProvider {
     return {
       id: 'dev-user',
       tenantId: 'dev-tenant',
-      scopes: ['resources:read', 'resources:write'],
+      // Dev local vê toda a ajuda, inclusive a do time interno (spec e2e-regressao-docs §9.1).
+      scopes: ['resources:read', 'resources:write', 'ajuda:read', 'ajuda:interno'],
       via: 'session',
     }
   }
