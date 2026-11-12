@@ -42,7 +42,11 @@ const MARCADOR = '<!-- demos -->'
  * @returns {Promise<{ catalogo: CatalogoVersao, indice: CatalogoIndice }>}
  */
 export async function publicarDemos({ selecao, manifesto, host, storage, libraryId, agora }) {
-  const gravados = (id) => manifesto.videos.filter((video) => video.id === id && video.ok)
+  const gravados = (id) =>
+    manifesto.videos.filter(
+      (video) =>
+        video.id === id && video.ok && (video.projeto === 'desktop' || video.projeto === 'mobile')
+    )
   const faltando = [...selecao.demos, ...selecao.treinamento]
     .map((item) => item.id)
     .filter((id, i, todos) => todos.indexOf(id) === i && gravados(id).length === 0)
@@ -51,7 +55,6 @@ export async function publicarDemos({ selecao, manifesto, host, storage, library
   const enviar = async (colecao, item) => {
     const videos = {}
     for (const video of gravados(item.id)) {
-      if (video.projeto !== 'desktop' && video.projeto !== 'mobile') continue
       const { videoId } = await host.upload({
         colecao,
         titulo: `${item.id} — ${item.titulo} (${video.projeto})`,
@@ -80,6 +83,8 @@ export async function publicarDemos({ selecao, manifesto, host, storage, library
       spec: selecao.spec,
       demos,
     }
+    // Se a gravação do índice falhar, o catalogo/<versao>.json órfão e os vídeos da versão ficam;
+    // o rerun sobrescreve o catálogo e faz upsert dos vídeos por título.
     await storage.gravar(caminhoDaVersao(selecao.versao), `${JSON.stringify(catalogo, null, 2)}\n`)
     const anterior = lerIndice(await storage.ler(CAMINHO_INDICE))
     const indice = montarIndice({ anterior, versao: catalogo, treinamento, agora })

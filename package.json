@@ -11,12 +11,12 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "demos:gravar": "E2E_DEMOS=1 playwright test --project=desktop --project=mobile",
+    "demos:publicar": "node scripts/demos/publicar.mjs",
     "docs:gerar": "E2E_DOCS=1 playwright test --grep @doc --project=desktop",
     "prepare": "node scripts/install-git-hooks.mjs",
     "check:runbooks": "node scripts/check-runbooks.mjs",
     "check:cenarios": "node scripts/check-cenarios.mjs",
-    "format": "prettier --write .",
-    "demos:publicar": "node scripts/demos/publicar.mjs"
+    "format": "prettier --write ."
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

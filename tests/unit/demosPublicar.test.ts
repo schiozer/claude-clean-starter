@@ -12,7 +12,7 @@ const agora = new Date('2026-11-12T10:00:00.000Z')
 const item = (id: string) => ({
   id,
   titulo: `T ${id}`,
-  contexto: 'res',
+  contexto: 'RES',
   perfil: 'usuário final' as const,
 })
 const selecao = {
@@ -116,6 +116,9 @@ describe('publicarDemos', () => {
     ).rejects.toThrow('boom')
     const treinamentos = [...host.colecoes].filter(([, c]) => c.nome === 'Treinamento')
     expect(treinamentos.map(([id]) => id)).toEqual([antigaId])
+    expect(
+      [...host.colecoes.keys()].filter((id) => host.colecoes.get(id)!.nome === 'Treinamento')
+    ).toHaveLength(1)
     expect(storage.arquivos.get(CAMINHO_INDICE)).toBe(indiceAntigo)
   })
 })

@@ -37,7 +37,7 @@ export async function specDaTag(api, tag) {
 }
 
 /** Contexto a partir do ID `CT-<CTX>-NNN`. */
-const contextoDe = (id) => (/^CT-([A-Z]+)-/.exec(id)?.[1] ?? '').toLowerCase()
+const contextoDe = (id) => id.split('-')[1] ?? id
 
 /** @returns {ItemSelecionado} */
 export const paraItem = (cenario) => ({

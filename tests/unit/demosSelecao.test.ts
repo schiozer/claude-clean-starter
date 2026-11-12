@@ -46,6 +46,7 @@ describe('grepDe e paraItem', () => {
     expect(grepDe({ demos: [{ id: 'A' }, { id: 'B' }], treinamento: [{ id: 'B' }] })).toBe('A|B')
     expect(grepDe({ demos: [], treinamento: [] })).toBe('')
     expect(paraItem(cenarios[0]).perfil).toBe('usuário final')
+    expect(paraItem(cenarios[0]).contexto).toBe('RES')
   })
 })
 
@@ -61,9 +62,15 @@ describe('tagDoCommit', () => {
 })
 
 describe('specDaTag', () => {
-  const api = (body: string) => ({
+  const api = (body: string, merged: string | null = '2026-11-01', base = 'main') => ({
     tags: async () => [{ name: 'v1.0.0', sha: 'abc' }],
-    pullsForCommit: async () => [{ body, merged_at: '2026-11-01', base: { ref: 'main' } }],
+    pullsForCommit: async () => [{ body, merged_at: merged, base: { ref: base } }],
+  })
+
+  it('PR não mergeado na main dá spec null', async () => {
+    const corpo = 'Spec: docs/superpowers/specs/x.md'
+    expect((await specDaTag(api(corpo, null), 'v1.0.0')).spec).toBeNull()
+    expect((await specDaTag(api(corpo, '2026-11-01', 'dev'), 'v1.0.0')).spec).toBeNull()
   })
 
   it('devolve o caminho da spec do PR', async () => {
