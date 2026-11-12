@@ -245,6 +245,12 @@ describe('AjudaService', () => {
       expect(dto.videos.treinamento.map((t) => t.id)).toEqual(['CT-RES-001'])
     })
 
+    it('makeEmbeds padrão → nenhuma URL de embed (fail-closed)', async () => {
+      const padrao = new AjudaService(source, videosCom(indice()))
+      const dto = await padrao.get(interno, { id: INTERNO.id })
+      expect(dto.videos).toEqual({ estado: 'ok', demo: null, treinamento: [] })
+    })
+
     it('cenário sem demo no índice → demo null', async () => {
       const i = indice()
       delete i.demos['CT-RES-001']

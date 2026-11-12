@@ -117,10 +117,7 @@ const verifierFor = (config: McpConfig) =>
   new CompositeTokenVerifier(
     personalTokenVerifier,
     config.issuerBaseUrl
-      ? new Auth0JwtVerifier({
-          issuer: config.issuerBaseUrl.href,
-          audience: config.resourceUrl.href,
-        })
+      ? new Auth0JwtVerifier({ issuer: config.issuerBaseUrl.href, audience: config.resourceUrl.href })
       : null
   )
 

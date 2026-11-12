@@ -22,12 +22,13 @@ export class CdnCatalogoDeVideos implements IVideosDaAjuda {
     timeoutMs?: number
   }) {
     this.url = opts.url
-    this.fetchFn = opts.fetchFn ?? fetch
+    this.fetchFn = opts.fetchFn ?? fetch.bind(globalThis)
     this.clock = opts.clock
     this.ttlMs = opts.ttlMs ?? 300_000
     this.timeoutMs = opts.timeoutMs ?? 3_000
   }
 
+  /** `forcar` é uma costura de teste: ignora o cache válido e busca de novo. */
   async indice(opts: { forcar?: boolean } = {}): Promise<CatalogoIndice | null> {
     const agora = this.clock.now().getTime()
     const valido = this.cache && agora - this.cache.lidoEm < this.ttlMs ? this.cache : null

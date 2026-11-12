@@ -58,6 +58,7 @@ describe('CdnCatalogoDeVideos', () => {
     await cdn.indice()
     clock.ms += 300_001
     expect(await cdn.indice()).toBeNull()
+    expect(erro).toHaveBeenCalledWith('[ajuda:catalogo]', expect.anything())
   })
 
   it('refetch forçado que falha dentro do TTL → cache', async () => {

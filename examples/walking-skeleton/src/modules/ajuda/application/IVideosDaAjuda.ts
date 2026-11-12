@@ -9,3 +9,6 @@ export interface IVideosDaAjuda {
 export interface IEmbeds {
   url(videoId: string, opts: { assinado: boolean }): string | null
 }
+
+/** Padrão fail-closed: nunca monta URL, então nenhum vídeo aparece. */
+export const SEM_EMBEDS: IEmbeds = { url: () => null }

@@ -1,7 +1,6 @@
 import type { z } from 'zod'
 import { hasScope, requireScope, type AuthUser } from '@/shared/auth'
 import { NotFoundError, ValidationError } from '@/shared/errors'
-import { BunnyEmbeds } from '../infrastructure/BunnyEmbeds'
 import type { CatalogoIndice } from './catalogo'
 import {
   toAjudaDocDTO,
@@ -11,9 +10,8 @@ import {
   type VideosDaAjuda,
 } from './dto'
 import type { IAjudaSource } from './IAjudaSource'
-import type { IEmbeds, IVideosDaAjuda } from './IVideosDaAjuda'
+import { SEM_EMBEDS, type IEmbeds, type IVideosDaAjuda } from './IVideosDaAjuda'
 import { getAjudaSchema, imagemAjudaSchema } from './schemas'
-import { systemClock } from '@/shared/kernel'
 
 const LEITURA = 'ajuda:read'
 const INTERNO = 'ajuda:interno'
@@ -24,14 +22,13 @@ const INTERNO = 'ajuda:interno'
  */
 export class AjudaService {
   /**
-   * `videos === null` → `desligado`. O `makeEmbeds` padrão não tem `tokenKey`: URL assinada sai
-   * `null` (fail-closed); a composition injeta `BUNNY_STREAM_TOKEN_KEY`.
+   * `videos === null` → `desligado`. O `makeEmbeds` padrão não monta URL nenhuma (`SEM_EMBEDS`,
+   * fail-closed); a composition injeta o `BunnyEmbeds` com `BUNNY_STREAM_TOKEN_KEY`.
    */
   constructor(
     private readonly source: IAjudaSource,
     private readonly videos: IVideosDaAjuda | null = null,
-    private readonly makeEmbeds: (libraryId: string) => IEmbeds = (libraryId) =>
-      new BunnyEmbeds({ libraryId, clock: systemClock })
+    private readonly makeEmbeds: (libraryId: string) => IEmbeds = () => SEM_EMBEDS
   ) {}
 
   async list(actor: AuthUser): Promise<AjudaDocDTO[]> {
@@ -70,7 +67,7 @@ export class AjudaService {
 
   private demoDe(indice: CatalogoIndice, embeds: IEmbeds, doc: AjudaDoc) {
     const demo = indice.demos[doc.id]
-    const videoId = demo?.videos.desktop ?? demo?.videos.mobile
+    const videoId = demo?.videos.desktop || demo?.videos.mobile
     if (!demo || !videoId) return null
     const embedUrl = embeds.url(videoId, { assinado: doc.perfil === 'time interno' })
     return embedUrl ? { versao: demo.versao, embedUrl, titulo: demo.titulo } : null
@@ -86,7 +83,7 @@ export class AjudaService {
       const interno = trilha.perfil === 'time interno'
       if (interno && !hasScope(actor, INTERNO)) continue
       for (const item of trilha.itens) {
-        const videoId = item.videos.desktop ?? item.videos.mobile
+        const videoId = item.videos.desktop || item.videos.mobile
         const embedUrl = videoId ? embeds.url(videoId, { assinado: interno }) : null
         if (embedUrl) itens.push({ id: item.id, titulo: item.titulo, embedUrl })
       }
