@@ -97,6 +97,8 @@ export default defineConfig({
         env: {
           APP_ENV: 'e2e',
           RESOURCES_ENABLED: 'on',
+          DEMOS_BUNNY: 'on',
+          BUNNY_CATALOGO_URL: 'http://127.0.0.1:9/catalogo/index.json',
           MCP_RESOURCE_URL: `http://localhost:${PORTA_LOCAL}/api/mcp`,
           ...LOCAL_SOMENTE_TESTE,
           E2E_FAULTS_SECRET: process.env.E2E_FAULTS_SECRET ?? LOCAL_SOMENTE_TESTE.E2E_FAULTS_SECRET,

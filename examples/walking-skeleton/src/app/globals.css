@@ -88,6 +88,23 @@ input {
   margin-top: var(--space);
 }
 
+.ajuda-aviso {
+  margin-top: var(--space);
+  padding: var(--space);
+  border-radius: var(--radius);
+  background: var(--color-warning-surface);
+  color: var(--color-warning-foreground);
+}
+
+.ajuda-videos iframe {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
 button[aria-disabled='true'] {
   opacity: 0.6;
   cursor: not-allowed;

@@ -3,6 +3,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import type { AjudaDocDTO } from '@/modules/ajuda'
+import { AjudaVideos } from './AjudaVideos'
 
 /** Tamanho dos screenshots do `docs:gerar` (projeto desktop do Playwright). */
 const LARGURA = 1280
@@ -80,6 +81,7 @@ export function AjudaPassoAPasso({ doc }: { doc: AjudaDocDTO }) {
         </button>
       </nav>
       <p className="ajuda-dica">Dica: use as setas ← e → do teclado para trocar de passo.</p>
+      <AjudaVideos videos={doc.videos} />
     </main>
   )
 }

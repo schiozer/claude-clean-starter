@@ -7,6 +7,7 @@ const csp = (isDev) =>
     `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
+    'frame-src https://iframe.mediadelivery.net',
     "frame-ancestors 'none'",
   ].join('; ')
 

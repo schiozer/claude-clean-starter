@@ -75,11 +75,23 @@ Então volto ao passo 1
 Quando aperto a seta para a direita
 Então avanço de novo para o passo 2
 
+### CT-AJU-002 — Ver a ajuda quando os vídeos estão indisponíveis
+
+Tipo: @e2e
+Critério: CA-3 Perfil: usuário final
+
+Dado que estou logado como usuário final
+Quando abro a página "Criar um recurso e vê-lo na lista" da ajuda
+Então vejo o passo 1 com o screenshot e a legenda
+E vejo o aviso "Vídeos indisponíveis no momento."
+
 ## 9. Critérios de Aceitação
 
 - **CA-1**: o usuário logado vê em `/ajuda` só as páginas do perfil dele e navega uma página passo
   a passo (screenshot + legenda), inclusive só com o teclado.
 - **CA-2**: página `time interno` só aparece e só abre (inclusive as imagens) com `ajuda:interno`.
+- **CA-3**: com os vídeos ligados e o catálogo inacessível, a página da ajuda mostra a documentação
+  e o aviso, sem erro.
 
 ## 10. Itens Futuros
 
