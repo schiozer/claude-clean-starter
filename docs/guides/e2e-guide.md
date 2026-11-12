@@ -220,16 +220,20 @@ conhecidas:
 
 ## Adoção
 
-- O `/template-sync` **semeia** uma vez os arquivos do projeto que faltarem
-  (`playwright.config.ts`, `tests/e2e/cenarios.config.json`, `tests/e2e/auth.setup.ts`,
-  `docs/rnf.md`) e nunca os sobrescreve. Depois de semeados, são do projeto.
-- Sem `playwright.config.ts` ou `tests/e2e/cenarios.config.json`, o `Regressão (UAT)` fica verde
-  com um aviso (`E2E não configurado`) e não testa nada. Ele não substitui a configuração.
-- Ajuste o `webServer` do `playwright.config.ts` para subir o app do projeto, o `ajuda` e os
-  `specs` do `cenarios.config.json` e o baseline de `docs/rnf.md`: todo requisito precisa de um
-  teste com o mesmo ID.
+- O `/template-sync` **semeia** uma vez só os arquivos inertes que faltarem
+  (`tests/e2e/auth.setup.ts`, `docs/rnf.md`) e nunca os sobrescreve. Depois de semeados, são do
+  projeto.
+- `playwright.config.ts` e `tests/e2e/cenarios.config.json` **não** são semeados: são eles que
+  ligam o `Regressão (UAT)`, e os do template apontam para o skeleton. Enquanto faltarem, o check
+  fica verde com um aviso (`E2E não configurado`) e não testa nada, e o PR de sync lista o passo
+  em **Adoção pendente**.
+- Para ligar: crie o `playwright.config.ts` a partir do do template, com o `webServer` subindo o
+  app do projeto, e o `tests/e2e/cenarios.config.json` com os `specs`, as `paginas` e o `ajuda` do
+  projeto. Ajuste o baseline de `docs/rnf.md`: todo requisito precisa de um teste com o mesmo ID.
 - Importe `test` e `expect` de `tests/e2e/support`, não de `@playwright/test`: é o `test` do
-  suporte que manda o bypass da Vercel só para a origem do preview.
+  suporte que manda o bypass da Vercel só para a origem do preview. A regra
+  `no-restricted-imports` do ESLint barra o import errado em `tests/e2e/**` (tipos e `devices`
+  continuam vindo de `@playwright/test`).
 
 ---
 

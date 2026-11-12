@@ -40,9 +40,9 @@
 > semanal na issue `template-sync`).
 >
 > **Adoção — E2E** ([ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md)): o
-> `/template-sync` semeia `playwright.config.ts`, `tests/e2e/cenarios.config.json`,
-> `tests/e2e/auth.setup.ts` e `docs/rnf.md` se faltarem (nunca sobrescreve); sem eles o
-> `Regressão (UAT)` só avisa. Ajuste-os pelo [guia de E2E](./docs/guides/e2e-guide.md#adoção).
+> `/template-sync` semeia só `tests/e2e/auth.setup.ts` e `docs/rnf.md` (nunca sobrescreve); crie
+> `playwright.config.ts` (com o `webServer` do app) e `tests/e2e/cenarios.config.json` pelo
+> [guia de E2E](./docs/guides/e2e-guide.md#adoção). Até lá o `Regressão (UAT)` só avisa.
 
 ---
 

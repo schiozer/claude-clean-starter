@@ -2,8 +2,8 @@
 // segredos exigidos e chamada JSON-RPC ao MCP. Sem valores fixos: tudo vem do baseline ou do env.
 import { mkdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { test, type APIRequestContext, type APIResponse } from '@playwright/test'
-import { parametro } from '../support'
+import { type APIRequestContext, type APIResponse } from '@playwright/test'
+import { parametro, test } from '../support'
 
 /** Valor obrigatório do env da suíte; ausente → erro com o nome da variável (nunca o valor). */
 export const exigir = (valor: string | null, variavel: string): string => {

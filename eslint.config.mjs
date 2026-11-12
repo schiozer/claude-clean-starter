@@ -18,8 +18,13 @@ export default tseslint.config(
       '.superpowers/',
       // Cada exemplo é um projeto autocontido, com tooling e CI próprios
       // (job `example`). O tooling da raiz não o varre — evita conflito de
-      // configs/versões e artefatos gerados (ex.: .next/).
-      'examples/**',
+      // configs/versões e artefatos gerados (ex.: .next/). Exceção: os testes E2E do
+      // skeleton rodam com o Playwright da raiz e passam pela regra de import abaixo.
+      'examples/**/*',
+      '!examples/walking-skeleton/',
+      '!examples/walking-skeleton/tests/',
+      '!examples/walking-skeleton/tests/e2e/',
+      '!examples/walking-skeleton/tests/e2e/**',
       '**/*.config.js',
       '**/*.config.mjs',
       '**/*.config.ts',
@@ -41,6 +46,27 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       'no-console': 'off',
+    },
+  },
+  {
+    // E2E importa `test`/`expect` do suporte: é ele que manda o bypass da Vercel só para a
+    // origem do preview (ADR-016). Tipos e `devices` continuam vindo de `@playwright/test`.
+    files: ['tests/e2e/**', 'examples/walking-skeleton/tests/e2e/**'],
+    ignores: ['tests/e2e/support/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@playwright/test',
+              importNames: ['test', 'expect'],
+              message:
+                "Importe `test`/`expect` de tests/e2e/support (ex.: from '../support'), não de @playwright/test.",
+            },
+          ],
+        },
+      ],
     },
   },
   {

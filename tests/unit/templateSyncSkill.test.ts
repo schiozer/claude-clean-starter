@@ -39,24 +39,46 @@ describe('skill template-sync', () => {
     }
   )
 
-  const SEMEADOS = [
-    'playwright.config.ts',
-    'tests/e2e/cenarios.config.json',
-    'tests/e2e/auth.setup.ts',
-    'docs/rnf.md',
-  ]
+  // R26: só arquivos inertes são semeados; os que ligam o gate viram passo de adoção explícito.
+  const SEMEADOS = ['tests/e2e/auth.setup.ts', 'docs/rnf.md']
+  const ATIVAM_O_GATE = ['playwright.config.ts', 'tests/e2e/cenarios.config.json']
+  const AVISO_ADOCAO =
+    'E2E não configurado — criar playwright.config.ts (webServer do app do projeto) e cenarios.config.json conforme docs/guides/e2e-guide.md, Adoção'
 
-  it('o sync semeia os arquivos do projeto ausentes, sem sobrescrever', () => {
+  const passo9 = () => {
     const steps = section('sync')
-    for (const arquivo of SEMEADOS) expect(steps).toContain(`\`${arquivo}\``)
+    return steps.slice(steps.indexOf('9. **Aplicar**'), steps.indexOf('10. **Resolver'))
+  }
+
+  it('o sync semeia só os arquivos inertes ausentes, sem sobrescrever', () => {
+    const steps = section('sync')
+    for (const arquivo of SEMEADOS) expect(passo9()).toContain(`\`${arquivo}\``)
     expect(steps).toMatch(/[Nn]unca sobrescreva/)
     expect(steps).toContain('test -e')
     expect(steps.indexOf('test -e')).toBeLessThan(steps.indexOf('npm run check:runbooks'))
   })
 
+  it('o sync não semeia os arquivos que ligam o gate', () => {
+    const passo = passo9()
+    const recusa = passo.indexOf('**não** são semeados')
+    expect(recusa).toBeGreaterThan(-1)
+    for (const arquivo of ATIVAM_O_GATE) {
+      expect(passo.indexOf(`\`${arquivo}\``)).toBeGreaterThan(-1)
+      expect(passo.indexOf(`\`${arquivo}\``)).toBeLessThan(recusa)
+    }
+    expect(passo).not.toMatch(/cp <clone>\/(playwright|tests\/e2e\/cenarios)/)
+  })
+
+  it('o PR de sync lista o passo de adoção do E2E quando faltam os arquivos do gate', () => {
+    expect(SKILL).toContain(AVISO_ADOCAO)
+    const corpo = section('sync').slice(section('sync').indexOf('17. **Push + PR**'))
+    expect(corpo).toMatch(/\*\*Adoção pendente\*\*/)
+  })
+
   it('o adotar também semeia (segue o passo do sync)', () => {
     expect(section('adotar')).toMatch(/semeia/)
     expect(section('adotar')).toMatch(/passos 8 a 14/)
+    expect(section('adotar')).not.toMatch(/semeia[^.]*playwright\.config\.ts/)
   })
 
   it('a skill explica o conflito binário', () => {
