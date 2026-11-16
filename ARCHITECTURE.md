@@ -337,7 +337,7 @@ O bundle do app é **público** (qualquer um extrai). Portanto:
 
 ```
 Tela (RN) → hook → api-client (fetch + JWT)
-      → função serverless: valida Zod → <Ctx>Service (guard → regra) → repository → DB
+      → backend no host: valida Zod → <Ctx>Service (guard → regra) → repository → DB
       → resposta (DTO) → hook → tela
 ```
 
@@ -403,7 +403,7 @@ fica isolada atrás de interfaces (`I*Repository`, `IAuthProvider`):
 | ------- | ------------------------------------------------- | ----------------------------------- |
 | App     | **Expo** (React Native), iOS; expo-router         | Presentation + application-cliente  |
 | Banco   | **Neon** (Postgres serverless)                    | Relacional, exponível via MCP       |
-| Backend | **Vercel** (funções serverless) + **Vercel Cron** | BFF + jobs agendados                |
+| Backend | **Vercel**, **Heroku** ou **Cloud Run** + cron do host | BFF + jobs agendados                |
 | Auth    | **Auth0** (Universal Login, JWT)                  | Identidade atrás de `IAuthProvider` |
 | Authz   | **Guards na aplicação** (fail-closed)             | Multi-tenant sem depender de RLS    |
 | Push    | **Expo Notifications** → APNs                     | Notificações proativas              |

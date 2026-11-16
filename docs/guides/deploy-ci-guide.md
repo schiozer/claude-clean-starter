@@ -17,6 +17,10 @@ Os ADRs já fixaram o **comportamento**; falta escolher a **infra** que o execut
 - **Banco = branches de um projeto Neon único** ([ADR-003](../adr/template/003-banco-por-ambiente-neon.md)).
 - **Auth = tenant Auth0 por ambiente** ([ADR-004](../adr/template/004-auth-por-ambiente-auth0.md)).
 
+O host é escolhido em `deploy.config.json` (vazio = `vercel`); ver
+[ADR-018](../adr/template/018-camada-de-deploy.md) e `docs/runbooks/host-<host>.md`.
+A tabela abaixo descreve o default (Vercel).
+
 ## Mapeamento recomendado (default)
 
 | Regra | Como materializar (recomendado) |

@@ -56,7 +56,8 @@ Regras que decorrem da decisão:
 ela **não** é decidida aqui: o ADR vinculante de host/CI nasce no **projeto real**.
 O mapeamento recomendado que materializa `PR → UAT` / `merge → Prod` está no
 [guia de Host & CI](../../guides/deploy-ci-guide.md). Este ADR é agnóstico de host —
-fixa apenas a política dos três ambientes.
+fixa apenas a política dos três ambientes. A camada de deploy plugável (Vercel, Heroku ou
+Cloud Run) está no [ADR-018](./018-camada-de-deploy.md).
 
 ## Consequências
 
