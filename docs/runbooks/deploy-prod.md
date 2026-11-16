@@ -9,7 +9,9 @@
 Promover para Prod um PR já aprovado no UAT. O deploy de Prod é disparado pelo **merge na
 `main`** ([ADR-002](../adr/template/002-estrategia-de-ambientes.md)) — e o merge é **sempre do
 humano** (R3, [ADR-013](../adr/template/013-governanca-operacional-e-runbooks.md)). O agente prepara,
-confere, acompanha o deploy e faz o smoke test.
+confere, acompanha o deploy e faz o smoke test. Os passos de host chamam os blocos do runbook do
+host do `deploy.config.json` ([host-vercel.md](./host-vercel.md), [host-heroku.md](./host-heroku.md),
+[host-cloudrun.md](./host-cloudrun.md)).
 
 ## Pré-condições
 
@@ -21,8 +23,8 @@ confere, acompanha o deploy e faz o smoke test.
 ## Pre-flight
 
 1. [R0] Conferir a conta `gh` ativa: `gh auth status --active` → `<preencher: conta do repo>` (regra 5 do `CLAUDE.md`).
-2. [R0] Conferir o scope Vercel: `vercel project ls --scope <preencher: team Vercel>` lista `<preencher: projeto Vercel>`.
-3. [R0] Anotar o deploy de Prod atual (alvo do rollback): `vercel ls <preencher: projeto Vercel> --prod --scope <preencher: team Vercel>`.
+2. [R0] Conferir a conta e o projeto do host: Pre-flight do runbook do host (host-<host>.md).
+3. [R0] Anotar o deploy de Prod atual (alvo do rollback): bloco **Prod** do runbook do host (host-<host>.md), passo de anotar o deploy atual.
 
 ## Passos
 
@@ -32,15 +34,15 @@ confere, acompanha o deploy e faz o smoke test.
    Verificar: há aprovação explícita do humano para o UAT deste PR (sem ela → parar).
 3. [R3] Humano: fazer o merge do PR na `main` (`gh pr merge <n>` ou botão no GitHub) e avisar quando terminar.
    Verificar: `gh pr view <n> --json state,mergeCommit` → `state: MERGED`; anotar o `mergeCommit`.
-4. [R0] Acompanhar o deploy de Produção: `vercel ls <preencher: projeto Vercel> --prod --scope <preencher: team Vercel>`.
-   Verificar: o deploy do `mergeCommit` chega a `Ready` (`Error` → [rollback.md](./rollback.md)).
-5. [R0] Conferir que o domínio de Prod serve **esse** deploy: `vercel inspect https://<preencher: domínio de Prod> --scope <preencher: team Vercel>`.
-   Verificar: o deploy servido é o do `mergeCommit`. Se é outro, há um rollback instantâneo ativo (a atribuição automática do domínio fica desligada) → passo 6; senão, pular o passo 6.
-6. [R2] Só com rollback ativo: promover o novo deploy, religando a atribuição automática: `vercel promote <deploy-do-mergeCommit> --scope <preencher: team Vercel>`.
-   Verificar: `vercel inspect https://<preencher: domínio de Prod>` mostra o deploy do `mergeCommit`.
+4. [R0] Acompanhar o deploy de Produção: bloco **Prod** do runbook do host (host-<host>.md), passo de acompanhar.
+   Verificar: o deploy do `mergeCommit` fica pronto (falhou → [rollback.md](./rollback.md)).
+5. [R0] Conferir que o domínio de Prod serve **esse** deploy: bloco **Prod** do runbook do host.
+   Verificar: o deploy servido é o do `mergeCommit`. Se é outro (na Vercel, um rollback instantâneo ativo) → passo 6; senão, pular o passo 6.
+6. [R2] Só se o domínio não serve o deploy do merge: o passo de promover do bloco **Prod** do runbook do host (na Vercel, `promote`, que religa a atribuição automática do domínio).
+   Verificar: o domínio de Prod serve o deploy do `mergeCommit`.
 7. [R0] Smoke test em Prod: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: domínio de Prod>/` e `curl -si -X POST https://<preencher: domínio de Prod>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'`.
    Verificar: `200` na home e `/api/mcp` sem token → `401` com `WWW-Authenticate` contendo `resource_metadata`.
-8. [R0] Observar erros por alguns minutos: `vercel logs <deploy-url> --scope <preencher: team Vercel>`.
+8. [R0] Observar erros por alguns minutos: bloco **Prod** do runbook do host, passo de logs.
    Verificar: sem pico de erros 5xx novos (havendo → [rollback.md](./rollback.md)).
 
 ## Verificação final
@@ -50,8 +52,8 @@ confere, acompanha o deploy e faz o smoke test.
 
 ## Rollback
 
-1. [R2] Seguir o [rollback.md](./rollback.md) — primeiro desligar a flag da feature; se não bastar, promover o deploy anotado no pre-flight: `vercel rollback <deploy-anterior> --scope <preencher: team Vercel>`.
-   Verificar: `vercel ls <preencher: projeto Vercel> --prod --scope <preencher: team Vercel>` mostra o deploy anterior servindo Prod e o smoke test volta a passar.
+1. [R2] Seguir o [rollback.md](./rollback.md) — primeiro desligar a flag da feature; se não bastar, voltar ao deploy anotado no pre-flight pelo bloco **Rollback** do runbook do host (host-<host>.md).
+   Verificar: os `Verificar:` do bloco mostram o deploy anterior servindo Prod e o smoke test volta a passar.
 
 ## Registro
 
