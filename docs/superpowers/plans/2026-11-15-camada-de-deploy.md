@@ -348,4 +348,24 @@ ADR-018: contexto (bloqueio corporativo, 4 projetos), decisão (§4–§5 da spe
 
 ## Constatações
 
-_(preenchido na Task 0)_
+Registradas em 2026-11-15, pela documentação oficial (sem conta de teste disponível).
+
+1. **Heroku → GitHub Deployment**: o Heroku diz que "quando um deploy é feito a partir de um
+   Review app, a integração GitHub do Heroku publica um deployment status com um link"
+   (devcenter.heroku.com/articles/github-integration), mas **não documenta o nome do
+   `environment`** e recomenda não inferir nada do nome do app (nomes aleatórios por padrão).
+   **Decisão: a Task 5 entra** — o Heroku aguarda pela Platform API (`review-apps` do pipeline
+   filtrado por SHA), que não depende de nome não documentado. `HEROKU_API_KEY` só no GitHub;
+   `heroku.pipelineId` obrigatório no `deploy.config.json` quando `host: heroku`.
+   `ambienteDePreview` do Heroku fica `() => false` (não usado).
+2. **Auth0 → curinga**: aceito só no subdomínio mais à esquerda, um por URL, **com prefixo/sufixo
+   no mesmo rótulo** (`https://prefix-*-suffix.example.com`); a documentação desaconselha em
+   produção (aqui é só o tenant de UAT).
+   - **Cloud Run**: a URL da tag é `https://<tag>---<serviço>-<hash>.<sufixo>.run.app`; o padrão
+     `https://pr-*---<serviço>-<hash>.<sufixo>.run.app` cobre só revisões do próprio serviço
+     (o hash é do projeto) → **curinga no runbook**, sem código.
+   - **Heroku**: review apps têm nome aleatório em `herokuapp.com` (domínio compartilhado — um
+     curinga ali aceitaria apps de terceiros). **Decisão: a Task 12 entra, só para o host
+     `heroku`** (registrar/remover a URL do review app no Auth0 de UAT pela Management API).
+     Com Heroku, a URL vem do `aguardar` (Task 5); o registro roda no passo de espera do
+     `e2e-regressao.yml` e a remoção no `encerrar` do `deploy.yml`.
