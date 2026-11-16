@@ -35,7 +35,7 @@ runbook, e o agente as grava aqui e nos demais runbooks via PR ao final.
 
 ## Passos
 
-1. [R2] Criar o host ligado ao repo: bloco **Bootstrap** do runbook do host (host-<host>.md) — projeto/apps/serviços por ambiente, arquivos de raiz e `deploy.config.json` por PR, credenciais do CI e Auth0 de UAT do host.
+1. [R2] Criar a infraestrutura do host ligada ao repo: bloco **Bootstrap** do runbook do host (host-<host>.md) — projeto/apps/serviços por ambiente, arquivos de raiz e `deploy.config.json` por PR, credenciais do CI. O que depende de Neon, Auth0 e envs fica para o passo 9.
    Verificar: os `Verificar:` do bloco passam e `node scripts/deploy/index.mjs host` não falha.
 2. [R2] Criar o projeto Neon (a branch `main` dele é **Prod**): `neonctl projects create --name <preencher: projeto Neon> --org-id <preencher: org Neon>`.
    Verificar: `neonctl branches list --project-id <gerado: id do projeto Neon>` mostra `main` (o id vem na saída do `create`).
@@ -51,16 +51,18 @@ runbook, e o agente as grava aqui e nos demais runbooks via PR ao final.
    Verificar: a listagem de nomes do bloco **Segredos e envs** do runbook do host mostra os nomes esperados em Prod.
 8. [R1] Apontar o UAT fixo para um preview pronto: bloco **UAT** do runbook do host (host-<host>.md).
    Verificar: os `Verificar:` do bloco passam; anotar a URL do UAT (o bloco diz qual é).
-9. [R0] Conferir que a URL do UAT é acessível no aceite e pelo ChatGPT (na Vercel, depende da _Deployment Protection_ configurada no Bootstrap do host-vercel.md; nos outros hosts o preview é público e protegido pela autenticação do app).
-   Verificar: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: URL do UAT>/` → `200` e `curl -si -X POST https://<preencher: URL do UAT>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'` encontra o header do app.
-10. [R3] Humano: em Settings → General → Pull Requests, deixar só "Allow squash merging" com "Default to pull request title" (o título do PR vira a mensagem do commit e a fonte da versão, [ADR-014](../adr/template/014-release-management.md)).
+9. [R2] Completar o host: bloco **Bootstrap (pós-envs)** do runbook do host (host-<host>.md) — o que depende do Auth0, das envs e do UAT fixo (na Vercel, as URLs de Preview no Auth0 e a _Deployment Protection_, do humano; no Heroku, o registro de URLs no Auth0 por Management API; no Cloud Run, o curinga do Auth0). Os passos `Humano:` do bloco seguem sendo do humano.
+   Verificar: os `Verificar:` do bloco passam.
+10. [R0] Conferir que a URL do UAT é acessível no aceite e pelo ChatGPT (na Vercel, depende da _Deployment Protection_ do passo 9; nos outros hosts o preview é público e protegido pela autenticação do app).
+    Verificar: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: URL do UAT>/` → `200` e `curl -si -X POST https://<preencher: URL do UAT>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'` encontra o header do app.
+11. [R3] Humano: em Settings → General → Pull Requests, deixar só "Allow squash merging" com "Default to pull request title" (o título do PR vira a mensagem do commit e a fonte da versão, [ADR-014](../adr/template/014-release-management.md)).
     Verificar: `gh api repos/<preencher: owner/repo> --jq '.allow_squash_merge, .allow_merge_commit, .allow_rebase_merge, .squash_merge_commit_title'` → `true false false PR_TITLE`.
-11. [R3] Humano: se o plano permitir, ligar a branch protection da `main` (PR obrigatório, sem push direto, required checks `Test & Lint (root)`, `Walking Skeleton (example)`, `PR gate` e `Regressão (UAT)` (os `requiredChecks` de `hooks/protect-main/config.json`) — e `Spec × código` se `SPEC_GATE=on` — ou os jobs equivalentes do projeto); senão, confirmar que o workflow `Guarda da main` está ativo em Actions.
+12. [R3] Humano: se o plano permitir, ligar a branch protection da `main` (PR obrigatório, sem push direto, required checks `Test & Lint (root)`, `Walking Skeleton (example)`, `PR gate` e `Regressão (UAT)` (os `requiredChecks` de `hooks/protect-main/config.json`) — e `Spec × código` se `SPEC_GATE=on` — ou os jobs equivalentes do projeto); senão, confirmar que o workflow `Guarda da main` está ativo em Actions.
     Verificar: `gh api repos/<preencher: owner/repo>/branches/main/protection --jq '.required_status_checks.contexts'` lista os checks; sem branch protection, `gh workflow list --repo <preencher: owner/repo>` mostra `Guarda da main` como `active`.
 
 ## Verificação final
 
-- Host: ligado ao repo pelo bloco **Bootstrap** do runbook do host; UAT e Prod com as envs esperadas (só nomes).
+- Host: ligado ao repo pelos blocos **Bootstrap** e **Bootstrap (pós-envs)** do runbook do host; UAT e Prod com as envs esperadas (só nomes).
 - Neon: `main` (Prod), `uat`, `dev`; `DATABASE_URL` do UAT → `uat`, de Prod → `main`.
 - Auth0: tenants por ambiente anotados neste runbook.
 - GitHub: `main` protegida com os required checks.

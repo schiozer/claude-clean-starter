@@ -36,9 +36,9 @@ host do `deploy.config.json` ([host-vercel.md](./host-vercel.md), [host-heroku.m
    Verificar: `gh pr view <n> --json state,mergeCommit` → `state: MERGED`; anotar o `mergeCommit`.
 4. [R0] Acompanhar o deploy de Produção: bloco **Prod** do runbook do host (host-<host>.md), passo de acompanhar.
    Verificar: o deploy do `mergeCommit` fica pronto (falhou → [rollback.md](./rollback.md)).
-5. [R0] Conferir que o domínio de Prod serve **esse** deploy: bloco **Prod** do runbook do host.
-   Verificar: o deploy servido é o do `mergeCommit`. Se é outro (na Vercel, um rollback instantâneo ativo) → passo 6; senão, pular o passo 6.
-6. [R2] Só se o domínio não serve o deploy do merge: o passo de promover do bloco **Prod** do runbook do host (na Vercel, `promote`, que religa a atribuição automática do domínio).
+5. [R0] Conferir que o domínio de Prod serve **esse** deploy. Na Vercel: passo de conferir o domínio do bloco **Prod** do host-vercel.md. Nos demais hosts não há passo próprio: no Heroku, a release de topo do `-prod` (passo de acompanhar) é a do `mergeCommit`; no Cloud Run, a revisão com 100% do tráfego (passo de anotar o deploy atual) é a do `mergeCommit`.
+   Verificar: o deploy servido é o do `mergeCommit`. Se é outro: na Vercel (rollback instantâneo ativo) → passo 6; no Heroku e no Cloud Run, é falha → [rollback.md](./rollback.md). Senão, pular o passo 6.
+6. [R2] Só na Vercel e só se o domínio não serve o deploy do merge: passo de promover do bloco **Prod** do host-vercel.md (`promote`, que religa a atribuição automática do domínio). Nos demais hosts: não se aplica (o deploy do merge já recebe o tráfego).
    Verificar: o domínio de Prod serve o deploy do `mergeCommit`.
 7. [R0] Smoke test em Prod: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: domínio de Prod>/` e `curl -si -X POST https://<preencher: domínio de Prod>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'`.
    Verificar: `200` na home e `/api/mcp` sem token → `401` com `WWW-Authenticate` contendo `resource_metadata`.

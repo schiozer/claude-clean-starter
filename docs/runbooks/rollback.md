@@ -36,7 +36,7 @@ não volta por aqui: migração é sempre aditiva e o reverso é uma nova migra�
    Verificar: `gh pr checks <n> --watch` verde.
 5. [R3] Humano: fazer o merge do PR de revert na `main` e avisar quando terminar.
    Verificar: `gh pr view <n> --json state` → `MERGED` e o deploy do commit de revert fica pronto (bloco **Prod** do runbook do host).
-6. [R2] Se o passo 3 foi executado e o domínio não serve o deploy do revert: o passo de promover do bloco **Rollback** do runbook do host (na Vercel, `promote`, que religa a atribuição automática; no Heroku e no Cloud Run o deploy do merge já recebe o tráfego).
+6. [R2] Só na Vercel, se o passo 3 foi executado e o domínio não serve o deploy do revert: passo de promover o deploy do revert do bloco **Rollback** do host-vercel.md (`promote`, que religa a atribuição automática). Nos demais hosts: não se aplica (no Heroku o auto-deploy e no Cloud Run o `--to-latest` do `deploy.yml` já põem o revert no ar).
    Verificar: o domínio de Prod serve o deploy do commit de revert (sem isso, merges futuros não chegam a Prod).
 
 ## Verificação final

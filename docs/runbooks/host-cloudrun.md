@@ -10,8 +10,13 @@ Operações do host **Google Cloud Run** da camada de deploy: vale quando o `dep
 `"host": "cloudrun"`. Os runbooks gerais ([bootstrap-ambientes.md](./bootstrap-ambientes.md),
 [deploy-uat.md](./deploy-uat.md), [deploy-prod.md](./deploy-prod.md), [rollback.md](./rollback.md),
 [segredos-e-env.md](./segredos-e-env.md), [feature-flags.md](./feature-flags.md)) mantêm o roteiro e
-chamam os blocos abaixo — **Bootstrap**, **UAT**, **Prod**, **Rollback**, **Segredos e envs**,
+chamam os blocos abaixo — **Bootstrap**, **Bootstrap (pós-envs)**, **UAT**, **Prod**, **Rollback**,
+**Segredos e envs**,
 **Cron** e **Encerrar**. Execute o bloco que o runbook geral indicar, com o mesmo risco.
+
+O [bootstrap-ambientes.md](./bootstrap-ambientes.md) chama o **Bootstrap** no passo 1 (só a
+infraestrutura do host) e o **Bootstrap (pós-envs)** depois de Neon, Auth0, envs e UAT fixo — os
+passos que dependem deles.
 
 No Cloud Run, há um **projeto GCP por ambiente** (`<preencher: projeto GCP UAT>`,
 `<preencher: projeto GCP Prod>`), cada um com o seu serviço, o seu Artifact Registry e as suas
@@ -57,23 +62,28 @@ Repita os passos 1–5 para cada ambiente: `<proj>` = `<preencher: projeto GCP U
    Verificar: `gcloud billing budgets list --billing-account <preencher: id da conta de faturamento>` lista `<proj>-orcamento`.
 3. [R2] Ligar as APIs: `gcloud services enable run.googleapis.com artifactregistry.googleapis.com iamcredentials.googleapis.com --project <proj>`.
    Verificar: `gcloud services list --enabled --project <proj>` lista as três.
-4. [R2] Criar o Artifact Registry com a **política de limpeza** (manter as 5 imagens mais novas; apagar as tags `pr-*` com mais de 7 dias): `gcloud artifacts repositories create <preencher: repositório, ex. app> --repository-format docker --location <preencher: região, ex. us-east1> --project <proj>` e `gcloud artifacts repositories set-cleanup-policies <preencher: repositório, ex. app> --location <preencher: região, ex. us-east1> --project <proj> --policy limpeza.json --no-dry-run`, com o `limpeza.json`:
+4. [R2] Criar o Artifact Registry com a **política de limpeza** (apagar imagens com mais de 7 dias e as tags `pr-*` com mais de 7 dias, sempre mantendo as 5 versões mais novas — `Keep` vence `Delete`, então o rollback para qualquer uma das 5 últimas imagens funciona; uma regra só de `Keep` não apaga nada): `gcloud artifacts repositories create <preencher: repositório, ex. app> --repository-format docker --location <preencher: região, ex. us-east1> --project <proj>` e `gcloud artifacts repositories set-cleanup-policies <preencher: repositório, ex. app> --location <preencher: região, ex. us-east1> --project <proj> --policy limpeza.json --no-dry-run`, com o `limpeza.json`:
 
    ```json
    [
-     { "name": "manter-5", "action": { "type": "Keep" }, "mostRecentVersions": { "keepCount": 5 } },
+     {
+       "name": "apagar-velhas",
+       "action": { "type": "Delete" },
+       "condition": { "tagState": "any", "olderThan": "7d" }
+     },
      {
        "name": "pr-velhas",
        "action": { "type": "Delete" },
-       "condition": { "tagState": "TAGGED", "tagPrefixes": ["pr-"], "olderThan": "7d" }
-     }
+       "condition": { "tagState": "tagged", "tagPrefixes": ["pr-"], "olderThan": "7d" }
+     },
+     { "name": "manter-5", "action": { "type": "Keep" }, "mostRecentVersions": { "keepCount": 5 } }
    ]
    ```
 
-   Verificar: `gcloud artifacts repositories describe <preencher: repositório, ex. app> --location <preencher: região, ex. us-east1> --project <proj>` mostra as duas políticas.
+   Verificar: `gcloud artifacts repositories describe <preencher: repositório, ex. app> --location <preencher: região, ex. us-east1> --project <proj>` mostra as três políticas (`gcloud artifacts repositories list-cleanup-policies <preencher: repositório, ex. app> --location <preencher: região, ex. us-east1> --project <proj>`).
 
-5. [R2] Criar o pool/provider WIF e a service account do deploy: `gcloud iam workload-identity-pools create github --location global --project <proj>`; `gcloud iam workload-identity-pools providers create-oidc github --location global --workload-identity-pool github --issuer-uri https://token.actions.githubusercontent.com --attribute-mapping google.subject=assertion.sub,attribute.repository=assertion.repository --attribute-condition "assertion.repository == '<preencher: owner/repo>'" --project <proj>`; `gcloud iam service-accounts create deployer --project <proj>`; os papéis `roles/run.admin`, `roles/artifactregistry.writer` e `roles/iam.serviceAccountUser` para `deployer@<proj>.iam.gserviceaccount.com` (`gcloud projects add-iam-policy-binding <proj> --member serviceAccount:deployer@<proj>.iam.gserviceaccount.com --role <papel>`, um por papel); e o vínculo do repositório: `gcloud iam service-accounts add-iam-policy-binding deployer@<proj>.iam.gserviceaccount.com --role roles/iam.workloadIdentityUser --member principalSet://iam.googleapis.com/projects/<número do projeto>/locations/global/workloadIdentityPools/github/attribute.repository/<preencher: owner/repo> --project <proj>`.
-   Verificar: `gcloud iam workload-identity-pools providers describe github --location global --workload-identity-pool github --project <proj> --format='value(name)'` devolve `projects/<número do projeto>/locations/global/workloadIdentityPools/github/providers/github` (é o `wifProvider` do passo 6).
+5. [R2] Criar o pool/provider WIF e a service account do deploy: `gcloud iam workload-identity-pools create github --location global --project <proj>`; `gcloud iam workload-identity-pools providers create-oidc github --location global --workload-identity-pool github --issuer-uri https://token.actions.githubusercontent.com --attribute-mapping google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref --attribute-condition <condição> --project <proj>`, com `<condição>` = `"assertion.repository == '<preencher: owner/repo>'"` no projeto de UAT e `"assertion.repository == '<preencher: owner/repo>' && assertion.ref == 'refs/heads/main'"` no de **Prod** (sem a trava da `main`, o workflow de um PR conseguiria publicar em Prod sem o merge); `gcloud iam service-accounts create deployer --project <proj>`; os papéis `roles/run.admin`, `roles/artifactregistry.writer` e `roles/iam.serviceAccountUser` para `deployer@<proj>.iam.gserviceaccount.com` (`gcloud projects add-iam-policy-binding <proj> --member serviceAccount:deployer@<proj>.iam.gserviceaccount.com --role <papel>`, um por papel); e o vínculo do repositório: `gcloud iam service-accounts add-iam-policy-binding deployer@<proj>.iam.gserviceaccount.com --role roles/iam.workloadIdentityUser --member principalSet://iam.googleapis.com/projects/<número do projeto>/locations/global/workloadIdentityPools/github/attribute.repository/<preencher: owner/repo> --project <proj>`.
+   Verificar: `gcloud iam workload-identity-pools providers describe github --location global --workload-identity-pool github --project <proj> --format='value(name)'` devolve `projects/<número do projeto>/locations/global/workloadIdentityPools/github/providers/github` (é o `wifProvider` do passo 6) e, no de Prod, `--format='value(attributeCondition)'` contém `refs/heads/main`.
 
 Depois dos dois ambientes:
 
@@ -103,9 +113,15 @@ Depois dos dois ambientes:
 
    Verificar: `node scripts/deploy/index.mjs host` não falha e `docker build -t teste .` termina sem erro.
 
-7. [R2] Primeiro deploy da `main` em cada ambiente (cria o serviço; sem ele, o `deploy.yml` do PR falha com "rode o Bootstrap de docs/runbooks/host-cloudrun.md"): construir e enviar a imagem (`docker build -t <preencher: região, ex. us-east1>-docker.pkg.dev/<proj>/<preencher: repositório, ex. app>/<preencher: serviço, ex. app>:bootstrap .` e `docker push` da mesma imagem, com `gcloud auth configure-docker <preencher: região, ex. us-east1>-docker.pkg.dev` antes) e `gcloud run deploy <preencher: serviço, ex. app> --image <a imagem> --region <preencher: região, ex. us-east1> --project <proj> --allow-unauthenticated --min-instances 0`. O tráfego fica 100% nesta revisão.
-   Verificar: `gcloud run services describe <preencher: serviço, ex. app> --region <preencher: região, ex. us-east1> --project <proj> --format='value(status.url)'` devolve a URL e a home responde `200` (o app pode recusar login até o passo 8).
-8. [R2] Configurar as envs e os segredos do app **no serviço** de cada ambiente, antes do primeiro PR (bloco **Segredos e envs**), incluindo `APP_ENV=uat` no UAT e `APP_ENV=production` em Prod.
+7. [R2] Primeiro deploy da `main` em cada ambiente (cria o serviço; sem ele, o `deploy.yml` do PR falha com "rode o Bootstrap de docs/runbooks/host-cloudrun.md"): construir e enviar a imagem (`docker build --platform linux/amd64 -t <preencher: região, ex. us-east1>-docker.pkg.dev/<proj>/<preencher: repositório, ex. app>/<preencher: serviço, ex. app>:bootstrap .` e `docker push` da mesma imagem, com `gcloud auth configure-docker <preencher: região, ex. us-east1>-docker.pkg.dev` antes) e `gcloud run deploy <preencher: serviço, ex. app> --image <a imagem> --region <preencher: região, ex. us-east1> --project <proj> --allow-unauthenticated --min-instances 0`. O tráfego fica 100% nesta revisão. O `--platform linux/amd64` é obrigatório num Mac Apple Silicon: sem ele a imagem sai `arm64` e o Cloud Run, que só roda `linux/amd64`, recusa o deploy (o CI já constrói em `amd64`).
+   Verificar: `gcloud run services describe <preencher: serviço, ex. app> --region <preencher: região, ex. us-east1> --project <proj> --format='value(status.url)'` devolve a URL e a revisão fica `Ready` (sem as envs, que chegam pelo bootstrap-ambientes.md, login e rotas com banco ainda falham).
+
+### Bootstrap (pós-envs)
+
+Depende do `DATABASE_URL` do Neon, dos tenants Auth0 e das envs do serviço (passos 2–7 do
+bootstrap-ambientes.md).
+
+8. [R0] Conferir as envs e os segredos gravados **no serviço** de cada ambiente pelos passos 4–7 do bootstrap-ambientes.md (bloco **Segredos e envs**), incluindo `APP_ENV=uat` no UAT e `APP_ENV=production` em Prod. Faltando alguma → voltar ao [segredos-e-env.md](./segredos-e-env.md) antes do primeiro PR.
    Verificar: `gcloud run services describe <preencher: serviço, ex. app> --region <preencher: região, ex. us-east1> --project <proj> --format='value(spec.template.spec.containers[0].env[].name)'` lista os nomes esperados.
 9. [R2] No app de login web do Auth0 de UAT, aceitar as URLs de preview e a da tag `uat` (callback `/api/auth/callback` e logout): o curinga `https://pr-*---<preencher: serviço, ex. app>-<gerado: hash do serviço UAT>.<gerado: sufixo da região>.run.app` (o hash e o sufixo saem da URL do passo 7) e a URL fixa `https://uat---<preencher: serviço, ex. app>-<gerado: hash do serviço UAT>.<gerado: sufixo da região>.run.app`. No tenant de Prod, só a URL de Prod, sem curinga.
    Verificar: o login pelo Universal Login funciona na URL de um preview `pr-<n>`.

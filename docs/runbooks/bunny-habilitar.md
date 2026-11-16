@@ -62,7 +62,7 @@ novo ao rotacionar qualquer credencial do Bunny.
 
 1. [R1] Desligar o job: `gh variable delete DEMOS_BUNNY --repo <preencher: owner/repo>`.
    Verificar: `gh variable list --repo <preencher: owner/repo>` não lista `DEMOS_BUNNY`.
-2. [R1] Desligar o app: remover `DEMOS_BUNNY` do UAT pelo passo de remover env do bloco **Segredos e envs** do runbook do host (em Prod, e no Heroku e no Cloud Run, R2). Redeploy. A `/ajuda` volta a mostrar só a documentação.
+2. [R1] Desligar o app: remover `DEMOS_BUNNY` do UAT pelo passo de remover env do bloco **Segredos e envs** do runbook do host (em Prod, e no Heroku e no Cloud Run, R2). Depois, o passo 3 do [segredos-e-env.md](./segredos-e-env.md). A `/ajuda` volta a mostrar só a documentação.
    Verificar: a listagem de nomes do bloco não mostra `DEMOS_BUNNY` e a `/ajuda` não mostra vídeos.
 3. [R2] Se as credenciais não forem mais usadas: o humano revoga as chaves no Bunny e o agente pede a remoção dos segredos (`gh secret delete <NOME> --repo <preencher: owner/repo>`, um por aprovação).
    Verificar: `gh secret list --repo <preencher: owner/repo>` não lista mais os nomes removidos.

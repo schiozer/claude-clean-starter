@@ -35,10 +35,10 @@ recebe as envs, vira o host do repositório por PR, é validado no UAT, recebe o
 
 ## Passos
 
-1. [R2] Bootstrap do host novo **em paralelo**: bloco **Bootstrap** do runbook do host novo (projetos/apps, credenciais de CI, Auth0 de UAT). O host atual segue servindo UAT e Prod.
+1. [R2] Bootstrap do host novo **em paralelo**: bloco **Bootstrap** do runbook do host novo (projetos/apps/serviços, credenciais de CI). O host atual segue servindo UAT e Prod.
    Verificar: os `Verificar:` do bloco passam; o domínio de Prod continua no host atual.
-2. [R2] Recriar as envs e os segredos no host novo, por ambiente: bloco **Segredos e envs** do runbook do host novo, com os nomes listados nas Pré-condições (o humano digita os valores; nada vem do host antigo para a sessão do agente). Inclui `APP_ENV`, `MCP_RESOURCE_URL` e as URLs públicas com os endereços do host novo.
-   Verificar: a listagem de nomes do host novo bate com a do host atual, ambiente a ambiente.
+2. [R2] Recriar as envs e os segredos no host novo, por ambiente: bloco **Segredos e envs** do runbook do host novo, com os nomes listados nas Pré-condições (o humano digita os valores; nada vem do host antigo para a sessão do agente). Inclui `APP_ENV`, `MCP_RESOURCE_URL` e as URLs públicas com os endereços do host novo. Depois, o bloco **Bootstrap (pós-envs)** do host novo (Auth0 de UAT e, na Vercel, a _Deployment Protection_, que é do humano).
+   Verificar: a listagem de nomes do host novo bate com a do host atual, ambiente a ambiente, e os `Verificar:` do **Bootstrap (pós-envs)** passam.
 3. [R1] Trocar o host do repositório por PR: `deploy.config.json` com o `host` novo (e o bloco dele), arquivos de raiz do host novo, e a remoção dos do host antigo que não servem mais; `npm run lint && npm test` locais. Se o host antigo é a Vercel, a integração Git dela continuaria criando previews: deixe-a ligada até o passo 7.
    Verificar: no PR, o job `Deploy` roda com o host novo e a `Regressão (UAT)` fica verde contra a URL do preview do host novo (comentário do bot com `alvo: https://…`).
 4. [R1] Validar o UAT no host novo: bloco **UAT** do runbook do host novo (apontar o UAT fixo para o preview do PR) e o smoke test do [deploy-uat.md](./deploy-uat.md).

@@ -171,6 +171,10 @@ describe('checkRunbook', () => {
       'gcloud run services update-traffic',
       '`gcloud run services update-traffic app --to-latest --region us-east1`',
     ],
+    [
+      'gcloud run services update-traffic',
+      '`gcloud run services update-traffic app --to-tags uat=100 --region us-east1`',
+    ],
     ['gcloud run services delete', '`gcloud run services delete app --region us-east1`'],
     ['gcloud projects delete', '`gcloud projects delete app-uat`'],
   ])('comando de host "%s" em passo R1 → exige no mínimo [R2]', (name, command) => {

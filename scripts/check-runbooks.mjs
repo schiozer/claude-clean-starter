@@ -52,10 +52,10 @@ const MIN_CLASS_COMMANDS = [
   { name: 'heroku releases:rollback', pattern: /heroku releases:rollback/, min: 2 },
   { name: 'heroku apps:destroy', pattern: /heroku apps:destroy/, min: 2 },
   { name: 'heroku config:set', pattern: /heroku config:set/, min: 2 },
-  // Só mover tráfego é R2; `--update-tags`/`--remove-tags` (UAT fixo, encerrar preview) é livre.
+  // Só mover tráfego é R2 (inclusive `--to-tags`); `--update-tags`/`--remove-tags` (UAT fixo, encerrar preview) é livre.
   {
     name: 'gcloud run services update-traffic',
-    pattern: /gcloud run services update-traffic[^`\n]*--to-(revisions|latest)/,
+    pattern: /gcloud run services update-traffic[^`\n]*--to-(revisions|latest|tags)/,
     min: 2,
   },
   { name: 'gcloud run services delete', pattern: /gcloud run services delete/, min: 2 },

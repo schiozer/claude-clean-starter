@@ -11,8 +11,13 @@ vale quando o `deploy.config.json` tem `"host": "vercel"` ou não existe (o padr
 gerais ([bootstrap-ambientes.md](./bootstrap-ambientes.md), [deploy-uat.md](./deploy-uat.md),
 [deploy-prod.md](./deploy-prod.md), [rollback.md](./rollback.md),
 [segredos-e-env.md](./segredos-e-env.md), [feature-flags.md](./feature-flags.md)) mantêm o roteiro e
-chamam os blocos abaixo — **Bootstrap**, **UAT**, **Prod**, **Rollback**, **Segredos e envs**,
+chamam os blocos abaixo — **Bootstrap**, **Bootstrap (pós-envs)**, **UAT**, **Prod**, **Rollback**,
+**Segredos e envs**,
 **Cron** e **Encerrar**. Execute o bloco que o runbook geral indicar, com o mesmo risco.
+
+O [bootstrap-ambientes.md](./bootstrap-ambientes.md) chama o **Bootstrap** no passo 1 (só a
+infraestrutura do host) e o **Bootstrap (pós-envs)** depois de Neon, Auth0, envs e UAT fixo — os
+passos que dependem deles.
 
 Na Vercel: integração Git da Vercel (Preview por PR, Production no merge da `main`), alias estável
 de UAT apontado para o preview em aceite, Deployment Protection com bypass para o E2E e
@@ -35,10 +40,15 @@ de UAT apontado para o preview em aceite, Deployment Protection com bypass para 
 
 1. [R2] Criar o projeto Vercel ligado ao repo: `vercel link --project <preencher: projeto Vercel> --scope <preencher: team Vercel>` e conectar o Git no dashboard (Settings → Git).
    Verificar: `vercel project ls --scope <preencher: team Vercel>` lista o projeto e um push numa branch gera preview.
-2. [R3] Humano: configurar a _Deployment Protection_ da Vercel para o alias do UAT ser acessível no aceite e pelo ChatGPT (exceção para o alias, ou _Protection Bypass_ — ao menos `/api/mcp` e `/.well-known/*`).
-   Verificar: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: alias UAT>/` → `200` e `curl -si -X POST https://<preencher: alias UAT>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'` encontra o header do app.
-3. [R2] No app de login web do Auth0 de UAT, aceitar as URLs de Preview (callback `/api/auth/callback` e logout): `<preencher: padrão das URLs de Preview do projeto>`. O curinga do Auth0 vale só no rótulo mais à esquerda e com prefixo/sufixo; `vercel.app` é domínio compartilhado, então use prefixo **e** sufixo do projeto/team (ou um domínio próprio para os previews). O alias do UAT e o domínio de Prod entram sem curinga, cada um no tenant do seu ambiente.
+
+### Bootstrap (pós-envs)
+
+Depende do tenant Auth0 de UAT, das envs e do alias do UAT (passos 5–8 do bootstrap-ambientes.md).
+
+2. [R2] No app de login web do Auth0 de UAT, aceitar as URLs de Preview (callback `/api/auth/callback` e logout): `<preencher: padrão das URLs de Preview do projeto>`. O curinga do Auth0 vale só no rótulo mais à esquerda e com prefixo/sufixo; `vercel.app` é domínio compartilhado, então use prefixo **e** sufixo do projeto/team (ou um domínio próprio para os previews). O alias do UAT e o domínio de Prod entram sem curinga, cada um no tenant do seu ambiente.
    Verificar: o login pelo Universal Login funciona na URL de um preview e no alias do UAT.
+3. [R3] Humano: configurar a _Deployment Protection_ da Vercel para o alias do UAT ser acessível no aceite e pelo ChatGPT (exceção para o alias, ou _Protection Bypass_ — ao menos `/api/mcp` e `/.well-known/*`).
+   Verificar: `curl -s -o /dev/null -w '%{http_code}' https://<preencher: alias UAT>/` → `200` e `curl -si -X POST https://<preencher: alias UAT>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'` encontra o header do app.
 
 ### UAT
 

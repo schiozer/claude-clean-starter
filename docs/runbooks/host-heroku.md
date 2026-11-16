@@ -10,8 +10,13 @@ Operações do host **Heroku** da camada de deploy: vale quando o `deploy.config
 `"host": "heroku"`. Os runbooks gerais ([bootstrap-ambientes.md](./bootstrap-ambientes.md),
 [deploy-uat.md](./deploy-uat.md), [deploy-prod.md](./deploy-prod.md), [rollback.md](./rollback.md),
 [segredos-e-env.md](./segredos-e-env.md), [feature-flags.md](./feature-flags.md)) mantêm o roteiro e
-chamam os blocos abaixo — **Bootstrap**, **UAT**, **Prod**, **Rollback**, **Segredos e envs**,
+chamam os blocos abaixo — **Bootstrap**, **Bootstrap (pós-envs)**, **UAT**, **Prod**, **Rollback**,
+**Segredos e envs**,
 **Cron** e **Encerrar**. Execute o bloco que o runbook geral indicar, com o mesmo risco.
+
+O [bootstrap-ambientes.md](./bootstrap-ambientes.md) chama o **Bootstrap** no passo 1 (só a
+infraestrutura do host) e o **Bootstrap (pós-envs)** depois de Neon, Auth0, envs e UAT fixo — os
+passos que dependem deles.
 
 No Heroku, um **pipeline** `<preencher: nome do app>` tem:
 
@@ -57,18 +62,23 @@ que faltam.
    Verificar: `heroku pipelines:info <preencher: nome do app>` mostra o repositório conectado e, num PR de teste, um review app aparece no pipeline.
 4. [R2] Gravar o segredo `HEROKU_API_KEY` do GitHub Actions (usado pelo `aguardar` e pelo `encerrar`): o humano gera um token de longa duração (`heroku authorizations:create --description deploy-ci`, num terminal separado) e roda `gh secret set HEROKU_API_KEY --repo <preencher: owner/repo>`, digitando o valor no prompt.
    Verificar: `gh secret list --repo <preencher: owner/repo>` lista o **nome** `HEROKU_API_KEY`.
+
+### Bootstrap (pós-envs)
+
+Depende dos tenants Auth0 e das envs dos apps (passos 4–7 do bootstrap-ambientes.md).
+
 5. [R3] Humano: no Auth0 de UAT (`<preencher: domínio do tenant Auth0 de UAT>`), criar um client **Machine to Machine** autorizado na Management API com só `read:clients` e `update:clients`, e anotar o _Client ID_ do app de login web do UAT (o que recebe as URLs dos review apps). Mexer em permissões do IdP é do humano.
    Verificar: o humano confirma o client M2M com os dois escopos e informa os dois _Client IDs_ (não são segredo).
 6. [R2] Ligar o registro de URLs no Auth0 de UAT: variáveis `gh variable set AUTH0_MGMT_DOMAIN --body <preencher: domínio do tenant Auth0 de UAT> --repo <preencher: owner/repo>`, `gh variable set AUTH0_MGMT_CLIENT_ID --body <client id do M2M> --repo <preencher: owner/repo>`, `gh variable set AUTH0_WEB_CLIENT_ID --body <client id do login web> --repo <preencher: owner/repo>` e, só se a rota de callback do app não for `/api/auth/callback`, `gh variable set AUTH0_CALLBACK_PATH --body <rota> --repo <preencher: owner/repo>`; o segredo, o humano grava com `gh secret set AUTH0_MGMT_CLIENT_SECRET --repo <preencher: owner/repo>`, digitando-o no prompt.
    Verificar: `gh variable list --repo <preencher: owner/repo>` lista os três nomes `AUTH0_MGMT_DOMAIN`, `AUTH0_MGMT_CLIENT_ID` e `AUTH0_WEB_CLIENT_ID`, e `gh secret list --repo <preencher: owner/repo>` lista `AUTH0_MGMT_CLIENT_SECRET`. Na próxima `Regressão (UAT)`, o log de "Aguardar o preview do PR" diz `URL registrada no Auth0: https://…`.
-7. [R2] Configurar as envs do app nos dois apps **antes** do primeiro PR (bloco **Segredos e envs**), incluindo `APP_ENV=uat` no `-uat` e nos review apps (herdados do app de `staging` via _Review app config vars_ no dashboard) e `APP_ENV=production` no `-prod`.
+7. [R0] Conferir as envs gravadas pelos passos 4–7 do bootstrap-ambientes.md (bloco **Segredos e envs**): `APP_ENV=uat` no `-uat` e nas _Review app config vars_ do pipeline, `APP_ENV=production` no `-prod`. Faltando alguma → voltar ao [segredos-e-env.md](./segredos-e-env.md) antes do primeiro PR.
    Verificar: `heroku config -a <preencher: nome do app>-uat --json | jq -r 'keys[]'` e o mesmo para `-prod` listam os nomes esperados (só nomes).
 8. [R1] Adicionar ao Auth0 de cada ambiente, sem curinga, a URL fixa do app: `https://<gerado: host do app UAT>` no tenant de UAT e `https://<preencher: domínio de Prod>` no de Prod (callback `/api/auth/callback` e logout), pelo dashboard do Auth0; no de Prod é **R2**.
    Verificar: o login pelo Universal Login funciona na URL do `-uat`.
 
 ### UAT
 
-9. [R0] Localizar o review app do PR: `heroku pipelines:info <preencher: nome do app> --json` (ou o comentário do `github-actions[bot]` com o alvo da `Regressão (UAT)`) e o slug da última release dele: `heroku releases -a <review-app> --json | jq -r '[.[] | select(.status == "succeeded")] | last | .slug.id'`.
+9. [R0] Localizar o review app do PR: `heroku pipelines:info <preencher: nome do app> --json` (ou o comentário do `github-actions[bot]` com o alvo da `Regressão (UAT)`) e o slug da última release dele: `heroku releases -a <review-app> --json | jq -r '[.[] | select(.status == "succeeded")] | sort_by(.version) | last | .slug.id'`.
    Verificar: o review app tem a release do SHA do PR com status `succeeded`; anotar `<slug-id>` e, para reverter, a versão atual do `-uat` (`heroku releases -a <preencher: nome do app>-uat -n 1`). O host do `-uat` sai da `web_url` de `heroku apps:info -a <preencher: nome do app>-uat --json | jq -r .app.web_url`.
 10. [R1] Apontar o UAT fixo para o review app (mesmo slug, sem rebuild): `curl -n -X POST https://api.heroku.com/apps/<preencher: nome do app>-uat/releases -H 'Accept: application/vnd.heroku+json; version=3' -H 'Content-Type: application/json' -d '{"slug": "<slug-id>", "description": "UAT do PR <n>"}'` (Platform API; o `-n` usa a credencial que o `heroku login` grava no `~/.netrc`, sem token na linha de comando).
     Verificar: `heroku releases -a <preencher: nome do app>-uat -n 1` mostra a release nova com a descrição do PR, e `curl -s -o /dev/null -w '%{http_code}' https://<gerado: host do app UAT>/` → `200`.

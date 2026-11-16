@@ -32,7 +32,7 @@ No walking skeleton: `RESOURCES_ENABLED`, `MCP_RESOURCES_READ`, `MCP_RESOURCES_W
 
 1. [R1] Trocar a flag no UAT (`on`/`off`): passo de env não-secreta do bloco **Segredos e envs** do runbook do host. Em Prod o passo é **R2**; para `MCP_<CTX>_WRITE=on` é **R2** em qualquer ambiente; no Heroku e no Cloud Run, toda mudança de env é **R2** (cria release/revisão).
    Verificar: a listagem de nomes do bloco mostra `<FLAG>` no ambiente.
-2. [R1] Fazer a flag valer: passo de redeploy do bloco **Segredos e envs** do runbook do host (na Vercel, redeploy e reapontar o UAT fixo, [deploy-uat.md](./deploy-uat.md)); em Prod é **R2**.
+2. [R1] Fazer a flag valer: passo 3 do [segredos-e-env.md](./segredos-e-env.md) (na Vercel, redeploy e reapontar o UAT fixo; no Heroku, a mudança já criou a release; no Cloud Run, push no PR e reapontar a tag `uat`); em Prod na Vercel, o redeploy é **R2**.
    Verificar: o deploy/release/revisão nova do ambiente fica pronta (bloco **Prod** ou **UAT** do runbook do host).
 3. [R0] Conferir o efeito: `curl -s -o /dev/null -w '%{http_code}' https://<url-do-ambiente>/api/<ctx>` e `tools/list` no MCP Inspector com um token do ambiente.
    Verificar: feature desligada → `404` e nenhuma tool do módulo; `MCP_<CTX>_WRITE=on` → a tool de escrita aparece só para token com `<ctx>:write`.
