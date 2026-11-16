@@ -9,7 +9,8 @@ import { makeGithubClient } from '../github-api.mjs'
 import { lerDeployConfig } from './config.mjs'
 import { waitPreview } from './aguardar.mjs'
 import vercel from './hosts/vercel.mjs'
-import heroku from './hosts/heroku.mjs'
+import heroku, { urlDoReviewApp } from './hosts/heroku.mjs'
+import { lerConfigAuth0, obterToken, registrarUrl, removerUrl } from './auth0Callbacks.mjs'
 import cloudrun from './hosts/cloudrun.mjs'
 
 export const OPERACOES = ['host', 'credenciais', 'preview', 'prod', 'encerrar', 'aguardar']
@@ -50,10 +51,34 @@ function credenciais(config, env) {
   }
 }
 
+// Auth0 de UAT só para Heroku (Cloud Run/Vercel usam curinga nos runbooks). Sem as quatro
+// variáveis AUTH0_*, pula; com algumas, lerConfigAuth0 falha nomeando as que faltam.
+async function sincronizarAuth0({ acao, url, env, log, fetchFn }) {
+  const auth0 = lerConfigAuth0(env)
+  if (!auth0) return log('Auth0 não configurado (AUTH0_*): pulando o registro da URL')
+  const token = await obterToken({
+    dominio: auth0.dominio,
+    clientId: auth0.mgmtClientId,
+    clientSecret: auth0.mgmtClientSecret,
+    fetchFn,
+  })
+  const args = {
+    dominio: auth0.dominio,
+    clientId: auth0.clientId,
+    token,
+    url,
+    callbackPath: auth0.callbackPath,
+    fetchFn,
+  }
+  const { alterado } = await (acao === 'registrar' ? registrarUrl(args) : removerUrl(args))
+  const verbo = acao === 'registrar' ? 'registrada' : 'removida'
+  log(alterado ? `URL ${verbo} no Auth0: ${url}` : `Auth0 já estava em dia para ${url}`)
+}
+
 /** @returns {Promise<Record<string,string>>} */
 export async function executar(
   operacao,
-  { env = process.env, raiz = process.cwd(), exec, github } = {}
+  { env = process.env, raiz = process.cwd(), exec, github, fetchFn = globalThis.fetch } = {}
 ) {
   if (!OPERACOES.includes(operacao)) {
     throw new Error(`deploy: operação '${operacao}' inválida (válidas: ${OPERACOES.join(', ')})`)
@@ -81,6 +106,9 @@ export async function executar(
             ambienteDePreview: adapter.ambienteDePreview,
           })
         ).url
+    if (config.host === 'heroku') {
+      await sincronizarAuth0({ acao: 'registrar', url, env, log, fetchFn })
+    }
     return { url }
   }
 
@@ -89,8 +117,20 @@ export async function executar(
   const ctx = { config, pr, sha, exec, github, log }
   if (operacao === 'preview') await adapter.deployPreview(ctx)
   else if (operacao === 'prod') await adapter.deployProd(ctx)
-  else await adapter.encerrarPreview(ctx)
+  else {
+    await adapter.encerrarPreview(ctx)
+    if (config.host === 'heroku') await removerUrlDoReviewApp({ config, pr, env, log, fetchFn })
+  }
   return {}
+}
+
+async function removerUrlDoReviewApp({ config, pr, env, log, fetchFn }) {
+  if (!lerConfigAuth0(env)) return log('Auth0 não configurado (AUTH0_*): pulando a remoção da URL')
+  const token = env.HEROKU_API_KEY
+  if (!token) throw new Error('deploy: variável HEROKU_API_KEY é obrigatória para o Heroku')
+  const url = await urlDoReviewApp({ pr, pipelineId: config.heroku.pipelineId, token, fetchFn })
+  if (!url) return log(`sem review app para o PR #${pr}: nada a remover no Auth0`)
+  await sincronizarAuth0({ acao: 'remover', url, env, log, fetchFn })
 }
 
 const execReal = (cmd, args) =>

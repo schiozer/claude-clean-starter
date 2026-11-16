@@ -19,6 +19,46 @@ const transitorio = (error) =>
 
 const maisRecente = (a, b) => String(a.created_at).localeCompare(String(b.created_at))
 
+const fazerGet =
+  ({ token, fetchFn }) =>
+  async (caminho) => {
+    const headers = {
+      Accept: 'application/vnd.heroku+json; version=3',
+      Authorization: `Bearer ${token}`,
+    }
+    const resposta = await fetchFn(`${API}${caminho}`, { headers })
+    if (resposta.status === 401 || resposta.status === 403) {
+      throw new Error(
+        `Heroku recusou as credenciais (HTTP ${resposta.status}): verifique HEROKU_API_KEY`
+      )
+    }
+    if (!resposta.ok) throw erroHttp(resposta.status, caminho)
+    return resposta.json()
+  }
+
+/**
+ * `web_url` do review app mais novo do PR, ou null se não há review app (ou o app já sumiu).
+ * Usado para tirar a URL do Auth0 ao encerrar o PR.
+ * @returns {Promise<string | null>}
+ */
+export async function urlDoReviewApp({ pr, pipelineId, token, fetchFn = globalThis.fetch }) {
+  const get = fazerGet({ token, fetchFn })
+  const apps = await get(`/pipelines/${encodeURIComponent(pipelineId)}/review-apps`)
+  const revApp = (apps ?? [])
+    .filter((a) => a.pr_number === pr)
+    .sort(maisRecente)
+    .at(-1)
+  const appId = revApp?.app?.id
+  if (!appId || revApp.status === 'deleted') return null
+  try {
+    const app = await get(`/apps/${encodeURIComponent(appId)}`)
+    return app?.web_url || null
+  } catch (error) {
+    if (error?.status === 404) return null
+    throw error
+  }
+}
+
 /**
  * Espera o review app do PR (`pr_number === pr`) ter um build `succeeded` do commit `sha` e devolve
  * a `web_url`. O review app não tem campo `commit`; o SHA vem do build mais novo do app:
@@ -37,20 +77,7 @@ export async function aguardarReviewApp({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   intervalMs = DEFAULT_INTERVAL_MS,
 }) {
-  const headers = {
-    Accept: 'application/vnd.heroku+json; version=3',
-    Authorization: `Bearer ${token}`,
-  }
-  const get = async (caminho) => {
-    const resposta = await fetchFn(`${API}${caminho}`, { headers })
-    if (resposta.status === 401 || resposta.status === 403) {
-      throw new Error(
-        `Heroku recusou as credenciais (HTTP ${resposta.status}): verifique HEROKU_API_KEY`
-      )
-    }
-    if (!resposta.ok) throw erroHttp(resposta.status, caminho)
-    return resposta.json()
-  }
+  const get = fazerGet({ token, fetchFn })
 
   const prazo = now() + timeoutMs
   let viuReviewApp = false

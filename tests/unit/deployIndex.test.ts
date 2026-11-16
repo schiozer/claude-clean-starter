@@ -137,3 +137,107 @@ describe('adaptador', () => {
   it('host desconhecido/sem adaptador → erro claro', () =>
     expect(() => adaptador('netlify')).toThrow(/deploy: adaptador 'netlify'/))
 })
+
+describe('executar: Auth0 de UAT (heroku)', () => {
+  const AUTH0 = {
+    AUTH0_MGMT_DOMAIN: 'x.auth0.com',
+    AUTH0_MGMT_CLIENT_ID: 'm',
+    AUTH0_MGMT_CLIENT_SECRET: 's',
+    AUTH0_WEB_CLIENT_ID: 'web',
+  }
+  const URL_PR = 'https://app-pr-1.herokuapp.com'
+  const json = (corpo: unknown, status = 200) => ({
+    ok: status < 400,
+    status,
+    json: async () => corpo,
+  })
+  const fetchFake = (reviewApps: unknown[] = [], appStatus = 200) =>
+    vi.fn(async (url: string, init?: { method?: string }) => {
+      if (url.endsWith('/oauth/token')) return json({ access_token: 'tok' })
+      if (url.includes('/review-apps')) return json(reviewApps)
+      if (url.includes('api.heroku.com/apps/')) return json({ web_url: URL_PR }, appStatus)
+      if (init?.method === 'PATCH') return json({})
+      return json({ callbacks: [], allowed_logout_urls: [] })
+    })
+  const chamou = (f: ReturnType<typeof fetchFake>, trecho: string) =>
+    f.mock.calls.some((c) => String(c[0]).includes(trecho))
+  const comAguardar = async (fn: () => Promise<unknown>) => {
+    const heroku = adaptador('heroku')
+    heroku.aguardarPreview = async () => URL_PR
+    try {
+      return await fn()
+    } finally {
+      delete heroku.aguardarPreview
+    }
+  }
+  const envAguardar = { PR_NUMBER: '1', PREVIEW_SHA: 'abc' }
+
+  it('heroku aguardar com todas as variáveis → registra a URL', async () => {
+    const f = fetchFake()
+    await comAguardar(() =>
+      executar('aguardar', {
+        env: { ...envAguardar, ...AUTH0 },
+        raiz: raizes.heroku,
+        fetchFn: f as never,
+      })
+    )
+    expect(chamou(f, '/api/v2/clients/web')).toBe(true)
+    expect(f.mock.calls.some((c) => (c[1] as { method?: string })?.method === 'PATCH')).toBe(true)
+  })
+  it('heroku aguardar sem variáveis → pula o Auth0', async () => {
+    const f = fetchFake()
+    const r = await comAguardar(() =>
+      executar('aguardar', { env: envAguardar, raiz: raizes.heroku, fetchFn: f as never })
+    )
+    expect(r).toEqual({ url: URL_PR })
+    expect(f).not.toHaveBeenCalled()
+  })
+  it('heroku aguardar com variáveis parciais → erro', async () => {
+    const f = fetchFake()
+    await expect(
+      comAguardar(() =>
+        executar('aguardar', {
+          env: { ...envAguardar, AUTH0_MGMT_DOMAIN: 'x.auth0.com' },
+          raiz: raizes.heroku,
+          fetchFn: f as never,
+        })
+      )
+    ).rejects.toThrow(/AUTH0_MGMT_CLIENT_ID/)
+  })
+  it('vercel aguardar nunca toca o Auth0', async () => {
+    const f = fetchFake()
+    const api = {
+      call: vi.fn(async (_m: string, path: string) =>
+        path.includes('/statuses')
+          ? [{ state: 'success', environment_url: 'https://v.example' }]
+          : [{ id: 1, environment: 'Preview', created_at: '2026-11-10T10:00:00Z' }]
+      ),
+    }
+    const r = await executar('aguardar', {
+      env: { PREVIEW_SHA: 'abc', ...AUTH0 },
+      raiz: raizes.vercel,
+      github: api as never,
+      fetchFn: f as never,
+    })
+    expect(r).toEqual({ url: 'https://v.example' })
+    expect(f).not.toHaveBeenCalled()
+  })
+  it('heroku encerrar remove a URL do review app', async () => {
+    const f = fetchFake([{ pr_number: 1, status: 'created', app: { id: 'a1' } }])
+    await executar('encerrar', {
+      env: { PR_NUMBER: '1', DEPLOY_SHA: 'abc', HEROKU_API_KEY: 'h', ...AUTH0 },
+      raiz: raizes.heroku,
+      fetchFn: f as never,
+    })
+    expect(chamou(f, '/oauth/token')).toBe(true)
+  })
+  it('heroku encerrar com review app já removido → sucesso sem tocar o Auth0', async () => {
+    const f = fetchFake([])
+    await executar('encerrar', {
+      env: { PR_NUMBER: '1', DEPLOY_SHA: 'abc', HEROKU_API_KEY: 'h', ...AUTH0 },
+      raiz: raizes.heroku,
+      fetchFn: f as never,
+    })
+    expect(chamou(f, 'auth0.com')).toBe(false)
+  })
+})
