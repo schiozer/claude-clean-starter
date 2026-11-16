@@ -20,6 +20,10 @@ describe('isE2eLocalEnvironment', () => {
   it('APP_ENV=e2e num deploy da Vercel (VERCEL=1) → false (fail-closed)', () => {
     expect(isE2eLocalEnvironment({ APP_ENV: 'e2e', VERCEL: '1' })).toBe(false)
   })
+  it('APP_ENV=e2e no Heroku (DYNO) ou no Cloud Run (K_SERVICE) → false (fail-closed)', () => {
+    expect(isE2eLocalEnvironment({ APP_ENV: 'e2e', DYNO: 'web.1' })).toBe(false)
+    expect(isE2eLocalEnvironment({ APP_ENV: 'e2e', K_SERVICE: 'app' })).toBe(false)
+  })
   it('outros APP_ENV ou ausente → false', () => {
     expect(isE2eLocalEnvironment({ APP_ENV: 'development' })).toBe(false)
     expect(isE2eLocalEnvironment({})).toBe(false)

@@ -1,0 +1,9 @@
+{
+  "name": "claude-clean-starter",
+  "environments": {
+    "review": {
+      "scripts": {}
+    }
+  },
+  "buildpacks": [{ "url": "heroku/nodejs" }]
+}

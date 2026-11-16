@@ -22,11 +22,12 @@
 
 ## Pre-flight
 
-> Checagens de identidade (R0) **antes** de qualquer mutação: conta `gh`, scope Vercel,
-> projeto/branch Neon, tenant Auth0 — com os valores reais do projeto. Divergência → para.
+> Checagens de identidade (R0) **antes** de qualquer mutação: conta `gh`, scope do host (conta/projeto
+> do host do `deploy.config.json`, pelo Pre-flight do `host-<host>.md`), projeto/branch Neon, tenant
+> Auth0 — com os valores reais do projeto. Divergência → para.
 
 1. [R0] Conferir a conta `gh` ativa: `gh auth status --active` → `<preencher: conta do repo>`.
-2. [R0] Conferir o scope Vercel: `vercel project ls --scope <preencher: team Vercel>` lista `<preencher: projeto>`.
+2. [R0] Conferir o scope do host: Pre-flight do runbook do host (host-<host>.md) → `<preencher: conta/projeto do host>`.
 
 ## Passos
 
@@ -34,8 +35,8 @@
 > com o comando/observação e o resultado esperado. `[R3]` sempre começa com `Humano:`
 > (o agente entrega a instrução e espera a confirmação). Exemplos de cada classe:
 
-1. [R0] Ler o estado atual: `vercel ls --scope <preencher: team Vercel>`.
-   Verificar: o último deploy está `Ready`.
+1. [R0] Ler o estado atual: `gh pr checks <n>` (ou o passo de leitura do bloco do runbook do host).
+   Verificar: os checks estão `pass`.
 2. [R1] Mutação reversível fora de Prod: `<comando>`.
    Verificar: `<comando>` → `<esperado>`.
 3. [R2] Mutação de alto impacto (Prod, segredo, destrutiva): `<comando>` — pedir aprovação (ADR-013 §3).

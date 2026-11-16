@@ -1,11 +1,30 @@
 import { describe, it, expect } from 'vitest'
-import { cabecalhosDeBypass, e2eEnv, origemDoAlvo } from '../e2e/support/env'
+import { cabecalhosDeAcesso, cabecalhosDeBypass, e2eEnv, origemDoAlvo } from '../e2e/support/env'
 
 describe('e2eEnv', () => {
+  it('DEPLOY_HOST vazio → vercel; heroku e cloudrun aceitos; inválido lança erro', () => {
+    expect(e2eEnv({}).host).toBe('vercel')
+    expect(e2eEnv({ DEPLOY_HOST: ' heroku ' }).host).toBe('heroku')
+    expect(e2eEnv({ DEPLOY_HOST: 'cloudrun' }).host).toBe('cloudrun')
+    expect(() => e2eEnv({ DEPLOY_HOST: 'netlify' })).toThrow(/DEPLOY_HOST='netlify' inválido/)
+  })
+
+  it('cabecalhosDeAcesso: bypass só no host vercel e com segredo', () => {
+    const bypass = { VERCEL_AUTOMATION_BYPASS_SECRET: 'seg' }
+    expect(cabecalhosDeAcesso(e2eEnv({ ...bypass, DEPLOY_HOST: 'cloudrun' }))).toBeNull()
+    expect(cabecalhosDeAcesso(e2eEnv({ ...bypass, DEPLOY_HOST: 'heroku' }))).toBeNull()
+    expect(cabecalhosDeAcesso(e2eEnv({ DEPLOY_HOST: 'vercel' }))).toBeNull()
+    expect(cabecalhosDeAcesso(e2eEnv(bypass))).toEqual({
+      'x-vercel-protection-bypass': 'seg',
+      'x-vercel-set-bypass-cookie': 'true',
+    })
+  })
+
   it('sem variáveis: alvo local, login dev e nada de segredo', () => {
     expect(e2eEnv({})).toEqual({
       baseUrl: null,
       auth: 'dev',
+      host: 'vercel',
       bypass: null,
       faultsSecret: null,
       runPrefix: '',
@@ -54,6 +73,7 @@ describe('e2eEnv', () => {
     ).toEqual({
       baseUrl: 'https://app-git-x.vercel.app',
       auth: 'dev',
+      host: 'vercel',
       bypass: 'bypass-123',
       faultsSecret: 'faults-secret-0123456789',
       runPrefix: '987',

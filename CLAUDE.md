@@ -35,6 +35,10 @@
 > date a `Última verificação` de cada runbook e troque o passo do CI para
 > `npm run check:runbooks -- --strict`.
 >
+> **Adoção — host** ([ADR-018](./docs/adr/template/018-camada-de-deploy.md)): escolha o host
+> (`vercel`, `heroku` ou `cloudrun`) em `deploy.config.json`; vazio ou ausente = `vercel`. Faça o
+> bootstrap pelo bloco do host em `docs/runbooks/host-<host>.md`.
+>
 > **Adoção — sync com o template** ([ADR-015](./docs/adr/template/015-template-sync.md)): rode
 > `/template-sync adotar` a partir do template; depois, `/template-sync` a cada Release (aviso
 > semanal na issue `template-sync`).
@@ -171,7 +175,8 @@ Abrir/atualizar um PR **dispara o deploy em UAT** (acessível por site/celular);
 o **merge na `main`**, após o UAT aprovado, **dispara o deploy em produção**. Ver
 [ADR-002](./docs/adr/template/002-estrategia-de-ambientes.md). Ambientes sempre em três
 estágios (Dev local / UAT / Prod) para plataforma, banco (Neon) e auth (Auth0) —
-ver ADRs 002, 003 e 004. Os passos estão nos runbooks
+ver ADRs 002, 003 e 004. O host (Vercel, Heroku ou Cloud Run) vem de `deploy.config.json`
+([ADR-018](./docs/adr/template/018-camada-de-deploy.md)). Os passos estão nos runbooks
 [`deploy-uat.md`](./docs/runbooks/deploy-uat.md) e
 [`deploy-prod.md`](./docs/runbooks/deploy-prod.md) — o merge é sempre do humano.
 
@@ -179,7 +184,7 @@ ver ADRs 002, 003 e 004. Os passos estão nos runbooks
 
 Operação de deploy/configuração só via runbook de `docs/runbooks/` executado pela skill
 `runbook-execution`, respeitando as classes de risco do
-[ADR-013](./docs/adr/template/013-governanca-operacional-e-runbooks.md). Sem runbook para a
+[ADR-013](./docs/adr/template/013-governanca-operacional-e-runbooks.md). Os comandos do host estão em `docs/runbooks/host-<host>.md`. Sem runbook para a
 operação → não executa; propõe o runbook via PR.
 
 **Exceção pré-bootstrap:** enquanto não há infraestrutura (este template, ou um projeto cujo

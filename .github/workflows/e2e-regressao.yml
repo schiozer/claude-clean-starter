@@ -1,7 +1,7 @@
 name: Regressão (UAT)
 
 # Check obrigatório (spec e2e-regressao-docs §8.2): roda `@regressao` + os cenários novos/alterados
-# das specs do PR. Alvo: o Preview da Vercel do SHA do PR (`vars.E2E_TARGET == 'preview'`) ou, no
+# das specs do PR. Alvo: o preview do PR (host da camada de deploy) do SHA do PR (`vars.E2E_TARGET == 'preview'`) ou, no
 # template / antes do bootstrap, o app local subido pelo `webServer` do Playwright.
 on:
   pull_request:
@@ -76,13 +76,25 @@ jobs:
         if: steps.config.outputs.configurado == 'true'
         run: npx playwright install --with-deps chromium
 
-      - name: Aguardar o deploy Preview da Vercel
+      - name: Descobrir o host de deploy
+        id: host
+        if: steps.config.outputs.configurado == 'true'
+        run: node scripts/deploy/index.mjs host
+
+      - name: Aguardar o preview do PR
         id: preview
         if: steps.config.outputs.configurado == 'true' && vars.E2E_TARGET == 'preview'
-        run: node scripts/e2e/wait-preview.mjs
+        run: node scripts/deploy/index.mjs aguardar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PREVIEW_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEROKU_API_KEY: ${{ steps.host.outputs.host == 'heroku' && secrets.HEROKU_API_KEY || '' }}
+          AUTH0_MGMT_DOMAIN: ${{ steps.host.outputs.host == 'heroku' && vars.AUTH0_MGMT_DOMAIN || '' }}
+          AUTH0_MGMT_CLIENT_ID: ${{ steps.host.outputs.host == 'heroku' && vars.AUTH0_MGMT_CLIENT_ID || '' }}
+          AUTH0_MGMT_CLIENT_SECRET: ${{ steps.host.outputs.host == 'heroku' && secrets.AUTH0_MGMT_CLIENT_SECRET || '' }}
+          AUTH0_WEB_CLIENT_ID: ${{ steps.host.outputs.host == 'heroku' && vars.AUTH0_WEB_CLIENT_ID || '' }}
+          AUTH0_CALLBACK_PATH: ${{ steps.host.outputs.host == 'heroku' && vars.AUTH0_CALLBACK_PATH || '' }}
 
       - name: Filtro da regressão (@regressao + cenários do PR)
         id: grep
@@ -98,6 +110,7 @@ jobs:
         env:
           CI: '1'
           E2E_GREP: ${{ steps.grep.outputs.grep }}
+          DEPLOY_HOST: ${{ steps.host.outputs.host }}
           E2E_BASE_URL: ${{ steps.preview.outputs.url }}
           E2E_AUTH: ${{ vars.E2E_TARGET == 'preview' && 'auth0' || '' }}
           E2E_RUN_PREFIX: ${{ vars.E2E_TARGET == 'preview' && github.run_id || '' }}

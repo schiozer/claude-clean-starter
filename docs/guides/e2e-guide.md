@@ -148,15 +148,15 @@ CI o servidor já de pé é reaproveitado.
 
 ### Modo `e2e` local × modo preview
 
-|                    | Local (padrão; template e projeto antes do bootstrap) | Preview (`E2E_TARGET=preview`, projeto com UAT)      |
-| ------------------ | ----------------------------------------------------- | ---------------------------------------------------- |
-| Alvo               | app subido pelo `webServer` (`APP_ENV=e2e`)           | Preview da Vercel do SHA do PR (`E2E_BASE_URL`)      |
-| Login (`setup`)    | stub `/dev-login?perfil=…` (`E2E_AUTH` vazio)         | Universal Login do Auth0 (`E2E_AUTH=auth0`)          |
-| PATs e segredos    | `LOCAL_SOMENTE_TESTE` do `playwright.config.ts`       | segredos do GitHub (runbook `e2e-uat-configurar.md`) |
-| Proteção da Vercel | —                                                     | header de bypass só para a origem do preview         |
+|                     | Local (padrão; template e projeto antes do bootstrap) | Preview (`E2E_TARGET=preview`, projeto com UAT)       |
+| ------------------- | ----------------------------------------------------- | ----------------------------------------------------- |
+| Alvo                | app subido pelo `webServer` (`APP_ENV=e2e`)           | Preview do SHA do PR no host (`E2E_BASE_URL`)         |
+| Login (`setup`)     | stub `/dev-login?perfil=…` (`E2E_AUTH` vazio)         | Universal Login do Auth0 (`E2E_AUTH=auth0`)           |
+| PATs e segredos     | `LOCAL_SOMENTE_TESTE` do `playwright.config.ts`       | segredos do GitHub (runbook `e2e-uat-configurar.md`)  |
+| Proteção do preview | —                                                     | header de bypass (Vercel) só para a origem do preview |
 
 > **Nunca** defina `APP_ENV=e2e` num servidor que não seja o runner de CI ou a sua máquina:
-> fora da Vercel ele liga o login stub e os PATs fixos (ver consequências do ADR-016).
+> fora de um host de deploy ele liga o login stub e os PATs fixos (ver consequências do ADR-016).
 
 ---
 

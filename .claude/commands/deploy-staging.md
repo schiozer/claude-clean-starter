@@ -14,7 +14,7 @@ O deploy em UAT é **disparado pelo PR** (abrir/atualizar um PR → preview em U
 
 Use a skill `runbook-execution` com
 [`docs/runbooks/deploy-uat.md`](../../docs/runbooks/deploy-uat.md): pre-flight (conta git,
-scope Vercel), checagens locais, push da branch, PR, preview, alias do UAT e smoke test.
+conta/scope do host em `deploy.config.json`), checagens locais, push da branch, PR, preview, alias do UAT e smoke test.
 Ao final, informe ao usuário a URL do UAT.
 
 O PR usa o template (`.github/pull_request_template.md`) com o **UAT desmarcado**: o agente avisa

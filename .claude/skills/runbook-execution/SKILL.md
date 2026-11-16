@@ -1,6 +1,6 @@
 ---
 name: runbook-execution
-description: Use ao executar qualquer operação de deploy/configuração (Vercel, Neon, Auth0, envs, segredos, flags, migração, MCP, rollback) — executa um runbook de docs/runbooks/ passo a passo, respeitando as classes de risco R0–R3 do ADR-013.
+description: Use ao executar qualquer operação de deploy/configuração (host — Vercel, Heroku ou Cloud Run —, Neon, Auth0, envs, segredos, flags, migração, MCP, rollback) — executa um runbook de docs/runbooks/ passo a passo, respeitando as classes de risco R0–R3 do ADR-013.
 ---
 
 # Runbook Execution
@@ -34,7 +34,7 @@ classe mais alta.
 3. **Anunciar o plano** ao humano: runbook, ambiente-alvo e a lista de passos com a
    **classe efetiva** (após elevação). Ambiente ambíguo → pergunte.
 4. **Pre-flight (R0):** rode cada passo e compare com o valor declarado. Qualquer divergência
-   (conta `gh`, scope Vercel, projeto/branch Neon, tenant Auth0) → **para** e informa.
+   (conta `gh`, conta/scope do host, projeto/branch Neon, tenant Auth0) → **para** e informa.
 5. **Executar os Passos**, um por vez, aplicando o gate:
 
    | Classe efetiva | O que fazer |

@@ -5,8 +5,9 @@ migrações, MCP, rollback) escritos para serem executados **por agentes** — e
 passo a passo, com classe de risco e verificação em cada passo. Regras em
 [ADR-013](../adr/template/013-governanca-operacional-e-runbooks.md).
 
-> Este é o catálogo do **template**: os comandos assumem a stack padrão (Vercel + Neon +
-> Auth0) e os valores do projeto estão como `<preencher: …>` (entradas, decididas pelo
+> Este é o catálogo do **template**: os comandos assumem Neon + Auth0 e o host do
+> `deploy.config.json` (`vercel` — o padrão sem o arquivo —, `heroku` ou `cloudrun`). Os runbooks
+> gerais são neutros e chamam o bloco do runbook do host (`host-<host>.md`); os valores do projeto estão como `<preencher: …>` (entradas, decididas pelo
 > humano) ou `<gerado: …>` (saídas do `bootstrap-ambientes.md`, gravadas por ele via PR).
 > Ao adotar, complete-os (checklist abaixo).
 
@@ -14,7 +15,7 @@ passo a passo, com classe de risco e verificação em cada passo. Regras em
 
 | Runbook                                                      | Quando usar                                                                                                                    |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| [bootstrap-ambientes.md](./bootstrap-ambientes.md)           | Uma vez por projeto: criar Vercel, Neon, Auth0, envs, alias UAT, proteção da `main`                                            |
+| [bootstrap-ambientes.md](./bootstrap-ambientes.md)           | Uma vez por projeto: host (bloco **Bootstrap** do `host-<host>.md`), Neon, Auth0, envs, UAT fixo, proteção da `main`           |
 | [deploy-uat.md](./deploy-uat.md)                             | Levar uma branch ao UAT (push + PR → preview) e fazer o smoke test                                                             |
 | [deploy-prod.md](./deploy-prod.md)                           | Promover um PR aprovado no UAT para Prod (o **merge é do humano**)                                                             |
 | [rollback.md](./rollback.md)                                 | Incidente: desligar flag, promover deploy anterior, revert por PR                                                              |
@@ -25,6 +26,10 @@ passo a passo, com classe de risco e verificação em cada passo. Regras em
 | [spec-gate.md](./spec-gate.md)                               | Ligar/desligar o gate opcional `Spec × código` com Claude (`SPEC_GATE`, `ANTHROPIC_API_KEY`)                                   |
 | [e2e-uat-configurar.md](./e2e-uat-configurar.md)             | **Opcional** (só com `E2E_TARGET=preview`): usuários de teste, PATs e segredos para a `Regressão (UAT)` rodar contra o Preview |
 | [bunny-habilitar.md](./bunny-habilitar.md)                   | **Opcional** (`DEMOS_BUNNY`): library, storage zone, segredos `BUNNY_*` e envs para os vídeos de demo/treinamento na `/ajuda`  |
+| [host-vercel.md](./host-vercel.md)                           | Blocos do host **Vercel** (padrão): Bootstrap, UAT (alias), Prod, Rollback, Segredos e envs, Cron, Encerrar                    |
+| [host-heroku.md](./host-heroku.md)                           | Blocos do host **Heroku** (pipeline, review apps, UAT fixo por slug, Auth0 por Management API)                                 |
+| [host-cloudrun.md](./host-cloudrun.md)                       | Blocos do host **Cloud Run** (projetos GCP, WIF, revisões com tag `pr-<n>`/`uat`, tráfego em Prod)                             |
+| [migrar-host.md](./migrar-host.md)                           | Trocar o host do projeto (Vercel ↔ Heroku ↔ Cloud Run) em paralelo, com corte de DNS                                           |
 
 ## Classes de risco (resumo)
 
@@ -61,7 +66,7 @@ obrigatório (roda no CI). `npm run check:runbooks -- --strict` também exige ze
 
 ## Checklist de adoção
 
-- [ ] Preencher todo `<preencher>` dos runbooks (team Vercel, org Neon, URLs,
+- [ ] Preencher todo `<preencher>` dos runbooks (conta/projeto do host, org Neon, URLs,
       responsáveis), executar o `bootstrap-ambientes.md` (que grava os `<gerado>`: id do
       projeto Neon, tenants Auth0) e datar `Última verificação`.
 - [ ] Trocar o passo do CI para `npm run check:runbooks -- --strict`.

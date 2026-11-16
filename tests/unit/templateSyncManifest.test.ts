@@ -79,6 +79,12 @@ describe('makeMatcher', () => {
     expect(m('.env.local.example')).toBe(true)
   })
 
+  it('deploy.config.json é do projeto: fica em ignore', () => {
+    const manifest = repoManifest()
+    expect(manifest.ignore).toContain('deploy.config.json')
+    expect(makeMatcher(manifest)('deploy.config.json')).toBe(false)
+  })
+
   it('todo arquivo de tests/unit do template está no manifesto', () => {
     expect(testsOutsideManifest(ROOT)).toEqual([])
   })
