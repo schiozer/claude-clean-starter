@@ -32,6 +32,7 @@
     "tests/unit/checkRunbooks.test.ts",
     "tests/unit/demosCatalogo.test.ts",
     "tests/unit/deployAguardar.test.ts",
+    "tests/unit/deployCloudRun.test.ts",
     "tests/unit/deployConfig.test.ts",
     "tests/unit/deployIndex.test.ts",
     "tests/unit/demosPublicar.test.ts",

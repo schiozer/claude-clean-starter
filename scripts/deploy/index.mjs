@@ -10,11 +10,11 @@ import { lerDeployConfig } from './config.mjs'
 import { waitPreview } from './aguardar.mjs'
 import vercel from './hosts/vercel.mjs'
 import heroku from './hosts/heroku.mjs'
+import cloudrun from './hosts/cloudrun.mjs'
 
 export const OPERACOES = ['host', 'credenciais', 'preview', 'prod', 'encerrar', 'aguardar']
 
-// Task 4 adiciona o cloudrun com um import e uma entrada aqui.
-const ADAPTADORES = { vercel, heroku }
+const ADAPTADORES = { vercel, heroku, cloudrun }
 
 export function adaptador(host) {
   const adapter = ADAPTADORES[host]
@@ -25,6 +25,14 @@ export function adaptador(host) {
 const exigir = (env, nome) => {
   if (!env[nome]) throw new Error(`deploy: variável ${nome} é obrigatória`)
   return env[nome]
+}
+
+const numeroDoPr = (env) => {
+  const texto = env.PR_NUMBER ?? ''
+  if (!/^[1-9]\d*$/.test(texto)) {
+    throw new Error(`deploy: PR_NUMBER deve ser um inteiro positivo (recebido '${texto}')`)
+  }
+  return Number(texto)
 }
 
 function credenciais(config, env) {
@@ -60,6 +68,9 @@ export async function executar(
   if (operacao === 'aguardar') {
     const sha = exigir(env, 'PREVIEW_SHA')
     const ctx = { config, sha, exec, github, log }
+    if (!adapter.aguardarPreview && !github) {
+      throw new Error('deploy: GITHUB_TOKEN e GITHUB_REPOSITORY são obrigatórios para aguardar')
+    }
     const url = adapter.aguardarPreview
       ? await adapter.aguardarPreview(ctx)
       : (
@@ -73,7 +84,7 @@ export async function executar(
   }
 
   const sha = exigir(env, 'DEPLOY_SHA')
-  const pr = env.PR_NUMBER ? Number(env.PR_NUMBER) : undefined
+  const pr = operacao === 'prod' ? undefined : numeroDoPr(env)
   const ctx = { config, pr, sha, exec, github, log }
   if (operacao === 'preview') await adapter.deployPreview(ctx)
   else if (operacao === 'prod') await adapter.deployProd(ctx)

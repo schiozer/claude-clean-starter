@@ -83,11 +83,32 @@ describe('executar', () => {
   })
 })
 
+describe('executar: validações', () => {
+  it.each(['preview', 'encerrar'])('%s sem PR_NUMBER válido → erro claro', async (op) => {
+    for (const PR_NUMBER of [undefined, 'abc', '0', '-3', '1.5']) {
+      const env = { DEPLOY_SHA: 'abc', ...(PR_NUMBER === undefined ? {} : { PR_NUMBER }) }
+      await expect(
+        executar(op, { env, raiz: raizes.vercel, exec: vi.fn(), github })
+      ).rejects.toThrow(/deploy: PR_NUMBER deve ser um inteiro positivo/)
+    }
+  })
+  it('prod não exige PR_NUMBER', async () =>
+    expect(
+      await executar('prod', { env: { DEPLOY_SHA: 'abc' }, raiz: raizes.vercel, exec: vi.fn() })
+    ).toEqual({}))
+  it('aguardar sem aguardarPreview e sem github → erro pedindo GITHUB_TOKEN', async () =>
+    await expect(
+      executar('aguardar', { env: { PREVIEW_SHA: 'abc' }, raiz: raizes.vercel, exec: vi.fn() })
+    ).rejects.toThrow(/GITHUB_TOKEN e GITHUB_REPOSITORY são obrigatórios/))
+})
+
 describe('adaptador', () => {
   it('vercel: ambienteDePreview = startsWith Preview', () =>
     expect(adaptador('vercel').ambienteDePreview('Preview – app')).toBe(true))
   it('heroku: ambienteDePreview sempre falso', () =>
     expect(adaptador('heroku').ambienteDePreview('Preview')).toBe(false))
+  it('cloudrun: resolve o adaptador registrado', () =>
+    expect(adaptador('cloudrun').nome).toBe('cloudrun'))
   it('host desconhecido/sem adaptador → erro claro', () =>
-    expect(() => adaptador('cloudrun')).toThrow(/deploy:/))
+    expect(() => adaptador('netlify')).toThrow(/deploy: adaptador 'netlify'/))
 })
