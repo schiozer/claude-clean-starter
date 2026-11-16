@@ -18,8 +18,8 @@ Cada ambiente tem seu endpoint e seu tenant Auth0 (ADR-004): conecte o ChatGPT a
 para testar e ao **Prod** só depois do merge.
 
 > **UAT precisa de URL estável.** Previews por PR mudam de URL, e o `aud` do token precisa conter
-> a URL exata do MCP. Use um alias/domínio fixo para o UAT (ex.: `<projeto>-uat.vercel.app`,
-> apontado para o preview do PR em teste) e configure audience e `MCP_RESOURCE_URL` com ele.
+> a URL exata do MCP. Use um alias/domínio fixo para o UAT (ex.: `<projeto>-uat.vercel.app` na Vercel; nos demais hosts, a URL fixa do UAT em
+> `docs/runbooks/host-<host>.md`, apontada para o preview do PR em teste) e configure audience e `MCP_RESOURCE_URL` com ele.
 > Se os previews têm _Deployment Protection_, libere `/api/mcp` e `/.well-known/*` nesse
 > alias (bypass ou domínio próprio) — senão o ChatGPT é barrado antes de chegar ao MCP.
 

@@ -60,8 +60,8 @@ que faltam.
    Verificar: `node scripts/deploy/index.mjs host` não falha e `jq -r .name app.json` → `<preencher: nome do app>`.
 3. [R3] Humano: no dashboard do pipeline, conectar o repositório GitHub, ligar os **Review Apps** com criação automática por PR e **destruição automática** quando o PR fecha (ou após `<preencher: dias>` dias parado), e ligar o **auto-deploy da `main`** no app `-prod` (sem "wait for CI", que já gateia o merge). Conectar o GitHub é dar ao Heroku acesso ao repositório (proteção/permissão, R3).
    Verificar: `heroku pipelines:info <preencher: nome do app>` mostra o repositório conectado e, num PR de teste, um review app aparece no pipeline.
-4. [R2] Gravar o segredo `HEROKU_API_KEY` do GitHub Actions (usado pelo `aguardar` e pelo `encerrar`): o humano gera um token de longa duração (`heroku authorizations:create --description deploy-ci`, num terminal separado) e roda `gh secret set HEROKU_API_KEY --repo <preencher: owner/repo>`, digitando o valor no prompt.
-   Verificar: `gh secret list --repo <preencher: owner/repo>` lista o **nome** `HEROKU_API_KEY`.
+4. [R2] Gravar o segredo `HEROKU_API_KEY` do GitHub Actions (usado pelo `aguardar` e pelo `encerrar`): o humano gera um token de longa duração com escopo **somente leitura** (`heroku authorizations:create --description deploy-ci --scope read`, num terminal separado; o escopo `global` leria as config vars do `-prod` e poderia destruir o app, e esse token roda em código de PR) e roda `gh secret set HEROKU_API_KEY --repo <preencher: owner/repo>`, digitando o valor no prompt. O `aguardar` e o `encerrar` só fazem GET (pipeline, review apps, builds); o `encerrar` escreve só no Auth0, com outro segredo.
+   Verificar: `heroku authorizations --json | jq -r '.[] | select(.description == "deploy-ci") | .scope[]'` lista só `read` e `gh secret list --repo <preencher: owner/repo>` lista o **nome** `HEROKU_API_KEY`.
 
 ### Bootstrap (pós-envs)
 

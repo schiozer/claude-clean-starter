@@ -71,7 +71,7 @@ com Claude liga com `SPEC_GATE` (runbook `docs/runbooks/spec-gate.md`). Ver ADR-
 ## Testes E2E, regressão e ajuda
 
 Os cenários de teste nascem na spec (revisados pela QA) e viram testes Playwright ligados pelo ID.
-Todo PR roda o check obrigatório `Regressão (UAT)` (app local no template; Preview da Vercel no
+Todo PR roda o check obrigatório `Regressão (UAT)` (app local no template; preview do host no
 projeto, runbook `docs/runbooks/e2e-uat-configurar.md`), e os cenários `@doc` geram a ajuda em
 `/ajuda`. Ver [ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md). Os cenários
 `@demo`/`@treinamento` viram vídeos gravados pelo Playwright depois de cada Release e publicados no

@@ -25,6 +25,10 @@ describe('modelo Dockerfile (Cloud Run)', () => {
     expect(dockerfile).toMatch(/^USER\s+\S+/m)
     expect(dockerfile).toContain('--chown')
   })
+
+  it('instala as dependências sem rodar scripts (o prepare da raiz precisa de scripts/, ainda não copiado)', () => {
+    expect(dockerfile).toMatch(/^RUN npm ci --ignore-scripts/m)
+  })
 })
 
 describe('modelo .dockerignore (Cloud Run)', () => {

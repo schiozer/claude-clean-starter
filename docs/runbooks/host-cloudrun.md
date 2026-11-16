@@ -42,6 +42,7 @@ padrão `https://pr-*---<serviço>-<hash>.<sufixo>.run.app`, configurado à mão
 - Conta Google com uma **conta de faturamento** `<preencher: id da conta de faturamento>` e permissão para criar projetos.
 - CLI `gcloud` autenticada pelo humano (`gcloud auth login`; o agente não faz login por ninguém) e `docker` local só se for testar a imagem.
 - O `next.config` do projeto com `output: 'standalone'` (a imagem do modelo usa `.next/standalone`).
+- O `next build` da imagem roda **sem nenhuma env** (as envs do app ficam no serviço). Se o app valida env no build (ex.: Zod no `next.config`), declare `ARG NOME` e `ENV NOME=$NOME` antes do `RUN npm run build` no `Dockerfile` e passe `--build-arg NOME=<valor>` no `docker build` (só valores não secretos; segredo nunca vira build arg). O workflow do template não passa build args: o ajuste do `deploy.yml` é do projeto.
 - Humano com admin no repositório e no tenant Auth0 de UAT.
 
 ## Pre-flight
@@ -62,21 +63,25 @@ Repita os passos 1–5 para cada ambiente: `<proj>` = `<preencher: projeto GCP U
    Verificar: `gcloud billing budgets list --billing-account <preencher: id da conta de faturamento>` lista `<proj>-orcamento`.
 3. [R2] Ligar as APIs: `gcloud services enable run.googleapis.com artifactregistry.googleapis.com iamcredentials.googleapis.com --project <proj>`.
    Verificar: `gcloud services list --enabled --project <proj>` lista as três.
-4. [R2] Criar o Artifact Registry com a **política de limpeza** (apagar imagens com mais de 7 dias e as tags `pr-*` com mais de 7 dias, sempre mantendo as 5 versões mais novas — `Keep` vence `Delete`, então o rollback para qualquer uma das 5 últimas imagens funciona; uma regra só de `Keep` não apaga nada): `gcloud artifacts repositories create <preencher: repositório, ex. app> --repository-format docker --location <preencher: região, ex. us-east1> --project <proj>` e `gcloud artifacts repositories set-cleanup-policies <preencher: repositório, ex. app> --location <preencher: região, ex. us-east1> --project <proj> --policy limpeza.json --no-dry-run`, com o `limpeza.json`:
+4. [R2] Criar o Artifact Registry com a **política de limpeza** (apagar imagens com mais de 30 dias e as `pr-*` com mais de 14 dias, sempre mantendo as 20 versões mais novas — `Keep` vence `Delete`, então o rollback para qualquer uma das 20 últimas imagens funciona; uma regra só de `Keep` não apaga nada). A tag `uat` do Cloud Run é tag de **revisão**, não de imagem, então a política não consegue protegê-la por tag: a janela longa e o `Keep` das 20 mais novas reduzem o risco, mas uma revisão aceita há mais de 30 dias (e com mais de 20 pushes depois) perde a imagem e falha no cold start (`min-instances=0`). Recuperação: reexecutar o `Deploy` do PR (ou um push novo) para reconstruir a imagem, e reapontar a tag `uat`: `gcloud artifacts repositories create <preencher: repositório, ex. app> --repository-format docker --location <preencher: região, ex. us-east1> --project <proj>` e `gcloud artifacts repositories set-cleanup-policies <preencher: repositório, ex. app> --location <preencher: região, ex. us-east1> --project <proj> --policy limpeza.json --no-dry-run`, com o `limpeza.json`:
 
    ```json
    [
      {
        "name": "apagar-velhas",
        "action": { "type": "Delete" },
-       "condition": { "tagState": "any", "olderThan": "7d" }
+       "condition": { "tagState": "any", "olderThan": "30d" }
      },
      {
        "name": "pr-velhas",
        "action": { "type": "Delete" },
-       "condition": { "tagState": "tagged", "tagPrefixes": ["pr-"], "olderThan": "7d" }
+       "condition": { "tagState": "tagged", "tagPrefixes": ["pr-"], "olderThan": "14d" }
      },
-     { "name": "manter-5", "action": { "type": "Keep" }, "mostRecentVersions": { "keepCount": 5 } }
+     {
+       "name": "manter-20",
+       "action": { "type": "Keep" },
+       "mostRecentVersions": { "keepCount": 20 }
+     }
    ]
    ```
 

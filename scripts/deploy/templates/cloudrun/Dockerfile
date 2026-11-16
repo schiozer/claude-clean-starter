@@ -4,12 +4,15 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+# --ignore-scripts: o `prepare` da raiz (hooks de git) precisa de scripts/, que ainda não foi copiado aqui.
+RUN npm ci --ignore-scripts
 
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# O build roda sem envs. Se o app valida env no build (ex.: Zod no next.config), declare `ARG NOME`
+# e `ENV NOME=$NOME` antes do build e passe `--build-arg` no `docker build` (ver host-cloudrun.md).
 RUN npm run build
 
 FROM node:20-alpine AS runner

@@ -62,4 +62,4 @@ Auth0 ([ADR-004](./004-auth-por-ambiente-auth0.md)) seguem iguais nos três host
   `Regressão (UAT)`, obrigatória pelo ADR-016.
 - **Cloudflare, Amplify, Azure**: o contrato permite somar como hosts futuros; fora desta decisão.
 
-Spec: [camada de deploy](../../superpowers/specs/2026-11-13-camada-de-deploy-design.md).
+Spec: `docs/superpowers/specs/2026-11-13-camada-de-deploy-design.md`.

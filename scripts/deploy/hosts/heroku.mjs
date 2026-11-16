@@ -62,8 +62,8 @@ export async function urlDoReviewApp({ pr, pipelineId, token, fetchFn = globalTh
 /**
  * Espera o review app do PR (`pr_number === pr`) ter um build `succeeded` do commit `sha` e devolve
  * a `web_url`. O review app não tem campo `commit`; o SHA vem do build mais novo do app:
- * `source_blob.version` é como a integração GitHub do Heroku rotula o commit (confirmado em
- * execução real no CA-10). O token nunca entra em mensagens de erro nem em log.
+ * `source_blob.version` é como a integração GitHub do Heroku rotula o commit (premissa, a
+ * confirmar no CA-10). O token nunca entra em mensagens de erro nem em log.
  * @returns {Promise<{ url: string }>}
  */
 export async function aguardarReviewApp({
