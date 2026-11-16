@@ -53,8 +53,7 @@ function credenciais(config, env) {
 
 // Auth0 de UAT só para Heroku (Cloud Run/Vercel usam curinga nos runbooks). Sem as quatro
 // variáveis AUTH0_*, pula; com algumas, lerConfigAuth0 falha nomeando as que faltam.
-async function sincronizarAuth0({ acao, url, env, log, fetchFn }) {
-  const auth0 = lerConfigAuth0(env)
+async function sincronizarAuth0({ acao, url, auth0, log, fetchFn }) {
   if (!auth0) return log('Auth0 não configurado (AUTH0_*): pulando o registro da URL')
   const token = await obterToken({
     dominio: auth0.dominio,
@@ -107,6 +106,8 @@ export async function executar(
     if (!adapter.aguardarPreview && !github) {
       throw new Error('deploy: GITHUB_TOKEN e GITHUB_REPOSITORY são obrigatórios para aguardar')
     }
+    // Config parcial do Auth0 falha antes da espera (minutos), não depois dela.
+    const auth0 = config.host === 'heroku' ? lerConfigAuth0(env) : undefined
     const url = adapter.aguardarPreview
       ? await adapter.aguardarPreview(ctx)
       : (
@@ -117,7 +118,7 @@ export async function executar(
           })
         ).url
     if (config.host === 'heroku') {
-      await sincronizarAuth0({ acao: 'registrar', url, env, log, fetchFn })
+      await sincronizarAuth0({ acao: 'registrar', url, auth0, log, fetchFn })
     }
     return { url }
   }
@@ -135,12 +136,13 @@ export async function executar(
 }
 
 async function removerUrlDoReviewApp({ config, pr, env, log, fetchFn }) {
-  if (!lerConfigAuth0(env)) return log('Auth0 não configurado (AUTH0_*): pulando a remoção da URL')
+  const auth0 = lerConfigAuth0(env)
+  if (!auth0) return log('Auth0 não configurado (AUTH0_*): pulando a remoção da URL')
   const token = env.HEROKU_API_KEY
   if (!token) throw new Error('deploy: variável HEROKU_API_KEY é obrigatória para o Heroku')
   const url = await urlDoReviewApp({ pr, pipelineId: config.heroku.pipelineId, token, fetchFn })
   if (!url) return log(`sem review app para o PR #${pr}: nada a remover no Auth0`)
-  await sincronizarAuth0({ acao: 'remover', url, env, log, fetchFn })
+  await sincronizarAuth0({ acao: 'remover', url, auth0, log, fetchFn })
 }
 
 const execReal = (cmd, args) =>

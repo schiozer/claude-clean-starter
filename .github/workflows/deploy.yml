@@ -1,0 +1,95 @@
+name: Deploy
+
+# Camada de deploy (spec camada-de-deploy): PR aberto/atualizado -> preview (UAT); PR fechado ->
+# encerra o preview; push na main -> prod. O host (vercel | heroku | cloudrun) vem de deploy.config.
+# Não é check obrigatório: a espera do preview fica na Regressão (UAT).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  deployments: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}', github.event.pull_request.number) || 'deploy-prod' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Recusar PR de fork
+        id: fork
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::warning::PR de fork não recebe credenciais de deploy, então nenhum deploy foi feito."
+
+      - uses: actions/checkout@v5
+        if: steps.fork.outcome == 'skipped'
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-node@v5
+        if: steps.fork.outcome == 'skipped'
+        with:
+          node-version: '20'
+
+      - name: Descobrir o host
+        id: host
+        if: steps.fork.outcome == 'skipped'
+        run: node scripts/deploy/index.mjs host
+
+      - name: Credenciais do Cloud Run
+        id: cred
+        if: steps.fork.outcome == 'skipped' && steps.host.outputs.host == 'cloudrun'
+        run: node scripts/deploy/index.mjs credenciais
+        env:
+          DEPLOY_AMBIENTE: ${{ github.event_name == 'pull_request' && 'uat' || 'prod' }}
+
+      - uses: google-github-actions/auth@v2
+        if: steps.fork.outcome == 'skipped' && steps.host.outputs.host == 'cloudrun'
+        with:
+          workload_identity_provider: ${{ steps.cred.outputs.wifProvider }}
+          service_account: ${{ steps.cred.outputs.serviceAccount }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.fork.outcome == 'skipped' && steps.host.outputs.host == 'cloudrun'
+
+      - name: Configurar o Docker para o Artifact Registry
+        if: steps.fork.outcome == 'skipped' && steps.host.outputs.host == 'cloudrun'
+        run: gcloud auth configure-docker ${{ steps.cred.outputs.region }}-docker.pkg.dev --quiet
+
+      - name: Encerrar o preview do PR
+        if: steps.fork.outcome == 'skipped' && github.event_name == 'pull_request' && github.event.action == 'closed'
+        run: node scripts/deploy/index.mjs encerrar
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          DEPLOY_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEROKU_API_KEY: ${{ steps.host.outputs.host == 'heroku' && secrets.HEROKU_API_KEY || '' }}
+          AUTH0_MGMT_DOMAIN: ${{ steps.host.outputs.host == 'heroku' && vars.AUTH0_MGMT_DOMAIN || '' }}
+          AUTH0_MGMT_CLIENT_ID: ${{ steps.host.outputs.host == 'heroku' && vars.AUTH0_MGMT_CLIENT_ID || '' }}
+          AUTH0_MGMT_CLIENT_SECRET: ${{ steps.host.outputs.host == 'heroku' && secrets.AUTH0_MGMT_CLIENT_SECRET || '' }}
+          AUTH0_WEB_CLIENT_ID: ${{ steps.host.outputs.host == 'heroku' && vars.AUTH0_WEB_CLIENT_ID || '' }}
+          AUTH0_CALLBACK_PATH: ${{ steps.host.outputs.host == 'heroku' && vars.AUTH0_CALLBACK_PATH || '' }}
+
+      - name: Deploy do preview (PR)
+        if: steps.fork.outcome == 'skipped' && github.event_name == 'pull_request' && github.event.action != 'closed'
+        run: node scripts/deploy/index.mjs preview
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          DEPLOY_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy de produção
+        if: steps.fork.outcome == 'skipped' && github.event_name == 'push'
+        run: node scripts/deploy/index.mjs prod
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -204,6 +204,25 @@ describe('executar: Auth0 de UAT (heroku)', () => {
       )
     ).rejects.toThrow(/AUTH0_MGMT_CLIENT_ID/)
   })
+  it('heroku aguardar com config parcial falha antes de esperar o review app', async () => {
+    const f = fetchFake()
+    const heroku = adaptador('heroku')
+    const espera = vi.fn(async () => URL_PR)
+    heroku.aguardarPreview = espera
+    try {
+      await expect(
+        executar('aguardar', {
+          env: { ...envAguardar, AUTH0_MGMT_DOMAIN: 'x.auth0.com' },
+          raiz: raizes.heroku,
+          fetchFn: f as never,
+        })
+      ).rejects.toThrow(/AUTH0_MGMT_CLIENT_ID/)
+    } finally {
+      delete heroku.aguardarPreview
+    }
+    expect(espera).not.toHaveBeenCalled()
+    expect(f).not.toHaveBeenCalled()
+  })
   it('vercel aguardar nunca toca o Auth0', async () => {
     const f = fetchFake()
     const api = {
