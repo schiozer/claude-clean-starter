@@ -66,12 +66,37 @@ describe('executar', () => {
     await expect(executar('deploy', ctxVercel as never)).rejects.toThrow(
       /host, credenciais, preview, prod, encerrar, aguardar/
     ))
+  it('aguardar com heroku sem PR_NUMBER → erro', async () =>
+    await expect(
+      executar('aguardar', {
+        env: { PREVIEW_SHA: 'abc' },
+        raiz: raizes.heroku,
+        exec: vi.fn(),
+        github,
+      })
+    ).rejects.toThrow(/PR_NUMBER/))
+  it('aguardar com vercel não exige PR_NUMBER', async () => {
+    const api = {
+      call: vi.fn(async (_m: string, path: string) =>
+        path.includes('/statuses')
+          ? [{ state: 'success', environment_url: 'https://v.example' }]
+          : [{ id: 1, environment: 'Preview', created_at: '2026-11-10T10:00:00Z' }]
+      ),
+    }
+    const r = await executar('aguardar', {
+      env: { PREVIEW_SHA: 'abc' },
+      raiz: raizes.vercel,
+      exec: vi.fn(),
+      github: api,
+    })
+    expect(r).toEqual({ url: 'https://v.example' })
+  })
   it('aguardar usa adapter.aguardarPreview quando definido', async () => {
     const heroku = adaptador('heroku')
     heroku.aguardarPreview = async () => 'https://x.example'
     try {
       const r = await executar('aguardar', {
-        env: { PREVIEW_SHA: 'abc' },
+        env: { PREVIEW_SHA: 'abc', PR_NUMBER: '7' },
         raiz: raizes.heroku,
         exec: vi.fn(),
         github,

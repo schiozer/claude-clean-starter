@@ -17,13 +17,18 @@ const erroHttp = (status, caminho) =>
 const transitorio = (error) =>
   typeof error?.status === 'number' && (error.status >= 500 || error.status === 429)
 
+const maisRecente = (a, b) => String(a.created_at).localeCompare(String(b.created_at))
+
 /**
- * Espera o review app do PR (`commit === sha`) ficar `created` e devolve a `web_url`.
- * O token nunca entra em mensagens de erro nem em log.
+ * Espera o review app do PR (`pr_number === pr`) ter um build `succeeded` do commit `sha` e devolve
+ * a `web_url`. O review app não tem campo `commit`; o SHA vem do build mais novo do app:
+ * `source_blob.version` é como a integração GitHub do Heroku rotula o commit (confirmado em
+ * execução real no CA-10). O token nunca entra em mensagens de erro nem em log.
  * @returns {Promise<{ url: string }>}
  */
 export async function aguardarReviewApp({
   sha,
+  pr,
   pipelineId,
   token,
   fetchFn = globalThis.fetch,
@@ -53,16 +58,33 @@ export async function aguardarReviewApp({
 
   const consultar = async () => {
     const apps = await get(`/pipelines/${encodeURIComponent(pipelineId)}/review-apps`)
-    const revApp = (apps ?? []).filter((a) => a.commit === sha).at(-1)
+    const revApp = (apps ?? [])
+      .filter((a) => a.pr_number === pr)
+      .sort(maisRecente)
+      .at(-1)
     if (!revApp) return null
     viuReviewApp = true
     if (revApp.status === 'errored') {
-      throw new Error(`Review app falhou para ${sha} (status: errored)`)
+      const detalhe = [revApp.message, revApp.error_status].filter(Boolean).join(' - ')
+      throw new Error(`Review app do PR #${pr} falhou (errored)${detalhe ? `: ${detalhe}` : ''}`)
+    }
+    if (revApp.status === 'deleting' || revApp.status === 'deleted') {
+      throw new Error(`Review app do PR #${pr} foi removido (${revApp.status}): o PR foi fechado?`)
     }
     if (revApp.status !== 'created') return null
-    const app = await get(`/apps/${encodeURIComponent(revApp.app?.id)}`)
+    const appId = revApp.app?.id
+    if (!appId) throw new Error(`Review app do PR #${pr} criado sem app (sem app.id)`)
+
+    const builds = await get(`/apps/${encodeURIComponent(appId)}/builds`)
+    const build = (builds ?? []).sort(maisRecente).at(-1)
+    if (!build || build.source_blob?.version !== sha) return null
+    if (build.status === 'failed') {
+      throw new Error(`Build do review app do PR #${pr} falhou para ${sha} (status: failed)`)
+    }
+    if (build.status !== 'succeeded') return null
+    const app = await get(`/apps/${encodeURIComponent(appId)}`)
     if (!app?.web_url)
-      throw new Error(`Review app sem URL para ${sha} (status created sem web_url)`)
+      throw new Error(`Review app sem URL para ${sha} (build succeeded sem web_url)`)
     return { url: app.web_url }
   }
 
@@ -96,6 +118,7 @@ export default {
     if (!token) throw new Error('deploy: variável HEROKU_API_KEY é obrigatória para o Heroku')
     const { url } = await aguardarReviewApp({
       sha: ctx.sha,
+      pr: ctx.pr,
       pipelineId: ctx.config.heroku.pipelineId,
       token,
     })
