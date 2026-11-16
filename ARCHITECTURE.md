@@ -399,14 +399,14 @@ Assim como o template usa **Next.js** como exemplo do lado web, este é um conju
 concreto que instancia bem os padrões nativos acima — cada escolha vira um ADR e
 fica isolada atrás de interfaces (`I*Repository`, `IAuthProvider`):
 
-| Camada  | Escolha de exemplo                                | Papel                               |
-| ------- | ------------------------------------------------- | ----------------------------------- |
-| App     | **Expo** (React Native), iOS; expo-router         | Presentation + application-cliente  |
-| Banco   | **Neon** (Postgres serverless)                    | Relacional, exponível via MCP       |
+| Camada  | Escolha de exemplo                                     | Papel                               |
+| ------- | ------------------------------------------------------ | ----------------------------------- |
+| App     | **Expo** (React Native), iOS; expo-router              | Presentation + application-cliente  |
+| Banco   | **Neon** (Postgres serverless)                         | Relacional, exponível via MCP       |
 | Backend | **Vercel**, **Heroku** ou **Cloud Run** + cron do host | BFF + jobs agendados                |
-| Auth    | **Auth0** (Universal Login, JWT)                  | Identidade atrás de `IAuthProvider` |
-| Authz   | **Guards na aplicação** (fail-closed)             | Multi-tenant sem depender de RLS    |
-| Push    | **Expo Notifications** → APNs                     | Notificações proativas              |
+| Auth    | **Auth0** (Universal Login, JWT)                       | Identidade atrás de `IAuthProvider` |
+| Authz   | **Guards na aplicação** (fail-closed)                  | Multi-tenant sem depender de RLS    |
+| Push    | **Expo Notifications** → APNs                          | Notificações proativas              |
 
 > É um **ponto de partida**, não uma obrigação. Troque qualquer peça pela sua e
 > registre o porquê num ADR.

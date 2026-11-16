@@ -21,18 +21,24 @@ Auth0 ([ADR-004](./004-auth-por-ambiente-auth0.md)) seguem iguais nos três host
    existentes continuam funcionando sem mudança. O arquivo só guarda identificadores não secretos
    (validado por `scripts/deploy/config.mjs`); segredos nunca entram nele.
 2. **Adaptadores em script** (`scripts/deploy/hosts/<host>.mjs`) com contrato único
-   (`deployPreview`, `aguardarPreview`, `cabecalhosDeAcesso`, `deployProd`, `encerrarPreview`),
-   escolhidos por `scripts/deploy/index.mjs` e chamados pelo `deploy.yml`. Somar um host = um
-   adaptador.
+   `{ nome, ambienteDePreview, deployPreview, deployProd, encerrarPreview, aguardarPreview? }`,
+   escolhidos por `scripts/deploy/index.mjs` (operações `host`, `credenciais`, `preview`, `prod`,
+   `encerrar`, `aguardar`) e chamados pelo `deploy.yml`. Somar um host = um adaptador.
+   `aguardarPreview` é **opcional** e só o Heroku o implementa; Vercel e Cloud Run não o têm e a
+   CLI espera o GitHub Deployment do SHA filtrando pelo predicado `ambienteDePreview` do adaptador
+   (Vercel: `Preview*`; Cloud Run: `Preview`, publicado por `deployPreview`). Isto diverge de
+   propósito da §5.2 da spec (que previa `aguardarPreview` e `cabecalhosDeAcesso` em todos).
 3. **Preview por PR em todos os hosts**: cada PR tem o seu ambiente, e a `Regressão (UAT)`
-   ([ADR-016](./016-testes-e2e-nascidos-da-spec.md)) espera a URL pela API de Deployments do GitHub.
+   ([ADR-016](./016-testes-e2e-nascidos-da-spec.md)) espera a URL: pela API de Deployments do
+   GitHub (Vercel e Cloud Run) ou pela Platform API do Heroku.
 4. **Heroku**: review app do pipeline; o CI espera o build pela Platform API e registra a URL do PR
    no Auth0 do UAT pela Management API. Prod é o auto-deploy da `main`.
 5. **Cloud Run**: credencial por **Workload Identity Federation** (sem chave no GitHub), com Prod
    restrita à `main`. O preview é uma revisão com tag `pr-<n>` e `--no-traffic`; o Auth0 do UAT usa
    um wildcard para as URLs das tags.
-6. **Cabeçalhos de acesso do E2E** (bypass da proteção de preview) existem **só na Vercel**; nos
-   outros hosts o preview é acessível ao runner e `cabecalhosDeAcesso` devolve `null`.
+6. **Cabeçalhos de acesso do E2E** (bypass da proteção de preview) **não fazem parte do
+   adaptador**: vivem em `tests/e2e/support/env.ts` (`cabecalhosDeAcesso`), que só devolve os
+   cabeçalhos com `DEPLOY_HOST=vercel` e segredo configurado, e `null` nos demais hosts.
 7. **UAT fixo e rollback** ficam nos runbooks do host (`docs/runbooks/host-<host>.md`), com as
    classes de risco do [ADR-013](./013-governanca-operacional-e-runbooks.md); os runbooks gerais
    apontam para o bloco do host. Migrar de host: `migrar-host.md`.
