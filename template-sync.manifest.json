@@ -31,6 +31,7 @@
     "tests/unit/checkCenarios.test.ts",
     "tests/unit/checkRunbooks.test.ts",
     "tests/unit/demosCatalogo.test.ts",
+    "tests/unit/deployAguardar.test.ts",
     "tests/unit/deployConfig.test.ts",
     "tests/unit/demosPublicar.test.ts",
     "tests/unit/demosSelecao.test.ts",
