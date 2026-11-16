@@ -16,10 +16,13 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
+# O server.js do standalone escuta em process.env.HOSTNAME; sem 0.0.0.0 o Cloud Run não alcança o health check.
+ENV HOSTNAME=0.0.0.0
 RUN addgroup -S app && adduser -S app -G app
-COPY --from=build /app/.next/standalone ./
-COPY --from=build /app/.next/static ./.next/static
-COPY --from=build /app/public ./public
+# --chown: o usuário não root precisa escrever em .next/cache.
+COPY --from=build --chown=app:app /app/.next/standalone ./
+COPY --from=build --chown=app:app /app/.next/static ./.next/static
+COPY --from=build --chown=app:app /app/public ./public
 USER app
 EXPOSE 8080
 CMD ["node", "server.js"]

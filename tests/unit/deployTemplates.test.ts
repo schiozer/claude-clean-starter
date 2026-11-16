@@ -9,12 +9,21 @@ describe('modelo Dockerfile (Cloud Run)', () => {
   const dockerfile = ler('scripts/deploy/templates/cloudrun/Dockerfile')
 
   it('usa a saída standalone do Next e a porta 8080', () => {
-    expect(dockerfile).toContain('standalone')
+    expect(dockerfile).toContain('.next/standalone')
     expect(dockerfile).toContain('PORT=8080')
   })
 
-  it('roda como usuário não root', () => {
-    expect(dockerfile).toContain('USER')
+  it('sobe o server.js standalone', () => {
+    expect(dockerfile).toContain('CMD ["node", "server.js"]')
+  })
+
+  it('escuta em 0.0.0.0 (HOSTNAME)', () => {
+    expect(dockerfile).toContain('HOSTNAME=0.0.0.0')
+  })
+
+  it('roda como usuário não root, com arquivos do usuário copiados via --chown', () => {
+    expect(dockerfile).toMatch(/^USER\s+\S+/m)
+    expect(dockerfile).toContain('--chown')
   })
 })
 
