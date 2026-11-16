@@ -68,6 +68,13 @@ Checklist (crie uma tarefa por item):
       versões ao humano junto com os `asked` e aplique a escolhida;
     - preserve a **intenção do projeto**; traga só a novidade do template;
     - runbooks: os valores preenchidos do projeto prevalecem; só a estrutura nova entra;
+    - **Release da camada de deploy** (runbooks gerais neutros quanto ao host): `bootstrap-ambientes`,
+      `deploy-uat`, `deploy-prod`, `rollback`, `segredos-e-env`, `e2e-uat-configurar`,
+      `feature-flags`, `mcp-habilitar-e-conectar` e `bunny-habilitar` perderam os comandos
+      `vercel …`, que foram para `docs/runbooks/host-vercel.md`. O projeto que já preencheu os
+      `<preencher>` nesses runbooks **leva esses valores para `host-vercel.md`** e lista cada
+      um em **Juntados**; `deploy.config.json` é do projeto (`ignore` no manifesto), nunca é
+      sobrescrito;
     - JSON precisa parsear (`node -e "JSON.parse(require('fs').readFileSync('<arquivo>','utf8'))"`);
     - anote o porquê de cada decisão para o PR.
 11. **Perguntar os `asked`** numa **única** mensagem (arquivo, caso, o que você recomenda). Só

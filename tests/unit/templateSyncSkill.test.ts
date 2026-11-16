@@ -81,6 +81,12 @@ describe('skill template-sync', () => {
     expect(section('adotar')).not.toMatch(/semeia[^.]*playwright\.config\.ts/)
   })
 
+  it('a nota da camada de deploy manda os valores dos runbooks gerais para host-vercel.md, em Juntados', () => {
+    const passo = section('sync').split('10. **Resolver `conflicts`**')[1]?.split('\n11. ')[0] ?? ''
+    expect(passo).toContain('host-vercel.md')
+    expect(passo).toContain('Juntados')
+  })
+
   it('a skill explica o conflito binário', () => {
     expect(section('sync')).toMatch(/`binary`/)
   })

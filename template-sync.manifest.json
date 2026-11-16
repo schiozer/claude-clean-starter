@@ -81,6 +81,7 @@
   "ignore": [
     "examples/**",
     "src/**",
+    "deploy.config.json",
     "package-lock.json",
     ".claude/settings.local.json",
     ".env",
