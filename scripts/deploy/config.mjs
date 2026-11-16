@@ -56,8 +56,14 @@ export function parseDeployConfig(texto) {
     throw erro(`host '${json.host}' inválido (válidos: ${HOSTS.join(', ')})`)
   }
 
-  // Blocos de vercel/heroku são aceitos sem validação.
+  // Bloco de vercel é aceito sem validação; o de heroku só exige `pipelineId`.
   const config = { ...json }
+  if (json.host === 'heroku') {
+    const pipelineId = ehObjeto(json.heroku) ? json.heroku.pipelineId : undefined
+    if (typeof pipelineId !== 'string' || pipelineId.trim() === '') {
+      throw erro('heroku.pipelineId obrigatório (texto não vazio)')
+    }
+  }
   if (json.host === 'cloudrun') config.cloudrun = validarCloudRun(json.cloudrun)
   return config
 }

@@ -27,7 +27,7 @@ const raizes: Record<string, string> = {}
 
 beforeAll(() => {
   raizes.vercel = raizCom({ host: 'vercel' })
-  raizes.heroku = raizCom({ host: 'heroku' })
+  raizes.heroku = raizCom({ host: 'heroku', heroku: { pipelineId: 'pipe-1' } })
   const raizCr = raizCom({
     host: 'cloudrun',
     cloudrun: { region: 'us-central1', repository: 'repo', uat: amb('uat'), prod: amb('prod') },

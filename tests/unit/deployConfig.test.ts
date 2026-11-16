@@ -47,6 +47,19 @@ describe('parseDeployConfig', () => {
   it('cloudrun válido → devolve o bloco', () =>
     expect(parseDeployConfig(JSON.stringify(CFG)).cloudrun?.prod.project).toBe('app-prod'))
 
-  it('heroku/vercel aceitam bloco extra sem validar', () =>
-    expect(parseDeployConfig('{"host":"heroku","heroku":{}}').host).toBe('heroku'))
+  it('vercel aceita bloco extra sem validar', () =>
+    expect(parseDeployConfig('{"host":"vercel","vercel":{}}').host).toBe('vercel'))
+
+  it.each([
+    '{"host":"heroku"}',
+    '{"host":"heroku","heroku":{}}',
+    '{"host":"heroku","heroku":{"pipelineId":" "}}',
+  ])('heroku sem pipelineId → erro (%s)', (texto) =>
+    expect(() => parseDeployConfig(texto)).toThrow(
+      /deploy\.config\.json: heroku\.pipelineId obrigatório/
+    )
+  )
+
+  it('heroku com pipelineId é válido', () =>
+    expect(parseDeployConfig('{"host":"heroku","heroku":{"pipelineId":"p1"}}').host).toBe('heroku'))
 })

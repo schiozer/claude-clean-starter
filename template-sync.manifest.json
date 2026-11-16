@@ -34,6 +34,7 @@
     "tests/unit/deployAguardar.test.ts",
     "tests/unit/deployCloudRun.test.ts",
     "tests/unit/deployConfig.test.ts",
+    "tests/unit/deployHeroku.test.ts",
     "tests/unit/deployIndex.test.ts",
     "tests/unit/demosPublicar.test.ts",
     "tests/unit/demosSelecao.test.ts",

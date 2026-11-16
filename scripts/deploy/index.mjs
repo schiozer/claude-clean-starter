@@ -67,7 +67,7 @@ export async function executar(
 
   if (operacao === 'aguardar') {
     const sha = exigir(env, 'PREVIEW_SHA')
-    const ctx = { config, sha, exec, github, log }
+    const ctx = { config, sha, exec, github, log, env }
     if (!adapter.aguardarPreview && !github) {
       throw new Error('deploy: GITHUB_TOKEN e GITHUB_REPOSITORY são obrigatórios para aguardar')
     }
