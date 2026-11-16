@@ -131,32 +131,54 @@ describe('cloudrun: deployProd', () => {
 })
 
 describe('cloudrun: encerrarPreview', () => {
-  it('remove só a tag do PR', async () => {
-    const exec = vi.fn(async () => '')
+  const DESCRIBE_JSON = ['run', 'services', 'describe', 'svc-uat', ...LOCAL, '--format=json']
+  const REMOVE = [
+    'run',
+    'services',
+    'update-traffic',
+    'svc-uat',
+    '--remove-tags',
+    'pr-12',
+    ...LOCAL,
+  ]
+
+  it('tag presente: describe e depois remove só a tag do PR', async () => {
+    const exec = execPreview()
     await cloudrun.encerrarPreview(ctxDe({ exec }) as never)
     expect(exec.mock.calls).toEqual([
-      [
-        'gcloud',
-        ['run', 'services', 'update-traffic', 'svc-uat', '--remove-tags', 'pr-12', ...LOCAL],
-      ],
+      ['gcloud', DESCRIBE_JSON],
+      ['gcloud', REMOVE],
     ])
   })
 
-  it('tag inexistente → log e sucesso', async () => {
-    const exec = vi.fn(async () => {
-      throw new Error("deploy: 'gcloud' falhou: ERROR: tag not found: pr-12")
-    })
+  it('tag ausente: log, sucesso e nenhum update-traffic', async () => {
+    const exec = execPreview(servicoJson([{ tag: 'pr-9', url: 'https://outro' }, { percent: 100 }]))
     const ctx = ctxDe({ exec })
     await expect(cloudrun.encerrarPreview(ctx as never)).resolves.toBeUndefined()
+    expect(exec.mock.calls).toEqual([['gcloud', DESCRIBE_JSON]])
     expect(ctx.log).toHaveBeenCalledWith(expect.stringContaining('pr-12'))
   })
 
-  it('outro erro do gcloud → propaga', async () => {
+  it("erro no describe (ex.: 'Project ... not found') → propaga", async () => {
     const exec = vi.fn(async () => {
-      throw new Error("deploy: 'gcloud' falhou: PERMISSION_DENIED")
+      throw new Error("deploy: 'gcloud' falhou: Project 'app-uat' not found or permission denied")
     })
     await expect(cloudrun.encerrarPreview(ctxDe({ exec }) as never)).rejects.toThrow(
-      /PERMISSION_DENIED/
+      /Project 'app-uat' not found/
+    )
+    expect(exec).toHaveBeenCalledTimes(1)
+  })
+
+  it('erro no update-traffic → propaga', async () => {
+    const json = servicoJson([{ tag: 'pr-12', url: URL_PR }])
+    const exec = vi.fn(async (_cmd: string, args: string[]) => {
+      if (args.includes('--remove-tags')) {
+        throw new Error("deploy: 'gcloud' falhou: Service 'svc-uat' not found")
+      }
+      return json
+    })
+    await expect(cloudrun.encerrarPreview(ctxDe({ exec }) as never)).rejects.toThrow(
+      /Service 'svc-uat' not found/
     )
   })
 })

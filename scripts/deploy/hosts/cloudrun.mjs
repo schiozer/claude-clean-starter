@@ -41,7 +41,7 @@ async function exigirServico(exec, cfg) {
   }
 }
 
-async function urlDaTag(exec, cfg, tag) {
+async function trafegoDoServico(exec, cfg) {
   const json = await exec('gcloud', [
     'run',
     'services',
@@ -50,8 +50,11 @@ async function urlDaTag(exec, cfg, tag) {
     ...local(cfg, 'uat'),
     '--format=json',
   ])
-  const trafego = JSON.parse(json)?.status?.traffic ?? []
-  const url = trafego.find((t) => t.tag === tag)?.url
+  return JSON.parse(json)?.status?.traffic ?? []
+}
+
+async function urlDaTag(exec, cfg, tag) {
+  const url = (await trafegoDoServico(exec, cfg)).find((t) => t.tag === tag)?.url
   if (!url) throw new Error(`deploy: tag ${tag} sem URL no serviço ${cfg.uat.service}`)
   return url
 }
@@ -112,21 +115,20 @@ async function deployProd({ config, sha, exec, log }) {
 async function encerrarPreview({ config, pr, exec, log }) {
   const cfg = config.cloudrun
   const tag = tagDoPr(pr)
-  try {
-    await exec('gcloud', [
-      'run',
-      'services',
-      'update-traffic',
-      cfg.uat.service,
-      '--remove-tags',
-      tag,
-      ...local(cfg, 'uat'),
-    ])
-  } catch (error) {
-    const mensagem = error instanceof Error ? error.message : String(error)
-    if (!/not found|does not exist|não existe/i.test(mensagem)) throw error
+  const trafego = await trafegoDoServico(exec, cfg)
+  if (!trafego.some((t) => t.tag === tag)) {
     log?.(`tag ${tag} já não existe no serviço ${cfg.uat.service}; nada a encerrar`)
+    return
   }
+  await exec('gcloud', [
+    'run',
+    'services',
+    'update-traffic',
+    cfg.uat.service,
+    '--remove-tags',
+    tag,
+    ...local(cfg, 'uat'),
+  ])
 }
 
 export default {
