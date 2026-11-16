@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { checkRunbook, checkCatalog, REQUIRED_RUNBOOKS } from '../../scripts/check-runbooks.mjs'
@@ -159,6 +159,32 @@ describe('checkRunbook', () => {
     expect(errors.some((e) => e.includes('"vercel rollback" exige no mínimo [R2]'))).toBe(true)
   })
 
+  it.each([
+    ['heroku releases:rollback', '`heroku releases:rollback v41 -a app-prod`'],
+    ['heroku apps:destroy', '`heroku apps:destroy -a app-uat`'],
+    ['heroku config:set', '`heroku config:set APP_ENV=uat -a app-uat`'],
+    [
+      'gcloud run services update-traffic',
+      '`gcloud run services update-traffic app --to-revisions app-00041=100`',
+    ],
+    [
+      'gcloud run services update-traffic',
+      '`gcloud run services update-traffic app --to-latest --region us-east1`',
+    ],
+    ['gcloud run services delete', '`gcloud run services delete app --region us-east1`'],
+    ['gcloud projects delete', '`gcloud projects delete app-uat`'],
+  ])('comando de host "%s" em passo R1 → exige no mínimo [R2]', (name, command) => {
+    const errors = checkRunbook(swap('`gh pr create`', command))
+    expect(errors.some((e) => e.includes(`"${name}" exige no mínimo [R2]`))).toBe(true)
+  })
+
+  it.each([
+    '`gcloud run services update-traffic app --update-tags uat=app-00041`',
+    '`gcloud run services update-traffic app --remove-tags pr-12`',
+  ])('update-traffic só de tags em passo R1 → ok (%s)', (command) => {
+    expect(checkRunbook(swap('`gh pr create`', command))).toEqual([])
+  })
+
   it('passo em formato "1)" ou com marcador → erro', () => {
     const paren = checkRunbook(swap('2. [R3] Humano:', '2) [R3] Humano:'))
     const bullet = checkRunbook(swap('2. [R3] Humano:', '- [R3] Humano:'))
@@ -266,4 +292,14 @@ describe('catálogo do template (docs/runbooks)', () => {
       'placeholder <preencher> pendente'
     )
   })
+})
+
+describe('runbooks de host (camada de deploy)', () => {
+  it.each(['host-vercel.md', 'host-heroku.md', 'host-cloudrun.md', 'migrar-host.md'])(
+    '%s existe e passa no modo normal',
+    (file) => {
+      const md = readFileSync(join(process.cwd(), 'docs/runbooks', file), 'utf8')
+      expect(checkRunbook(md)).toEqual([])
+    }
+  )
 })

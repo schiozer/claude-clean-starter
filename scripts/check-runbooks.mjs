@@ -48,6 +48,18 @@ const MIN_CLASS_COMMANDS = [
     min: 2,
   },
   { name: '--env .env.prod', pattern: /--env \.env\.prod/, min: 2 },
+  // Hosts da camada de deploy (host-heroku.md, host-cloudrun.md).
+  { name: 'heroku releases:rollback', pattern: /heroku releases:rollback/, min: 2 },
+  { name: 'heroku apps:destroy', pattern: /heroku apps:destroy/, min: 2 },
+  { name: 'heroku config:set', pattern: /heroku config:set/, min: 2 },
+  // Só mover tráfego é R2; `--update-tags`/`--remove-tags` (UAT fixo, encerrar preview) é livre.
+  {
+    name: 'gcloud run services update-traffic',
+    pattern: /gcloud run services update-traffic[^`\n]*--to-(revisions|latest)/,
+    min: 2,
+  },
+  { name: 'gcloud run services delete', pattern: /gcloud run services delete/, min: 2 },
+  { name: 'gcloud projects delete', pattern: /gcloud projects delete/, min: 2 },
 ]
 const FENCE = /^\s*(`{3,}|~{3,})/
 
