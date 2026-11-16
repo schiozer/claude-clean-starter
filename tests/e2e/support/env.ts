@@ -1,6 +1,8 @@
 // Variáveis de ambiente da suíte E2E num só lugar (spec e2e-regressao-docs §7.2 e §8).
 // Puro: sem Playwright, testável no Vitest (`tests/unit/e2eEnv.test.ts`).
 
+import { HOSTS } from '../../../scripts/deploy/config.mjs'
+
 export type Env = Record<string, string | undefined>
 
 export interface E2eEnv {
@@ -8,6 +10,8 @@ export interface E2eEnv {
   baseUrl: string | null
   /** Como o `setup` autentica: `dev` (`/dev-login`, só no modo local) ou `auth0` (Universal Login). */
   auth: 'dev' | 'auth0'
+  /** `DEPLOY_HOST`: plataforma do alvo (vazio → `vercel`); só a Vercel tem bypass de proteção. */
+  host: 'vercel' | 'heroku' | 'cloudrun'
   /** `VERCEL_AUTOMATION_BYPASS_SECRET`: passa pela Deployment Protection do Preview. */
   bypass: string | null
   /** `E2E_FAULTS_SECRET`: habilita a injeção de lentidão (`x-e2e-delay-ms`) fora de Prod. */
@@ -40,6 +44,14 @@ const modoDeAuth = (valor: string | undefined): E2eEnv['auth'] => {
   throw new Error(`E2E_AUTH='${modo}' inválido: use 'dev' (ou vazio) ou 'auth0'`)
 }
 
+/** `DEPLOY_HOST`: vazio → `vercel`; fora de vercel/heroku/cloudrun → erro. */
+const hostDeDeploy = (valor: string | undefined): E2eEnv['host'] => {
+  const host = valor?.trim() ?? ''
+  if (host === '') return 'vercel'
+  if ((HOSTS as readonly string[]).includes(host)) return host as E2eEnv['host']
+  throw new Error(`DEPLOY_HOST='${host}' inválido: use ${HOSTS.join(', ')} (ou vazio)`)
+}
+
 /** `docs:gerar` captura telas com os dados do alvo: contra um ambiente remoto, recusa cedo. */
 const alvo = (env: Env): string | null => {
   const baseUrl = texto(env.E2E_BASE_URL)
@@ -54,6 +66,7 @@ const alvo = (env: Env): string | null => {
 export const e2eEnv = (env: Env = process.env): E2eEnv => ({
   baseUrl: alvo(env),
   auth: modoDeAuth(env.E2E_AUTH),
+  host: hostDeDeploy(env.DEPLOY_HOST),
   bypass: texto(env.VERCEL_AUTOMATION_BYPASS_SECRET),
   faultsSecret: texto(env.E2E_FAULTS_SECRET),
   runPrefix: env.E2E_RUN_PREFIX?.trim() ?? '',
@@ -66,14 +79,18 @@ export const e2eEnv = (env: Env = process.env): E2eEnv => ({
 })
 
 /**
- * Cabeçalhos da Deployment Protection da Vercel (`x-vercel-protection-bypass` + cookie de bypass),
- * ou `null` sem segredo (modo local). Vão **só** para a origem do preview (ver `support/test.ts`),
+ * Cabeçalhos de acesso ao alvo remoto: no host `vercel`, a Deployment Protection
+ * (`x-vercel-protection-bypass` + cookie de bypass); `null` sem segredo, no modo local e em
+ * heroku/cloudrun (sem bypass). Vão **só** para a origem do preview (ver `support/test.ts`),
  * nunca para Auth0, CDN ou terceiros.
  */
-export const cabecalhosDeBypass = (env: E2eEnv): Record<string, string> | null =>
-  env.bypass
+export const cabecalhosDeAcesso = (env: E2eEnv): Record<string, string> | null =>
+  env.host === 'vercel' && env.bypass
     ? { 'x-vercel-protection-bypass': env.bypass, 'x-vercel-set-bypass-cookie': 'true' }
     : null
+
+/** @deprecated Use `cabecalhosDeAcesso`; alias mantido por uma Release. */
+export const cabecalhosDeBypass = cabecalhosDeAcesso
 
 /** Predicado de URL: `true` só para a origem exata (esquema, host e porta) do `baseURL`. */
 export const origemDoAlvo =
