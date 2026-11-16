@@ -26,7 +26,9 @@ function execPreview(json = servicoJson([{ tag: 'pr-12', url: URL_PR }, { percen
   )
 }
 const githubFake = () => ({
-  call: vi.fn(async (_m: string, path: string) => (path === '/deployments' ? { id: 77 } : {})),
+  call: vi.fn<(method: string, path: string, body?: unknown) => Promise<object>>(
+    async (_m, path) => (path === '/deployments' ? { id: 77 } : {})
+  ),
   paginate: vi.fn(),
 })
 const ctxDe = (over: Record<string, unknown>) => ({

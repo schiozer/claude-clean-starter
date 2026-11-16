@@ -74,6 +74,18 @@ async function atualizar({ dominio, clientId, token, fetchFn, mudar }) {
   return { alterado: true }
 }
 
+/**
+ * @typedef {{
+ *   dominio: string,
+ *   clientId: string,
+ *   token: string,
+ *   url: string,
+ *   callbackPath?: string,
+ *   fetchFn?: typeof fetch,
+ * }} OpcoesUrl
+ */
+
+/** @param {OpcoesUrl} opcoes */
 export function registrarUrl({
   dominio,
   clientId,
@@ -98,6 +110,7 @@ export function registrarUrl({
   })
 }
 
+/** @param {OpcoesUrl} opcoes */
 export function removerUrl({
   dominio,
   clientId,

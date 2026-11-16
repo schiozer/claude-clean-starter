@@ -75,7 +75,17 @@ async function sincronizarAuth0({ acao, url, env, log, fetchFn }) {
   log(alterado ? `URL ${verbo} no Auth0: ${url}` : `Auth0 já estava em dia para ${url}`)
 }
 
-/** @returns {Promise<Record<string,string>>} */
+/**
+ * @param {string} operacao
+ * @param {{
+ *   env?: NodeJS.ProcessEnv,
+ *   raiz?: string,
+ *   exec?: (cmd: string, args: string[]) => Promise<string>,
+ *   github?: Pick<ReturnType<typeof makeGithubClient>, 'call'>,
+ *   fetchFn?: typeof fetch,
+ * }} [opcoes]
+ * @returns {Promise<Record<string,string>>}
+ */
 export async function executar(
   operacao,
   { env = process.env, raiz = process.cwd(), exec, github, fetchFn = globalThis.fetch } = {}
