@@ -16,7 +16,8 @@ describe('skill architecture-review', () => {
 
   it('acha o ADR vigente: maior NNN *-stack-tecnologica.md com Status: Aceito', () => {
     expect(SKILL).toMatch(/stack-tecnologica\.md/)
-    expect(SKILL).toMatch(/Status: Aceito/)
+    expect(SKILL).toMatch(/\*\*Status\*\*: Aceito/)
+    expect(SKILL).not.toMatch(/[^*]Status: Aceito/)
     expect(SKILL).toMatch(/maior/)
     expect(SKILL).toMatch(/Substituído por/)
   })
@@ -62,12 +63,29 @@ describe('skill init-project', () => {
   })
 
   it('projeto existente substitui o ADR e recusa o que não migra', () => {
-    expect(SKILL).toMatch(/Substituído por/)
+    expect(SKILL).toMatch(/\*\*Status\*\*: Substituído por \[NNN\]/)
     expect(SKILL).toMatch(/migração não suportada/i)
     expect(SKILL).toMatch(/ADR-011/)
   })
 
   it('nunca mergeia', () => {
     expect(SKILL).not.toMatch(/gh pr merge/)
+  })
+
+  it('host em projeto novo: só o bloco Bootstrap pelo bootstrap-ambientes, nunca o host-<host>.md inteiro', () => {
+    expect(SKILL).toMatch(/nunca o `host-<host>\.md` inteiro/)
+  })
+
+  it('desligar roda só o caminho de desligar, nunca os Passos de ligar', () => {
+    expect(SKILL).toMatch(/só o caminho de desligar/)
+    expect(SKILL).toMatch(/`migracao` da opção escolhida/)
+  })
+
+  it('setup com pré-condição não cumprida fica pendente no relatório', () => {
+    expect(SKILL).toMatch(/setup pendente/)
+  })
+
+  it('runbook opcional apagado pelo projeto = não suportada neste projeto', () => {
+    expect(SKILL).toMatch(/não suportada neste projeto/)
   })
 })

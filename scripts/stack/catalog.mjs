@@ -2,10 +2,13 @@
 // O tooling da raiz não tem Zod (ADR-007): validação à mão, só da forma. Caminhos que existem e
 // recomendações ficam no teste do catálogo.
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 
 export const CATALOG_PATH = 'stack.catalog.json'
+
+const RUNBOOKS_DIR = 'docs/runbooks/'
+const RUNBOOKS_README = 'docs/runbooks/README.md'
 
 const erro = (mensagem) => new Error(`Catálogo de stack inválido: ${mensagem}`)
 
@@ -80,4 +83,27 @@ export function parseCatalog(textoJson) {
 
 export function lerCatalog(raiz = process.cwd()) {
   return parseCatalog(readFileSync(join(raiz, CATALOG_PATH), 'utf8'))
+}
+
+/**
+ * Caminhos do catálogo que faltam em `raiz`. Runbook opcional que o projeto apagou junto com a
+ * linha do catálogo de `docs/runbooks/README.md` (instrução do próprio runbook) não conta: a
+ * opção vira "não suportada neste projeto" na `init-project`.
+ */
+export function caminhosFaltando(catalog, raiz = process.cwd()) {
+  const readmePath = join(raiz, RUNBOOKS_README)
+  const readme = existsSync(readmePath) ? readFileSync(readmePath, 'utf8') : ''
+  const apagadoDeProposito = (caminho) =>
+    caminho.startsWith(RUNBOOKS_DIR) && !readme.includes(`(./${basename(caminho)})`)
+
+  const faltando = new Set()
+  for (const dimensao of catalog.dimensoes) {
+    for (const opcao of dimensao.opcoes) {
+      for (const caminho of [opcao.adr, opcao.setup, opcao.migracao]) {
+        if (caminho === null || existsSync(join(raiz, caminho))) continue
+        if (!apagadoDeProposito(caminho)) faltando.add(caminho)
+      }
+    }
+  }
+  return [...faltando]
 }

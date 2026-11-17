@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { HOSTS } from '../../scripts/deploy/config.mjs'
-import { lerCatalog, parseCatalog } from '../../scripts/stack/catalog.mjs'
+import { lerCatalog, parseCatalog, caminhosFaltando } from '../../scripts/stack/catalog.mjs'
 
 const catalog = lerCatalog()
 const DIMENSOES = ['perfil', 'formato', 'host', 'banco', 'auth', 'mcp', 'video', 'specGate', 'e2e']
@@ -29,13 +30,7 @@ describe('stack.catalog.json', () => {
   })
 
   it('todo adr, setup e migracao existe', () => {
-    for (const d of dimensoes) {
-      for (const o of d.opcoes) {
-        for (const p of [o.adr, o.setup, o.migracao]) {
-          if (p !== null) expect(existsSync(resolve(p)), p).toBe(true)
-        }
-      }
-    }
+    expect(caminhosFaltando(catalog)).toEqual([])
   })
 
   it('no máximo uma recomendada por dimensão; perfil sem recomendada', () => {
@@ -97,6 +92,16 @@ describe('stack.catalog.json', () => {
     }
   })
 
+  it('chaves de codigoDoApp são ids de formato', () => {
+    const formatos = dimensao('formato').opcoes.map((o) => o.id)
+    for (const d of dimensoes) {
+      for (const o of d.opcoes) {
+        for (const chave of Object.keys(o.codigoDoApp))
+          expect(formatos, `${d.id}.${o.id}`).toContain(chave)
+      }
+    }
+  })
+
   it('heroku em expo-api lista código do app', () => {
     const heroku = dimensao('host').opcoes.find((o) => o.id === 'heroku') as Opcao
     expect(heroku.codigoDoApp['expo-api'].some((item) => /Procfile/.test(item))).toBe(true)
@@ -144,5 +149,36 @@ describe('parseCatalog', () => {
     ],
   ])('%s → erro de catálogo', (_nome, texto) => {
     expect(() => parseCatalog(texto)).toThrow(/Catálogo de stack inválido/)
+  })
+})
+
+describe('caminhosFaltando', () => {
+  const cat = (setup: string) => parseCatalog(com({ setup }))
+
+  function projeto(readme: string) {
+    const raiz = mkdtempSync(join(tmpdir(), 'stack-'))
+    mkdirSync(join(raiz, 'docs/runbooks'), { recursive: true })
+    writeFileSync(join(raiz, 'ARCHITECTURE.md'), '')
+    writeFileSync(join(raiz, 'docs/runbooks/README.md'), readme)
+    return raiz
+  }
+
+  it('runbook ausente ainda listado no README dos runbooks → falta', () => {
+    const raiz = projeto('| [bunny-habilitar.md](./bunny-habilitar.md) |')
+    expect(caminhosFaltando(cat('docs/runbooks/bunny-habilitar.md'), raiz)).toEqual([
+      'docs/runbooks/bunny-habilitar.md',
+    ])
+  })
+
+  it('runbook opcional apagado com a linha do README → não falta', () => {
+    const raiz = projeto('| [rollback.md](./rollback.md) |')
+    expect(caminhosFaltando(cat('docs/runbooks/bunny-habilitar.md'), raiz)).toEqual([])
+  })
+
+  it('adr ausente sempre falta', () => {
+    const raiz = projeto('')
+    expect(
+      caminhosFaltando(parseCatalog(com({ adr: 'docs/adr/template/999-x.md' })), raiz)
+    ).toEqual(['docs/adr/template/999-x.md'])
   })
 })

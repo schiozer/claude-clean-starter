@@ -59,9 +59,12 @@ opções escolhidas (ex.: `expo-api` + `heroku` → `Procfile` e build apontando
 servidor Node contínuo). Código do app **não** é feito por esta skill: cada item vira PR próprio,
 antes do runbook de migração.
 
-Dimensão de projeto existente que muda e tem `migracao: null` → **migração não suportada** pelo
-template: avise ("migração de `<dimensão>` não suportada pelo template") e mantenha o valor
-atual na meta. Nunca improvise comandos para migrar.
+Em projeto existente, o runbook vem da `migracao` da opção escolhida (a meta), não da atual.
+Dimensão que muda e tem `migracao: null` → **migração não suportada** pelo template: avise
+("migração de `<dimensão>` não suportada pelo template") e mantenha o valor atual na meta. Runbook
+do catálogo que o projeto apagou (os opcionais `bunny-habilitar.md` e `e2e-uat-configurar.md`
+mandam apagar quando não usados) → a opção é **não suportada neste projeto**: avise e mantenha o
+valor atual. Nunca improvise comandos para migrar.
 
 Peça a confirmação do humano antes de seguir.
 
@@ -73,32 +76,41 @@ Um único PR, pela feature branch `docs/stack-tecnologica-<AAAA-MM-DD>`, com:
   **meta** na tabela `Dimensão | Escolha | ADR de detalhe | Desde`. `Desde` mantém a data antiga
   das dimensões que não mudaram. Projeto existente sem ADR de stack: um ADR só, com o retrato
   (valores anteriores) no **Contexto**;
-- o ADR vigente anterior, se houver, com o status trocado para `Status: Substituído por [NNN]`
+- o ADR vigente anterior, se houver, com o status trocado para `**Status**: Substituído por [NNN]`
   (única edição permitida em ADR antigo);
 - `deploy.config.json` quando o `host` muda (só identificadores não secretos; os blocos de
   `heroku`/`cloudrun` vêm do runbook do host);
 - `**Perfil arquitetural**:` no `CLAUDE.md` em projeto novo.
 
-Variáveis do GitHub (`SPEC_GATE`, `DEMOS_BUNNY`) **não** vão no PR: são passo de runbook. Conta
-`gh` correta antes do push (regra 5); PR pelo `.github/pull_request_template.md` com
-`Spec: n/a — escolha de stack`; o merge é do humano (R3). Sem mudança nenhuma → sem ADR novo e
+Variáveis do GitHub (`SPEC_GATE`, `DEMOS_BUNNY`) **não** vão no PR: são passo de runbook. Commit e
+título do PR `docs(adr): registra a stack tecnológica do projeto` (tipo `docs`: o `PR gate` só
+aceita `Spec: n/a` fora de `feat`/`refactor`). Conta `gh` correta antes do push (regra 5); PR pelo
+`.github/pull_request_template.md` com `Spec: n/a — escolha de stack`; o merge é do humano (R3). Sem mudança nenhuma → sem ADR novo e
 sem PR.
 
 ## 5. Runbooks
 
 Pela skill `runbook-execution`, um runbook por vez, cada passo com a sua classe de risco.
 
-- **Projeto novo**: os `setup` das escolhas. Primeiro `docs/runbooks/bootstrap-ambientes.md`
-  (que já chama o bloco do host), depois os demais na ordem do catálogo. Runbook repetido entre
-  dimensões (ex.: `bootstrap-ambientes.md` de `banco` e `auth`) roda **uma vez**. Opção com
-  `setup: null` não roda nada.
-- **Projeto existente**: só as dimensões cujo valor muda, pela `migracao` (ex.: `host` →
-  `docs/runbooks/migrar-host.md`; ligar/desligar `mcp`, `video` e `specGate` pelo runbook
-  apontado, que tem os dois caminhos). Os PRs de código do app (passo 3) vêm antes.
+- **Projeto novo**: primeiro `docs/runbooks/bootstrap-ambientes.md`, que já chama o bloco
+  **Bootstrap** do runbook do host escolhido. O `setup` de `host` é coberto por ele:
+  nunca o `host-<host>.md` inteiro (é uma coleção de blocos — UAT, Prod, Rollback, Encerrar — e
+  rodá-lo de ponta a ponta recria ou destrói apps). Runbook repetido entre dimensões
+  (ex.: `bootstrap-ambientes.md` de `banco` e `auth`) roda **uma vez**; opção com `setup: null` não
+  roda nada. Os demais `setup` (ex.: `mcp-habilitar-e-conectar.md`, `e2e-uat-configurar.md`,
+  `bunny-habilitar.md`) dependem do app existir (rota no UAT, Release, usuários de teste): confira
+  as **Pré-condições** de cada um; não cumpridas → não rode e registre no relatório como
+  **setup pendente: <runbook> — <pré-condição>**, para rodar quando o app chegar lá.
+- **Projeto existente**: só as dimensões cujo valor muda, pela `migracao` da opção escolhida (ex.:
+  `host` → `docs/runbooks/migrar-host.md`). Os PRs de código do app (passo 3) vêm antes.
+  - **Ligar** `mcp`, `video` ou `specGate`: os **Passos** do runbook.
+  - **Desligar** (meta `desligado`, `nenhum` ou `off`): só o caminho de desligar, nunca os Passos
+    de ligar — a seção **Rollback** de `mcp-habilitar-e-conectar.md` e `bunny-habilitar.md`, e o
+    passo de desligar do `spec-gate.md` (R3: desligar o gate é do humano).
 
 Runbook com `<preencher>` no caminho → o `runbook-execution` para e pede os valores; não invente.
 
 ## 6. Relatório
 
-Meta final, link do PR, runbooks executados (e onde ficou o registro de cada um), dimensões com
-migração não suportada e itens de código do app pendentes.
+Meta final, link do PR, runbooks executados (e onde ficou o registro de cada um), setup pendente
+(runbook e pré-condição), dimensões com migração não suportada e itens de código do app pendentes.

@@ -37,8 +37,9 @@ nunca vira escolha: vai para **Fora do catálogo**.
 ## 2. Achar o ADR vigente
 
 Liste `docs/adr/*-stack-tecnologica.md` (fora de `docs/adr/template/`). **Vigente** = o de
-**maior** `NNN` com `**Status**: Aceito` (escrito `Status: Aceito`). Os anteriores têm
-`Status: Substituído por [NNN]` e só servem de histórico.
+**maior** `NNN` cuja linha de status é `**Status**: Aceito` (procure por `Aceito`, não pelo
+texto sem negrito). Os anteriores têm `**Status**: Substituído por [NNN]` e só servem de
+histórico.
 
 ## 3. Achou → conferir com o estado real (R0)
 
@@ -98,7 +99,7 @@ Chamada pela `init-project`: devolva o retrato e pare aqui (ela gera o ADR com a
 
    - `## Fora do catálogo` (lista, pode ficar vazia com "Nada.");
    - **Consequências** e **Alternativas Consideradas** curtas.
-3. Feature branch `docs/adr-stack-tecnologica`, commit
+3. Feature branch `docs/adr-stack-tecnologica-<AAAA-MM-DD>`, commit
    `docs(adr): registra a stack tecnológica do projeto`, conta `gh` correta (regra 5), push e
    PR pelo template `.github/pull_request_template.md` com `Spec: n/a — registro de stack`. O
    merge é do humano.
