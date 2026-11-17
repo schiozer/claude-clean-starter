@@ -68,6 +68,7 @@
     "tests/unit/releaseFlow.test.ts",
     "tests/unit/specGate.test.ts",
     "tests/unit/stackCatalog.test.ts",
+    "tests/unit/stackSkills.test.ts",
     "tests/unit/templateSyncApply.test.ts",
     "tests/unit/templateSyncCheck.test.ts",
     "tests/unit/templateSyncClassify.test.ts",
