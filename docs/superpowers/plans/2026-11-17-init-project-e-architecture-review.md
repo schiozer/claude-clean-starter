@@ -236,5 +236,5 @@
 
 ### Task 5: Verificação final
 
-- [ ] Rodar `npm run lint && npm run type-check && npm test && npm run check:runbooks && npm run format -- --check`. Tudo precisa sair verde (CA-7).
+- [ ] Rodar `npm run lint && npm run type-check && npm test && npm run check:runbooks && npx prettier --check .`. Tudo precisa sair verde (CA-7).
 - [ ] Fazer a conferência spec × código: CA-1 a CA-7 ok, CA-8 `parcial` (uso real no AssistBru depois do merge).
