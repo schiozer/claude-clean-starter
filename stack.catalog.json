@@ -1,0 +1,365 @@
+{
+  "versao": 1,
+  "dimensoes": [
+    {
+      "id": "perfil",
+      "nome": "Perfil arquitetural",
+      "grava": { "arquivo": "CLAUDE.md", "campo": "Perfil arquitetural" },
+      "opcoes": [
+        {
+          "id": "mvp-primeiro",
+          "nome": "MVP primeiro",
+          "recomendada": false,
+          "porque": "Produto ainda validando a ideia: começa com Service enxuto e é promovido ao completo por decisão explícita (ADR-011).",
+          "pros": [
+            "Menos código no início: Service acessa o banco direto, sem aggregates nem repositórios",
+            "Bordas REST + MCP já nascem no formato final; a promoção não muda interfaces/"
+          ],
+          "contras": [
+            "A promoção é trabalho extra e exige ADR do projeto",
+            "Regras de negócio ricas ficam espalhadas no Service até a promoção"
+          ],
+          "adr": "docs/adr/template/011-service-layer-ddd-modular-e-perfis.md",
+          "setup": null,
+          "migracao": null,
+          "codigoDoApp": {}
+        },
+        {
+          "id": "completo-direto",
+          "nome": "Completo direto",
+          "recomendada": false,
+          "porque": "Projeto pequeno e estável, sem fase MVP: nasce e permanece com DDD tático (ADR-011).",
+          "pros": [
+            "Invariantes protegidas por aggregates e value objects desde o dia 1",
+            "Repositórios atrás de interface: trocar o banco não muda o domínio"
+          ],
+          "contras": [
+            "Mais arquivos e cerimônia por feature",
+            "Exagero para protótipos descartáveis"
+          ],
+          "adr": "docs/adr/template/011-service-layer-ddd-modular-e-perfis.md",
+          "setup": null,
+          "migracao": null,
+          "codigoDoApp": {}
+        }
+      ]
+    },
+    {
+      "id": "formato",
+      "nome": "Formato do app",
+      "grava": "nenhum",
+      "opcoes": [
+        {
+          "id": "next-monolito",
+          "nome": "Next.js (monólito web)",
+          "recomendada": true,
+          "porque": "UI, REST e MCP no mesmo deployable: é o formato dos exemplos e dos templates de deploy do template.",
+          "pros": [
+            "Um deployable só; exemplos, skills e templates de deploy já usam este formato",
+            "Preview por PR cobre UI e API juntos"
+          ],
+          "contras": [
+            "Sem app nativo: no celular é só web/PWA",
+            "Mudar para expo-api depois exige separar o backend em apps/api"
+          ],
+          "adr": "ARCHITECTURE.md",
+          "setup": null,
+          "migracao": null,
+          "codigoDoApp": {}
+        },
+        {
+          "id": "expo-api",
+          "nome": "Expo (app nativo) + API separada",
+          "recomendada": false,
+          "porque": "Produto que precisa de app nativo (iOS): app Expo em apps/mobile e backend em apps/api (ARCHITECTURE.md, seção nativo).",
+          "pros": [
+            "App nativo com push, Keychain e loja",
+            "Schemas Zod e DTOs compartilhados em packages/shared"
+          ],
+          "contras": [
+            "Dois deployables (app pela loja/EAS, API no host)",
+            "Os templates de deploy assumem a raiz; a API em apps/api exige ajuste de build"
+          ],
+          "adr": "ARCHITECTURE.md",
+          "setup": null,
+          "migracao": null,
+          "codigoDoApp": {}
+        }
+      ]
+    },
+    {
+      "id": "host",
+      "nome": "Host (deploy)",
+      "grava": { "arquivo": "deploy.config.json", "campo": "host" },
+      "opcoes": [
+        {
+          "id": "vercel",
+          "nome": "Vercel",
+          "recomendada": true,
+          "porque": "Preview por PR nativo, plano Hobby grátis e menor setup; é o host padrão quando deploy.config.json está ausente (ADR-018).",
+          "pros": [
+            "Preview por PR sem configuração extra e grátis no plano Hobby",
+            "Comportamento padrão do template: sem deploy.config.json já funciona"
+          ],
+          "contras": [
+            "Bloqueada em algumas redes corporativas (caso que motivou o ADR-018)",
+            "SDKs @vercel/* e VERCEL_* prendem o app ao host"
+          ],
+          "adr": "docs/adr/template/018-camada-de-deploy.md",
+          "setup": "docs/runbooks/host-vercel.md",
+          "migracao": "docs/runbooks/migrar-host.md",
+          "codigoDoApp": {
+            "next-monolito": [],
+            "expo-api": [
+              "API em funções serverless da Vercel (ex.: @vercel/node) com build próprio de apps/api"
+            ]
+          }
+        },
+        {
+          "id": "heroku",
+          "nome": "Heroku",
+          "recomendada": false,
+          "porque": "Alternativa simples quando a Vercel não serve: review app por PR no pipeline e auto-deploy da main (ADR-018).",
+          "pros": [
+            "Review app por PR e auto-deploy da main pelo pipeline",
+            "Servidor Node contínuo: sem limites de função serverless"
+          ],
+          "contras": [
+            "Sem plano grátis: Eco ~US$ 5/mês por conta ou Basic ~US$ 7/app, e review apps também custam",
+            "O CI precisa registrar a URL de cada review app no Auth0 do UAT"
+          ],
+          "adr": "docs/adr/template/018-camada-de-deploy.md",
+          "setup": "docs/runbooks/host-heroku.md",
+          "migracao": "docs/runbooks/migrar-host.md",
+          "codigoDoApp": {
+            "next-monolito": [
+              "Procfile e app.json na raiz, copiados de scripts/deploy/templates/heroku/",
+              "Remover dependências de @vercel/* e VERCEL_* (ler APP_ENV)"
+            ],
+            "expo-api": [
+              "Procfile e app.json com o build apontando para apps/api",
+              "Servidor Node contínuo (ex.: @hono/node-server) em vez de funções serverless",
+              "Remover dependências de @vercel/* e VERCEL_* (ler APP_ENV)"
+            ]
+          }
+        },
+        {
+          "id": "cloudrun",
+          "nome": "Google Cloud Run",
+          "recomendada": false,
+          "porque": "Container com escala a zero e custo ~US$ 0 em baixo uso; preview por tag sem tráfego (ADR-018).",
+          "pros": [
+            "Preview por PR como tag pr-<n> sem tráfego; escala a zero",
+            "Credencial por Workload Identity Federation, sem chave no GitHub"
+          ],
+          "contras": [
+            "Setup mais longo (projetos GCP, WIF, Artifact Registry, alerta de orçamento)",
+            "Um serviço de UAT só para todos os PRs; exige limpeza do Artifact Registry"
+          ],
+          "adr": "docs/adr/template/018-camada-de-deploy.md",
+          "setup": "docs/runbooks/host-cloudrun.md",
+          "migracao": "docs/runbooks/migrar-host.md",
+          "codigoDoApp": {
+            "next-monolito": [
+              "Dockerfile e .dockerignore copiados de scripts/deploy/templates/cloudrun/, com output: 'standalone' no next.config",
+              "Remover dependências de @vercel/* e VERCEL_* (ler APP_ENV)"
+            ],
+            "expo-api": [
+              "Dockerfile de apps/api com servidor Node contínuo (ex.: @hono/node-server) ouvindo em PORT",
+              "Remover dependências de @vercel/* e VERCEL_* (ler APP_ENV)"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "banco",
+      "nome": "Banco de dados",
+      "grava": "nenhum",
+      "opcoes": [
+        {
+          "id": "neon",
+          "nome": "Neon (Postgres serverless)",
+          "recomendada": true,
+          "porque": "Postgres puro atrás de I*Repository, com um branch por ambiente e branches efêmeros para o agente (ADR-001, ADR-003).",
+          "pros": [
+            "Postgres puro, sem camada proprietária no banco (ADR-001)",
+            "Branches por ambiente e efêmeros para migrations destrutivas isoladas (ADR-003)"
+          ],
+          "contras": [
+            "Disciplina de promoção de migrations dev → uat → prod",
+            "Storage, realtime e functions são serviços à parte"
+          ],
+          "adr": "docs/adr/template/001-neon-auth0.md",
+          "setup": "docs/runbooks/bootstrap-ambientes.md",
+          "migracao": null,
+          "codigoDoApp": {}
+        }
+      ]
+    },
+    {
+      "id": "auth",
+      "nome": "Autenticação",
+      "grava": "nenhum",
+      "opcoes": [
+        {
+          "id": "auth0",
+          "nome": "Auth0",
+          "recomendada": true,
+          "porque": "IdP externo atrás de IAuthProvider/IAccessTokenVerifier, um tenant por ambiente e Authorization Server do MCP (ADR-001, ADR-004).",
+          "pros": [
+            "Identidade enterprise (SSO, MFA) e Authorization Server do MCP (ADR-012)",
+            "Um tenant por ambiente: zero usuário de teste em Prod (ADR-004)"
+          ],
+          "contras": ["Custo escala com MAU", "Três tenants para manter em sincronia"],
+          "adr": "docs/adr/template/001-neon-auth0.md",
+          "setup": "docs/runbooks/bootstrap-ambientes.md",
+          "migracao": null,
+          "codigoDoApp": {}
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "nome": "Borda MCP",
+      "grava": "nenhum",
+      "opcoes": [
+        {
+          "id": "ligado",
+          "nome": "MCP ligado",
+          "recomendada": true,
+          "porque": "O sistema é agêntico: o servidor MCP expõe os services a ChatGPT/Claude em nome do usuário (ADR-012).",
+          "pros": [
+            "LLMs usam o produto pelos mesmos services e guards da UI",
+            "Leitura ligada por flag; escrita nasce desligada"
+          ],
+          "contras": [
+            "Mais uma superfície de ataque: OAuth, PAT, rate limit e auditoria",
+            "Tools precisam de descrição e manutenção como UX para a LLM"
+          ],
+          "adr": "docs/adr/template/012-mcp-como-borda-agentica.md",
+          "setup": "docs/runbooks/mcp-habilitar-e-conectar.md",
+          "migracao": "docs/runbooks/mcp-habilitar-e-conectar.md",
+          "codigoDoApp": {}
+        },
+        {
+          "id": "desligado",
+          "nome": "MCP desligado",
+          "recomendada": false,
+          "porque": "Projeto sem uso agêntico previsto: as flags mcp.* ficam desligadas e nenhuma tool é listada.",
+          "pros": ["Menor superfície exposta", "Nenhuma configuração de OAuth para o MCP"],
+          "contras": [
+            "Sem acesso por ChatGPT/Claude",
+            "Ligar depois exige o runbook e a configuração do Auth0"
+          ],
+          "adr": "docs/adr/template/012-mcp-como-borda-agentica.md",
+          "setup": null,
+          "migracao": "docs/runbooks/mcp-habilitar-e-conectar.md",
+          "codigoDoApp": {}
+        }
+      ]
+    },
+    {
+      "id": "video",
+      "nome": "Vídeos de demo e treinamento",
+      "grava": { "gh-variable": "DEMOS_BUNNY" },
+      "opcoes": [
+        {
+          "id": "nenhum",
+          "nome": "Sem vídeos",
+          "recomendada": true,
+          "porque": "DEMOS_BUNNY nasce desligado: o job termina verde com aviso e a ajuda mostra só a documentação (ADR-017).",
+          "pros": [
+            "Nenhum custo nem segredo de vídeo",
+            "A /ajuda continua com a documentação gerada"
+          ],
+          "contras": ["Sem demos por Release nem trilhas de treinamento em vídeo"],
+          "adr": "docs/adr/template/017-bunny-videos-demos-treinamento.md",
+          "setup": null,
+          "migracao": "docs/runbooks/bunny-habilitar.md",
+          "codigoDoApp": {}
+        },
+        {
+          "id": "bunny",
+          "nome": "Bunny Stream",
+          "recomendada": false,
+          "porque": "Demos e treinamento gravados a cada Release e servidos pela CDN do Bunny (ADR-017).",
+          "pros": [
+            "Demos por versão e treinamento por perfil gerados dos cenários da spec",
+            "Embed assinado protege vídeos de time interno"
+          ],
+          "contras": [
+            "Custo do Bunny e segredos BUNNY_* para manter",
+            "Janela de cache em que vídeos podem aparecer quebrados após publicar"
+          ],
+          "adr": "docs/adr/template/017-bunny-videos-demos-treinamento.md",
+          "setup": "docs/runbooks/bunny-habilitar.md",
+          "migracao": "docs/runbooks/bunny-habilitar.md",
+          "codigoDoApp": {}
+        }
+      ]
+    },
+    {
+      "id": "specGate",
+      "nome": "Gate Spec × código com Claude",
+      "grava": { "gh-variable": "SPEC_GATE" },
+      "opcoes": [
+        {
+          "id": "off",
+          "nome": "Gate desligado",
+          "recomendada": true,
+          "porque": "Nasce desligado: depende de chave paga e de decisão do dono do repositório; a conferência local continua (ADR-014).",
+          "pros": [
+            "Sem custo de API nem segredo extra",
+            "A conferência local spec × código do Claudinho continua obrigatória"
+          ],
+          "contras": ["Sem segunda checagem automática no PR"],
+          "adr": "docs/adr/template/014-release-management.md",
+          "setup": null,
+          "migracao": "docs/runbooks/spec-gate.md",
+          "codigoDoApp": {}
+        },
+        {
+          "id": "on",
+          "nome": "Gate ligado",
+          "recomendada": false,
+          "porque": "Check Spec × código com Claude em todo PR, alarmado pela Guarda da main se faltar (ADR-014).",
+          "pros": [
+            "Revisão automática do PR contra a spec",
+            "Claude restrito a leitura, action fixada por SHA"
+          ],
+          "contras": [
+            "Custo por PR e chave da Anthropic no repositório",
+            "Prompt limitado a 100 000 bytes: PRs grandes são cortados"
+          ],
+          "adr": "docs/adr/template/014-release-management.md",
+          "setup": "docs/runbooks/spec-gate.md",
+          "migracao": "docs/runbooks/spec-gate.md",
+          "codigoDoApp": {}
+        }
+      ]
+    },
+    {
+      "id": "e2e",
+      "nome": "Testes E2E",
+      "grava": "nenhum",
+      "opcoes": [
+        {
+          "id": "playwright",
+          "nome": "Playwright",
+          "recomendada": true,
+          "porque": "Cenários da spec viram testes Playwright e a Regressão (UAT) roda contra o preview do PR (ADR-016).",
+          "pros": [
+            "Cenário da spec ligado ao teste pelo ID, com rastreabilidade",
+            "Projetos desktop e mobile; check obrigatório Regressão (UAT)"
+          ],
+          "contras": ["Só web: telas nativas (expo-api) precisam de Maestro/Detox à parte"],
+          "adr": "docs/adr/template/016-testes-e2e-nascidos-da-spec.md",
+          "setup": "docs/runbooks/e2e-uat-configurar.md",
+          "migracao": null,
+          "codigoDoApp": {}
+        }
+      ]
+    }
+  ]
+}
