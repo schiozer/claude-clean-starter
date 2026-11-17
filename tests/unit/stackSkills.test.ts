@@ -38,3 +38,36 @@ describe('skill architecture-review', () => {
     expect(SKILL).not.toMatch(/gh pr merge/)
   })
 })
+
+describe('skill init-project', () => {
+  const SKILL = ler('init-project')
+
+  it('frontmatter com name e description começando por Use', () => {
+    const frontmatter = frontmatterDe(SKILL)
+    expect(frontmatter).toMatch(/^name: init-project$/m)
+    expect(frontmatter).toMatch(/^description: Use /m)
+  })
+
+  it('parte da architecture-review e só oferece o catálogo', () => {
+    expect(SKILL).toMatch(/architecture-review/)
+    expect(SKILL).toMatch(/stack\.catalog\.json/)
+    expect(SKILL).toMatch(/só o catálogo/i)
+    expect(SKILL).toMatch(/codigoDoApp/)
+  })
+
+  it('projeto novo roda os setups pelo runbook-execution, bootstrap primeiro', () => {
+    expect(SKILL).toMatch(/projeto novo/i)
+    expect(SKILL).toMatch(/runbook-execution/)
+    expect(SKILL).toMatch(/bootstrap-ambientes\.md/)
+  })
+
+  it('projeto existente substitui o ADR e recusa o que não migra', () => {
+    expect(SKILL).toMatch(/Substituído por/)
+    expect(SKILL).toMatch(/migração não suportada/i)
+    expect(SKILL).toMatch(/ADR-011/)
+  })
+
+  it('nunca mergeia', () => {
+    expect(SKILL).not.toMatch(/gh pr merge/)
+  })
+})
