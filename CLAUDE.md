@@ -39,6 +39,10 @@
 > (`vercel`, `heroku` ou `cloudrun`) em `deploy.config.json`; vazio ou ausente = `vercel`. Faça o
 > bootstrap pelo bloco do host em `docs/runbooks/host-<host>.md`.
 >
+> **Adoção — stack** ([ADR-019](./docs/adr/template/019-stack-por-catalogo.md)): rode `/init-project`
+> para escolher perfil, host e gates pelo catálogo (`stack.catalog.json`); ele registra a stack num
+> ADR do projeto (`docs/adr/NNN-stack-tecnologica.md`) e roda os runbooks de setup ou de migração.
+>
 > **Adoção — sync com o template** ([ADR-015](./docs/adr/template/015-template-sync.md)): rode
 > `/template-sync adotar` a partir do template; depois, `/template-sync` a cada Release (aviso
 > semanal na issue `template-sync`).

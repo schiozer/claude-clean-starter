@@ -26,6 +26,13 @@ implementação e entram na regressão ([ADR-016](./docs/adr/template/016-testes
 
 ## Skills por Fase
 
+### Stack — Arquitetura do projeto
+
+| Skill                 | Origem  | Papel                                                                                                                                                                                                                           |
+| --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `architecture-review` | Projeto | Acha o ADR de stack vigente do projeto (`docs/adr/NNN-stack-tecnologica.md`) e confere com o estado real, ou levanta a stack com evidências e gera o ADR por PR — ver [ADR-019](./docs/adr/template/019-stack-por-catalogo.md). |
+| `init-project`        | Projeto | Escolhe a arquitetura-meta **só pelo catálogo** (`stack.catalog.json`), com prós, contras e recomendação; registra a meta por PR e roda os runbooks de setup (projeto novo) ou de migração (existente).                         |
+
 ### Design — Autoria de Spec
 
 | Skill                       | Origem      | Papel                                                                              |
