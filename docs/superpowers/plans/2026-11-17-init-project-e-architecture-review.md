@@ -221,7 +221,6 @@
 - Modify:
   - `SKILLS.md`: nova subseção `### Stack — Arquitetura do projeto` antes de `### Design — Autoria de Spec`, com as duas skills na tabela.
   - `CLAUDE.md:38`: nota curta depois de "Adoção — host": `> **Adoção — stack** ([ADR-019](...)): rode `/init-project` para escolher perfil, host e gates pelo catálogo (`stack.catalog.json`); ele registra a stack num ADR do projeto.`
-  - `docs/adr/README.md`, se houver índice. Conferir com `ls docs/adr`.
 - Test: suíte existente (`docsLinks`, `templateSyncManifest`).
 
 - [ ] **Step 1: Escrever o ADR-019** no formato do ADR-018 (`**Data**: 2026-11-17`, `**Status**: Aceito`). Conteúdo:
