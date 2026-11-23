@@ -23,14 +23,18 @@ const transitorio = (error) =>
 
 const maisRecente = (a, b) => String(a.created_at).localeCompare(String(b.created_at))
 
-/** Platform API: `(metodo, caminho, corpo?) → JSON`. O token nunca entra em mensagens de erro. */
+/**
+ * Platform API: `(metodo, caminho, corpo?, headersExtras?) → JSON`. O token nunca entra em
+ * mensagens de erro.
+ */
 const fazerApi =
   ({ token, fetchFn, variavel = 'HEROKU_API_KEY' }) =>
-  async (metodo, caminho, corpo) => {
+  async (metodo, caminho, corpo, headersExtras = {}) => {
     const headers = {
       Accept: 'application/vnd.heroku+json; version=3',
       Authorization: `Bearer ${token}`,
       ...(corpo ? { 'Content-Type': 'application/json' } : {}),
+      ...headersExtras,
     }
     const resposta = await fetchFn(`${API}${caminho}`, {
       method: metodo,
@@ -230,8 +234,18 @@ async function webUrl(get, appNome) {
   return dados.web_url
 }
 
+/**
+ * Sem `Range`, a Platform API lista em ordem ascendente e corta em 200: as releases recentes
+ * sumiriam. Pede as 50 mais novas (desc) e reordena por segurança.
+ */
+const RANGE_RELEASES_DESC = 'version ..; order=desc, max=50'
+
 const releasesPorVersao = async (api, appNome) =>
-  [...((await api('GET', `${app(appNome)}/releases`)) ?? [])].sort((a, b) => b.version - a.version)
+  [
+    ...((await api('GET', `${app(appNome)}/releases`, undefined, {
+      Range: RANGE_RELEASES_DESC,
+    })) ?? []),
+  ].sort((a, b) => b.version - a.version)
 
 /** Release em produção no app: a `current` ou, sem ela, a `succeeded` de maior versão. */
 const releaseAtual = (releases) =>
@@ -254,24 +268,34 @@ async function urlUat(ctx) {
   return webUrl(get, ctx.config.heroku.uatApp)
 }
 
+/** UUID do app: o corpo de `/pipeline-promotions` só aceita id, não nome. */
+const idDoApp = async (api, appNome) => {
+  const dados = await api('GET', app(appNome))
+  if (!dados?.id) throw new Error(`deploy: app ${appNome} sem id na Platform API`)
+  return dados.id
+}
+
 /**
- * Promove o slug do UAT para Prod (CT-ESTEIRA-010: só se o slug em UAT é do build do SHA pedido).
- * O `id` dos apps na promoção vem de `heroku.uatApp`/`heroku.prodApp`.
+ * Promove o slug do UAT para Prod. CT-ESTEIRA-010: só se o slug da release atual do UAT é do SHA
+ * pedido (`slug.commit`). A promoção copia a release atual do UAT no momento do POST; por isso, ao
+ * terminar, confere que Prod ficou com o slug verificado (UAT pode ter mudado no meio).
  */
 async function promoverProd(ctx) {
   const { api, espera } = esteiraCtx(ctx)
   const { pipelineId, uatApp, prodApp } = ctx.config.heroku
   const slug = releaseAtual(await releasesPorVersao(api, uatApp))?.slug?.id
-  const builds = (await api('GET', `${app(uatApp)}/builds`)) ?? []
-  const build = slug ? builds.find((b) => b.slug?.id === slug) : undefined
-  if (!build || build.source_blob?.version !== ctx.sha) {
+  const dadosDoSlug = slug
+    ? await api('GET', `${app(uatApp)}/slugs/${encodeURIComponent(slug)}`)
+    : undefined
+  if (!dadosDoSlug || dadosDoSlug.commit !== ctx.sha) {
     throw new Error(`deploy: slug do UAT não é de ${curto(ctx.sha)}: rode o deploy de UAT do SHA`)
   }
 
+  const [uatId, prodId] = [await idDoApp(api, uatApp), await idDoApp(api, prodApp)]
   const promocao = await api('POST', '/pipeline-promotions', {
     pipeline: { id: pipelineId },
-    source: { app: { id: uatApp } },
-    targets: [{ app: { id: prodApp } }],
+    source: { app: { id: uatId } },
+    targets: [{ app: { id: prodId } }],
   })
   ctx.log?.(`promoção ${promocao.id}: slug de ${curto(ctx.sha)} do ${uatApp} para o ${prodApp}`)
   await sondar({
@@ -291,6 +315,14 @@ async function promoverProd(ctx) {
     mensagemDeTimeout: () =>
       `Promoção para o ${prodApp} não terminou em ${minutos(espera.timeoutMs)}`,
   })
+
+  const emProd = releaseAtual(await releasesPorVersao(api, prodApp))?.slug?.id
+  if (emProd !== slug) {
+    throw new Error(
+      `deploy: prod recebeu slug diferente do verificado — UAT mudou durante a promoção; ` +
+        'faça rollback e promova de novo'
+    )
+  }
   ctx.log?.(`promoção ${promocao.id} concluída (succeeded)`)
   return { payload: { slug } }
 }

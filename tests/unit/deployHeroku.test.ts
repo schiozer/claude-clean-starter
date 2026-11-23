@@ -298,47 +298,82 @@ describe('adaptador heroku: esteira (build once, promote)', () => {
     expect(await heroku.urlUat(makeCtx(fetchFn))).toBe('https://app-uat.herokuapp.com/')
   })
 
+  const RANGE_DESC = 'version ..; order=desc, max=50'
+  const chamadas = (fetchFn: ReturnType<typeof fetchHeroku>, metodo: string, fim: string) =>
+    (fetchFn.mock.calls as unknown as [string, RequestInit][]).filter(
+      ([url, init]) => (init?.method ?? 'GET') === metodo && url.endsWith(fim)
+    )
+
   describe('promoverProd', () => {
-    const rotas = ({ versao = SHA_E, alvo = ['pending', 'succeeded'] } = {}): Rotas => ({
+    const UUID_UAT = '11111111-1111-4111-8111-111111111111'
+    const UUID_PROD = '22222222-2222-4222-8222-222222222222'
+    const rotas = ({
+      commit = SHA_E,
+      alvo = ['pending', 'succeeded'],
+      slugEmProd = 'slug-uat',
+    } = {}): Rotas => ({
+      // sem Range a API devolve em ordem ascendente e pode não marcar `current`
       'GET /apps/app-uat/releases': () =>
         json(200, [
           { id: 'r-1', version: 1, status: 'succeeded', slug: { id: 'slug-velho' } },
-          { id: 'r-2', version: 2, status: 'succeeded', current: true, slug: { id: 'slug-uat' } },
+          { id: 'r-2', version: 2, status: 'succeeded', slug: { id: 'slug-uat' } },
         ]),
-      'GET /apps/app-uat/builds': () =>
-        json(200, [
-          { id: 'b-0', slug: { id: 'slug-velho' }, source_blob: { version: 'velho' } },
-          { id: 'b-1', slug: { id: 'slug-uat' }, source_blob: { version: versao } },
-        ]),
+      'GET /apps/app-uat/slugs/slug-uat': () => json(200, { id: 'slug-uat', commit }),
+      'GET /apps/app-uat': () => json(200, { id: UUID_UAT, name: 'app-uat' }),
+      'GET /apps/app-prod': () => json(200, { id: UUID_PROD, name: 'app-prod' }),
       'POST /pipeline-promotions': () => json(201, { id: 'promo-1', status: 'pending' }),
       'GET /pipeline-promotions/promo-1/promotion-targets': () =>
-        json(200, [{ app: { id: 'app-prod' }, status: alvo.shift() ?? 'succeeded' }]),
+        json(200, [{ app: { id: UUID_PROD }, status: alvo.shift() ?? 'succeeded' }]),
+      'GET /apps/app-prod/releases': () =>
+        json(200, [
+          { id: 'p-1', version: 7, status: 'succeeded', slug: { id: 'slug-antigo' } },
+          { id: 'p-2', version: 8, status: 'succeeded', slug: { id: slugEmProd } },
+        ]),
     })
 
-    it('CT-ESTEIRA-010: slug do UAT de outro SHA → recusa sem promover', async () => {
-      const fetchFn = fetchHeroku(rotas({ versao: 'outrosha999' }))
+    it('CT-ESTEIRA-010: slug do UAT de outro commit → recusa sem promover', async () => {
+      const fetchFn = fetchHeroku(rotas({ commit: 'outrosha999' }))
       const ctx = makeCtx(fetchFn)
       await expect(heroku.promoverProd(ctx)).rejects.toThrow(
         `slug do UAT não é de ${SHA_E.slice(0, 7)}`
       )
-      const posts = fetchFn.mock.calls.filter(
-        (c) => (c as unknown as [string, RequestInit])[1]?.method === 'POST'
-      )
-      expect(posts).toHaveLength(0)
+      expect(chamadas(fetchFn, 'POST', '')).toHaveLength(0)
     })
 
-    it('slug certo → POST /pipeline-promotions do uatApp para o prodApp e espera succeeded', async () => {
+    it('lê as releases do UAT em ordem desc (Range) e o commit pelo slug, não por /builds', async () => {
+      const fetchFn = fetchHeroku(rotas())
+      await heroku.promoverProd(makeCtx(fetchFn))
+      const [[, init]] = chamadas(fetchFn, 'GET', '/apps/app-uat/releases')
+      expect(init.headers).toMatchObject({ Range: RANGE_DESC })
+      expect(chamadas(fetchFn, 'GET', '/apps/app-uat/slugs/slug-uat')).toHaveLength(1)
+      expect(chamadas(fetchFn, 'GET', '/builds')).toHaveLength(0)
+    })
+
+    it('slug certo → POST /pipeline-promotions com os UUIDs dos apps e espera succeeded', async () => {
       const fetchFn = fetchHeroku(rotas())
       const ctx = makeCtx(fetchFn)
       expect(await heroku.promoverProd(ctx)).toEqual({ payload: { slug: 'slug-uat' } })
-      const promo = fetchFn.mock.calls.find((c) => String(c[0]).endsWith('/pipeline-promotions'))
-      const body = JSON.parse(String((promo as unknown as [string, RequestInit])[1].body))
-      expect(body).toEqual({
+      const [[, init]] = chamadas(fetchFn, 'POST', '/pipeline-promotions')
+      expect(JSON.parse(String(init.body))).toEqual({
         pipeline: { id: 'pipe-1' },
-        source: { app: { id: 'app-uat' } },
-        targets: [{ app: { id: 'app-prod' } }],
+        source: { app: { id: UUID_UAT } },
+        targets: [{ app: { id: UUID_PROD } }],
       })
       expect(ctx.sleep).toHaveBeenCalledTimes(1)
+    })
+
+    it('depois do succeeded confere a release atual do prodApp (Range desc)', async () => {
+      const fetchFn = fetchHeroku(rotas())
+      await heroku.promoverProd(makeCtx(fetchFn))
+      const [[, init]] = chamadas(fetchFn, 'GET', '/apps/app-prod/releases')
+      expect(init.headers).toMatchObject({ Range: RANGE_DESC })
+    })
+
+    it('UAT mudou durante a promoção (prod com outro slug) → erro pedindo rollback', async () => {
+      const ctx = makeCtx(fetchHeroku(rotas({ slugEmProd: 'slug-intruso' })))
+      await expect(heroku.promoverProd(ctx)).rejects.toThrow(
+        /prod recebeu slug diferente do verificado.*UAT mudou durante a promoção.*rollback/
+      )
     })
 
     it('alvo da promoção failed → erro', async () => {
@@ -353,23 +388,23 @@ describe('adaptador heroku: esteira (build once, promote)', () => {
   })
 
   describe('rollbackProd', () => {
-    it('cria release no prodApp com o slug anterior ao atual', async () => {
+    it('cria release no prodApp com o slug anterior ao atual (lista ascendente, sem current)', async () => {
       const fetchFn = fetchHeroku({
         'GET /apps/app-prod/releases': () =>
           json(200, [
-            { version: 3, status: 'succeeded', current: true, slug: { id: 'slug-novo' } },
+            { version: 0, status: 'failed', slug: { id: 'slug-quebrado' } },
             { version: 1, status: 'succeeded', slug: { id: 'slug-antigo' } },
             { version: 2, status: 'succeeded', slug: { id: 'slug-novo' } },
-            { version: 0, status: 'failed', slug: { id: 'slug-quebrado' } },
+            { version: 3, status: 'succeeded', slug: { id: 'slug-novo' } },
           ]),
         'POST /apps/app-prod/releases': () => json(201, { id: 'r-4' }),
       })
       await heroku.rollbackProd(makeCtx(fetchFn))
-      const post = fetchFn.mock.calls.find(
-        (c) => (c as unknown as [string, RequestInit])[1]?.method === 'POST'
-      ) as unknown as [string, RequestInit]
-      expect(post[0]).toBe('https://api.heroku.com/apps/app-prod/releases')
-      expect(JSON.parse(String(post[1].body))).toEqual({ slug: 'slug-antigo' })
+      const [[, get]] = chamadas(fetchFn, 'GET', '/apps/app-prod/releases')
+      expect(get.headers).toMatchObject({ Range: RANGE_DESC })
+      const [[url, post]] = chamadas(fetchFn, 'POST', '')
+      expect(url).toBe('https://api.heroku.com/apps/app-prod/releases')
+      expect(JSON.parse(String(post.body))).toEqual({ slug: 'slug-antigo' })
     })
 
     it('sem release anterior → erro', async () => {
