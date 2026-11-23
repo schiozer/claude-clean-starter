@@ -437,3 +437,57 @@ describe('evaluateCommand', () => {
     )
   })
 })
+
+describe('esteira: integração protegida e promoção só do humano', () => {
+  const MOTIVO = '`Promover para Prod` é disparado pelo humano (`[R3]`).'
+  const COM_ESTEIRA = { protectedBranches: ['main', 'develop'] }
+  const onDevelop = (opts: Opts = {}): Opts => ({ ...COM_ESTEIRA, ...opts })
+  const evalDevelop = (command: string) =>
+    evaluateCommand(command, {
+      cwd: '/dev',
+      protectedBranches: ['main', 'develop'],
+      branchOf: () => 'develop',
+      aliasOf: () => null,
+    })
+
+  it('com esteira bloqueia git push para a develop e commit na develop', () => {
+    expect(evaluate('git push origin develop', onDevelop(ON_FEAT)).allowed).toBe(false)
+    expect(evalDevelop('git commit -m x').allowed).toBe(false)
+  })
+
+  it('sem esteira git push origin develop continua permitido', () => {
+    expect(evaluate('git push origin develop', ON_FEAT).allowed).toBe(true)
+  })
+
+  const PROMOCAO = [
+    'gh workflow run promover.yml',
+    'gh workflow run "Promover para Prod"',
+    'gh workflow run "promover para prod" --ref main',
+    'gh workflow enable promover.yml',
+    'gh workflow disable promover.yml',
+    'gh api -X POST repos/o/r/actions/workflows/promover.yml/dispatches',
+    'gh api --method POST repos/o/r/actions/workflows/1/dispatches -f ref=main',
+    'gh api repos/o/r/dispatches -f event_type=x',
+    'gh api repos/o/r/dispatches --input payload.json',
+  ]
+  for (const cmd of PROMOCAO) {
+    it(`bloqueia (com e sem esteira): ${cmd}`, () => {
+      for (const opts of [ON_FEAT, onDevelop(ON_FEAT)]) {
+        const verdict = evaluate(cmd, opts)
+        expect(verdict.allowed).toBe(false)
+        if (!verdict.allowed) expect(verdict.reason).toContain(MOTIVO)
+      }
+    })
+  }
+
+  for (const cmd of [
+    'gh workflow list',
+    'gh workflow view promover.yml',
+    'gh workflow run ci.yml',
+    'gh api repos/o/r/actions/workflows/promover.yml/dispatches',
+  ]) {
+    it(`permite: ${cmd}`, () => {
+      expect(evaluate(cmd, ON_FEAT).allowed).toBe(true)
+    })
+  }
+})

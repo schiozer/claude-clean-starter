@@ -74,6 +74,9 @@ const GLOBAL_OPTIONS_WITH_ARG = new Set([
 ])
 /** Config que muda o destino de um `git push` sem refspec explícito. */
 const PUSH_CONFIG = /^(push\.default|remote\..+\.(push|mirror))$/i
+const PROMOTION_MOTIVE = '`Promover para Prod` é disparado pelo humano (`[R3]`).'
+/** Alvo de `gh workflow …`: `promover`, `promover.yml` (com ou sem caminho) ou o nome do workflow. */
+const PROMOTION_WORKFLOW = /^(?:.*\/)?promover(?:\.ya?ml)?$|^promover para prod$/i
 const GRAPHQL_WRITE =
   /mergePullRequest|enablePullRequestAutoMerge|updateRef|createCommitOnBranch|mergeBranch/i
 const GH_API_FIELDS = ['-f', '--raw-field', '-F', '--field', '--input']
@@ -258,6 +261,7 @@ function checkGhApi(args, endpoint, protectedBranches) {
   }
   const method = optionValues(args, ['-X', '--method']).pop() ?? (fields.length ? 'POST' : 'GET')
   if (method.toUpperCase() === 'GET') return null
+  if (/\/dispatches\/?$/.test(endpoint)) return block(PROMOTION_MOTIVE)
   if (/(?:^|\/)branches\/[^/]+\/protection(?:\/|$)|(?:^|\/)rulesets(?:\/|$)/.test(endpoint)) {
     return block(
       '`gh api` alterando a proteção da branch: desligar proteções é do humano (`[R3]`).'
@@ -302,6 +306,9 @@ function checkGh(args, segment, protectedBranches) {
   if (group === 'pr' && action === 'merge') return block('`gh pr merge` é feito pelo humano.')
   if (group === 'alias' && action === 'set' && /merge/i.test(rest.slice(1).join(' '))) {
     return block('`gh alias` de merge: o merge é feito pelo humano.')
+  }
+  if (group === 'workflow' && ['run', 'enable', 'disable'].includes(action ?? '')) {
+    if (rest.some((a) => PROMOTION_WORKFLOW.test(a))) return block(PROMOTION_MOTIVE)
   }
   const editsPrBody = group === 'pr' && (action === 'create' || action === 'edit')
   if ((editsPrBody || group === 'api') && args.some((a) => UAT_TICKED.test(a))) {
