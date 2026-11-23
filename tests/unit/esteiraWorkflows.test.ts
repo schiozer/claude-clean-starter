@@ -76,7 +76,7 @@ describe('workflow promover.yml', () => {
 
   it('sai cedo com aviso sem esteira: o job da promoção (e os segredos) só roda com ela', () => {
     expect(yml).toContain('::warning::')
-    expect(yml).toContain('lerEsteira')
+    expect(yml).toContain('node scripts/esteira/index.mjs ativa')
     const [antes, job] = yml.split(/\n {2}promover:\n/)
     expect(job).toBeDefined()
     // o job que lê a esteira não toca segredo nem Environment.
@@ -114,5 +114,68 @@ describe('workflow promover.yml', () => {
   it('nunca --force nem imprime segredos', () => {
     expect(yml).not.toContain('--force')
     expect(yml).not.toMatch(/echo[^\n]*(secrets\.|outputs\.token)/)
+  })
+})
+
+describe('workflow back-promotion.yml', () => {
+  const yml = ler('.github/workflows/back-promotion.yml')
+  const [antes, job] = yml.split(/\n {2}abrir:\n/)
+
+  it('dispara depois da Release concluída na main (a tag já existe)', () => {
+    expect(ler('.github/workflows/release.yml')).toMatch(/^name: Release$/m)
+    expect(yml).toMatch(
+      /^on:\n {2}workflow_run:\n {4}workflows: \[Release\]\n {4}types: \[completed\]\n {4}branches: \[main\]\n/m
+    )
+    expect(yml).not.toMatch(/^ {2}(push|pull_request|pull_request_target):/m)
+  })
+
+  it('sem esteira sai cedo: o 1º job lê a esteira sem segredos nem Environment', () => {
+    expect(antes).toContain('node scripts/esteira/index.mjs ativa')
+    expect(antes).not.toContain('secrets.')
+    expect(antes).not.toContain('environment:')
+    expect(job).toMatch(/^ {4}needs: esteira$/m)
+    expect(job).toMatch(/^ {4}if: needs\.esteira\.outputs\.ativa == 'true'$/m)
+  })
+
+  it('só com a Release verde e fora do FF da App esteira-promover', () => {
+    const cond = /^ {4}if: (.+)$/m.exec(antes.split(/\n {2}esteira:\n/)[1] ?? '')?.[1] ?? ''
+    expect(cond).toContain("github.event.workflow_run.conclusion == 'success'")
+    expect(cond).toContain("github.event.workflow_run.actor.login != 'esteira-promover[bot]'")
+    expect(cond).toContain("github.event.workflow_run.event == 'push'")
+  })
+
+  it('checkout do SHA da Release (não da main atual)', () => {
+    expect(antes).toContain('ref: ${{ github.event.workflow_run.head_sha }}')
+  })
+
+  it('abre o PR com o token da App (dispara pr-gate/ci), escopo mínimo, Environment production', () => {
+    expect(job).toMatch(/^ {4}environment: production$/m)
+    expect(job).toContain('actions/create-github-app-token@v2')
+    expect(job).toContain('app-id: ${{ secrets.ESTEIRA_APP_ID }}')
+    expect(job).toContain('private-key: ${{ secrets.ESTEIRA_APP_PRIVATE_KEY }}')
+    const passo = job.split(/\n {6}- /).find((p) => p.includes('create-github-app-token'))
+    expect(passo).toMatch(/^ {10}permission-pull-requests: write$/m)
+    expect(passo).toMatch(/^ {10}permission-contents: read$/m)
+    expect(passo?.match(/permission-/g)).toHaveLength(2)
+    expect(job).toContain('GITHUB_TOKEN: ${{ steps.app.outputs.token }}')
+  })
+
+  it('roda o backPromotion.mjs com o SHA da Release', () => {
+    expect(job).toContain('node scripts/esteira/backPromotion.mjs')
+    expect(job).toContain('BACKPROMOTION_SHA: ${{ github.event.workflow_run.head_sha }}')
+  })
+
+  it('permissões mínimas do GITHUB_TOKEN e nunca imprime segredos', () => {
+    expect(yml).toMatch(/^permissions:\n {2}contents: read\n/m)
+    expect(yml).not.toContain('write-all')
+    expect(yml).not.toMatch(/echo[^\n]*(secrets\.|outputs\.token)/)
+  })
+})
+
+describe('promover.yml usa a CLI da esteira no job sem segredos', () => {
+  const yml = ler('.github/workflows/promover.yml')
+  it('node scripts/esteira/index.mjs ativa', () => {
+    const [antes] = yml.split(/\n {2}promover:\n/)
+    expect(antes).toContain('node scripts/esteira/index.mjs ativa')
   })
 })

@@ -1,0 +1,81 @@
+name: Back-promotion
+
+# Esteira (spec esteira-build-once-promote §3.2-5..7, CT-ESTEIRA-013): depois de um hotfix na
+# `main`, abre (ou atualiza) o PR `main` → `develop` com o título
+# `chore(release): back-promotion de vX.Y.Z`. Dispara quando a Release do push na main termina
+# (a tag vX.Y.Z já existe no SHA). O FF da App esteira-promover (promoção) não precisa de
+# back-promotion: a `develop` já contém o SHA. Sem o bloco `esteira`, sai com aviso.
+#
+# O PR é aberto com o token da App esteira-promover: PR aberto com o GITHUB_TOKEN não dispara os
+# workflows de pull_request (pr-gate, ci), e os checks obrigatórios nunca rodariam.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: back-promotion
+  cancel-in-progress: false
+
+jobs:
+  esteira:
+    name: Esteira ligada?
+    # `workflow_run.actor` = quem fez o push que disparou a Release (o FF da App aparece como
+    # esteira-promover[bot]; a Release já pula esse push, isto é a 2ª trava).
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.actor.login != 'esteira-promover[bot]'
+    runs-on: ubuntu-latest
+    outputs:
+      ativa: ${{ steps.esteira.outputs.ativa }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Ler o bloco esteira
+        id: esteira
+        run: node scripts/esteira/index.mjs ativa
+
+      - name: Avisar sem esteira
+        if: steps.esteira.outputs.ativa != 'true'
+        run: |
+          echo "::warning::Esteira desligada (sem o bloco esteira em hooks/protect-main/config.json): sem back-promotion."
+
+  abrir:
+    name: Abrir o PR de back-promotion
+    needs: esteira
+    if: needs.esteira.outputs.ativa == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Token da App esteira-promover
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.ESTEIRA_APP_ID }}
+          private-key: ${{ secrets.ESTEIRA_APP_PRIVATE_KEY }}
+          # escopo mínimo: abrir/editar/comentar o PR e ler as tags.
+          permission-pull-requests: write
+          permission-contents: read
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Abrir ou atualizar o PR main → develop
+        run: node scripts/esteira/backPromotion.mjs
+        env:
+          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
+          BACKPROMOTION_SHA: ${{ github.event.workflow_run.head_sha }}

@@ -36,12 +36,12 @@ jobs:
 
       - name: Ler o bloco esteira
         id: esteira
+        run: node scripts/esteira/index.mjs ativa
+
+      - name: Avisar sem esteira
+        if: steps.esteira.outputs.ativa != 'true'
         run: |
-          ativa=$(node --input-type=module -e "import { lerEsteira } from './scripts/esteira/config.mjs'; process.stdout.write(lerEsteira() ? 'true' : 'false')")
-          echo "ativa=$ativa" >> "$GITHUB_OUTPUT"
-          if [ "$ativa" != "true" ]; then
-            echo "::warning::Esteira desligada (sem o bloco esteira em hooks/protect-main/config.json): nada a promover."
-          fi
+          echo "::warning::Esteira desligada (sem o bloco esteira em hooks/protect-main/config.json): nada a promover."
 
       - name: Descobrir o host
         id: host
