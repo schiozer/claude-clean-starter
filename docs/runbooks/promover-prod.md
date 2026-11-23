@@ -108,6 +108,9 @@ Quem pode promover: os logins de `esteira.promotores`. O workflow só roda a par
     absorve o intervalo na versão.
 - A Release criada pela promoção usa o `GITHUB_TOKEN` do job e **não dispara** outros workflows
   (intencional; o `release.yml` também pula o push da App).
+- Com `DEMOS_BUNNY=on`, as demos da versão promovida **não** publicam sozinhas (o `Release` do push
+  da App é pulado): disparar Actions → **Demos & Treinamento** → _Run workflow_ com a tag `vX.Y.Z`
+  ([bunny-habilitar.md](./bunny-habilitar.md)).
 
 ## Rollback
 
