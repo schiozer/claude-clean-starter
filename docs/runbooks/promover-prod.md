@@ -46,6 +46,10 @@ Quem pode promover: os logins de `esteira.promotores`. O workflow só roda a par
   ([esteira-github-app.md](./esteira-github-app.md)).
 - O humano testou e aprovou o UAT do SHA que está lá (site/celular).
 - Nenhuma back-promotion pendente (PR `main` → `develop` aberto ou não mergeado).
+- Só Vercel: a atribuição automática do domínio de Prod está **ligada**. Depois de qualquer
+  `vercel rollback` (o automático da promoção ou o manual), a Vercel a desliga: a promoção seguinte
+  builda Production do SHA, o smoke em `PROD_URL` responde `200` do deploy **antigo** e o run sai
+  verde com Prod velha. Religar antes de promover (ver "Vercel depois de um rollback" abaixo).
 - Migração aditiva, se houver, já aplicada em Prod ([migracao-banco.md](./migracao-banco.md));
   features novas desligadas em Prod ([feature-flags.md](./feature-flags.md)).
 
@@ -92,6 +96,13 @@ Quem pode promover: os logins de `esteira.promotores`. O workflow só roda a par
     se o próprio rollback falhar, a mensagem pede verificar Prod à mão → [rollback.md](./rollback.md).
   - Smoke falhou na Vercel → `vercel rollback` já feito, issue `esteira` "main à frente de Prod"
     aberta; corrigir por [hotfix.md](./hotfix.md).
+  - **Vercel depois de um rollback** (automático ou manual): a atribuição automática do domínio de
+    Prod fica **desligada** e nenhuma promoção ou hotfix seguinte entra no ar, embora o run fique
+    verde. Passo do humano (`[R2]`, Prod, aprovação por operação): quando o deploy certo existir
+    (o do hotfix ou da próxima promoção), `vercel promote <url-do-deploy> --scope <preencher: team Vercel>`
+    — o `promote` religa a atribuição automática — ou religá-la em Settings → Domains. Conferir
+    com `vercel inspect https://<preencher: domínio de Prod> --scope <preencher: team Vercel>`, que
+    precisa mostrar o deploy do SHA promovido ([host-vercel.md](./host-vercel.md), passos 13–14).
   - Release falhou **depois** do FF → re-rodar o workflow é no-op (a `main` já é o SHA) e **não
     cria a tag**. Recuperar à mão: o **humano** (`[R3]`, o `protect-main` barra o agente) re-roda ou dispara a release do SHA no Actions; ou aguardar a próxima promoção, que
     absorve o intervalo na versão.
@@ -101,7 +112,7 @@ Quem pode promover: os logins de `esteira.promotores`. O workflow só roda a par
 ## Rollback
 
 1. [R2] Voltar Prod ao deploy anotado no pre-flight: [rollback.md](./rollback.md) → bloco **Rollback** do runbook do host (Heroku: slug anterior com o config **atual**; Cloud Run: a revisão que servia 100% antes; Vercel: `vercel rollback --yes --scope <preencher: team Vercel>`) — pedir aprovação.
-   Verificar: os `Verificar:` do bloco mostram o deploy anterior servindo Prod e o smoke test passa.
+   Verificar: os `Verificar:` do bloco mostram o deploy anterior servindo Prod e o smoke test passa. Na Vercel, o `vercel rollback` desliga a atribuição automática do domínio: a próxima promoção só entra no ar depois do `vercel promote` do humano (passo 14 do [host-vercel.md](./host-vercel.md)).
 2. [R1] A `main` não volta (nada reescreve o histórico, I4 do ADR-020): abrir a correção pelo [hotfix.md](./hotfix.md) ou um revert pela `develop` e promover de novo.
    Verificar: `gh pr list --state open` mostra o PR da correção.
 
