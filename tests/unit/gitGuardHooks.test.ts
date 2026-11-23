@@ -81,6 +81,23 @@ describe('git hooks .githooks (git real)', { timeout: 30000 }, () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
+  // Cópia do layout `.githooks/` + `hooks/protect-main/` (+ `scripts/esteira/`, que o guard importa)
+  // com um config próprio; `esteira` opcional liga a esteira.
+  const layoutWithConfig = (protectedBranches: string[], esteira?: object) => {
+    const layout = join(tmp, 'layout')
+    cpSync(HOOKS_PATH, join(layout, '.githooks'), { recursive: true })
+    cpSync(join(ROOT, 'hooks/protect-main'), join(layout, 'hooks/protect-main'), {
+      recursive: true,
+    })
+    cpSync(join(ROOT, 'scripts/esteira'), join(layout, 'scripts/esteira'), { recursive: true })
+    writeFileSync(
+      join(layout, 'hooks/protect-main/config.json'),
+      JSON.stringify({ protectedBranches, ...(esteira ? { esteira } : {}) }, null, 2)
+    )
+    return join(layout, '.githooks')
+  }
+  const layoutWithBranches = (branches: string[]) => layoutWithConfig(branches)
+
   describe('reference-transaction on main', () => {
     it('should refuse git commit', () => {
       expectRefused(tryGit(repo, 'commit', '--allow-empty', '-m', 'x'))
@@ -250,18 +267,6 @@ describe('git hooks .githooks (git real)', { timeout: 30000 }, () => {
     const SHELLS = ['sh', ...(existsSync('/bin/dash') ? ['/bin/dash'] : [])]
 
     // Cópia do layout `.githooks/` + `hooks/protect-main/` com config de duas branches.
-    const layoutWithBranches = (branches: string[]) => {
-      const layout = join(tmp, 'layout')
-      cpSync(HOOKS_PATH, join(layout, '.githooks'), { recursive: true })
-      cpSync(join(ROOT, 'hooks/protect-main'), join(layout, 'hooks/protect-main'), {
-        recursive: true,
-      })
-      writeFileSync(
-        join(layout, 'hooks/protect-main/config.json'),
-        JSON.stringify({ protectedBranches: branches })
-      )
-      return join(layout, '.githooks')
-    }
 
     const runShim = (shell: string, shim: string, args: string[], input: string) => {
       const result = spawnSync(shell, [shim, ...args], {
@@ -294,6 +299,56 @@ describe('git hooks .githooks (git real)', { timeout: 30000 }, () => {
       const hooks = layoutWithBranches(['main', 'release'])
       const input = `${A} ${C} refs/heads/feat/x\n`
       expectAllowed(runShim(shell, join(hooks, 'reference-transaction'), ['prepared'], input))
+    })
+  })
+
+  describe('esteira: branch de integração protegida', () => {
+    const ESTEIRA = {
+      integracao: 'develop',
+      producao: 'main',
+      prefixoHotfix: 'hotfix/',
+      promotores: ['alguem'],
+    }
+
+    // Repositório com `develop` já publicada no remoto, hooks do layout dado.
+    const withDevelop = (hooks: string) => {
+      git(repo, '-c', 'core.hooksPath=/dev/null', 'switch', '-q', '-c', 'develop')
+      git(repo, '-c', 'core.hooksPath=/dev/null', 'push', '-q', '-u', 'origin', 'develop')
+      git(repo, 'config', 'core.hooksPath', hooks)
+    }
+
+    it('should refuse a commit on develop when the esteira is on', () => {
+      withDevelop(layoutWithConfig(['main'], ESTEIRA))
+      expectRefused(tryGit(repo, 'commit', '--allow-empty', '-m', 'x'))
+    })
+
+    it('should allow a commit on develop without esteira', () => {
+      withDevelop(layoutWithConfig(['main']))
+      expectAllowed(tryGit(repo, 'commit', '--allow-empty', '-m', 'x'))
+    })
+
+    it('should allow git pull on develop that is behind origin/develop', () => {
+      withDevelop(layoutWithConfig(['main'], ESTEIRA))
+      const other = join(tmp, 'other')
+      git(tmp, 'clone', '-q', '-b', 'develop', bare, other)
+      configureUser(other)
+      git(other, 'commit', '-q', '--allow-empty', '-m', 'merge do PR')
+      git(other, 'push', '-q', 'origin', 'develop')
+      expectAllowed(tryGit(repo, 'pull', '-q'))
+      expect(sha('develop')).toBe(sha('origin/develop'))
+    })
+
+    it('should refuse pushing to develop when the esteira is on', () => {
+      withDevelop(layoutWithConfig(['main'], ESTEIRA))
+      git(repo, '-c', 'core.hooksPath=/dev/null', 'switch', '-q', '-c', 'feat')
+      git(repo, '-c', 'core.hooksPath=/dev/null', 'commit', '-q', '--allow-empty', '-m', 'feat')
+      expectRefused(tryGit(repo, 'push', 'origin', 'HEAD:develop'))
+    })
+
+    it('should allow a feature commit when the esteira is on', () => {
+      withDevelop(layoutWithConfig(['main'], ESTEIRA))
+      git(repo, 'switch', '-q', '-c', 'feat')
+      expectAllowed(tryGit(repo, 'commit', '--allow-empty', '-m', 'x'))
     })
   })
 })
