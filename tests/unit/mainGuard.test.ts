@@ -27,6 +27,11 @@ const runs = (names = REQUIRED, conclusion: string | null = 'success', status = 
 
 const makeApi = (overrides: Record<string, unknown> = {}) => ({
   compare: vi.fn(async () => [SHA]),
+  compareStatus: vi.fn(async () => ({ status: 'identical', aheadBy: 0, behindBy: 0 })),
+  deployments: vi.fn(
+    async (): Promise<{ id: number; payload: { sha?: string }; creator: { login: string } }[]> => []
+  ),
+  deploymentOk: vi.fn(async () => false),
   pullsForCommit: vi.fn(async () => [merged()]),
   checkRuns: vi.fn(async () => runs()),
   commitParents: vi.fn(async () => ['p'.repeat(40)]),
