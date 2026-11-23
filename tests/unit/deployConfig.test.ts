@@ -112,6 +112,14 @@ describe('parseDeployConfig com esteira (vercel e cloudrun)', () => {
   it('vercel sem esteira → uatAlias/team não são exigidos (como hoje)', () =>
     expect(parseDeployConfig(vercelCfg()).host).toBe('vercel'))
 
+  it('arquivo ausente sem esteira → { host: vercel } (como hoje)', () =>
+    expect(parseDeployConfig(null, { esteira: null })).toEqual({ host: 'vercel' }))
+
+  it('arquivo ausente com esteira → mesma validação da vercel (erro claro)', () =>
+    expect(() => parseDeployConfig(null, { esteira: ESTEIRA })).toThrow(
+      /vercel\.uatAlias obrigatório com a esteira ligada/
+    ))
+
   it.each([
     [undefined, /vercel\.uatAlias obrigatório/],
     [{ team: 't' }, /vercel\.uatAlias obrigatório/],

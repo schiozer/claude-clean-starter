@@ -60,7 +60,11 @@ function exigirComEsteira(json, host, campos) {
  * @param {{ esteira?: object | null }} [opcoes]
  */
 export function parseDeployConfig(texto, { esteira = null } = {}) {
-  if (texto === null) return { host: 'vercel' }
+  if (texto === null) {
+    // Ausente = vercel sem bloco: com a esteira, cai na mesma validação (uatAlias/team).
+    if (esteira) exigirComEsteira({}, 'vercel', ['uatAlias', 'team'])
+    return { host: 'vercel' }
+  }
 
   let json
   try {

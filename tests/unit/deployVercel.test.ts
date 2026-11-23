@@ -5,7 +5,7 @@ const SHA = 'cafe1234567890abcdef'
 const TOKEN = 'vercel-token-segredo-42'
 const config = { host: 'vercel', vercel: { uatAlias: 'app-uat.vercel.app', team: 'meu-time' } }
 
-type Deployment = { id: number; environment: string; ref?: string; created_at: string }
+type Deployment = { id: number; environment: string; sha: string; ref?: string; created_at: string }
 type Status = { state: string; environment_url?: string }
 
 const makeClock = () => {
@@ -30,7 +30,7 @@ const ctxDe = (over: Record<string, unknown> = {}) => ({
   sha: SHA,
   exec: vi.fn(async () => ''),
   log: vi.fn(),
-  env: { VERCEL_TOKEN: TOKEN },
+  env: { VERCEL_TOKEN: TOKEN, VERCEL_ORG_ID: 'team_org', VERCEL_PROJECT_ID: 'prj_app' },
   ...makeClock(),
   timeoutMs: 60_000,
   intervalMs: 10_000,
@@ -40,11 +40,13 @@ const ctxDe = (over: Record<string, unknown> = {}) => ({
 const dep = (
   id: number,
   environment: string,
-  ref = 'develop',
-  quando = '2026-11-23T10:00:00Z'
+  ref = SHA,
+  quando = '2026-11-23T10:00:00Z',
+  sha = SHA
 ) => ({
   id,
   environment,
+  sha,
   ref,
   created_at: quando,
 })
@@ -61,37 +63,41 @@ describe('vercel: contrato da esteira', () => {
 })
 
 describe('vercel: deployUat', () => {
-  it('espera o deploy Preview da branch de integração do SHA e devolve url + payload', async () => {
+  it('espera o deploy Preview do SHA (ref = SHA, como grava a Vercel) e devolve url + payload', async () => {
     const github = githubFake(
       () => [
-        dep(1, 'Preview – app', 'feature/x', '2026-11-23T11:00:00Z'),
-        dep(2, 'Preview – app', 'develop'),
+        dep(1, 'Preview – app', SHA, '2026-11-23T11:00:00Z', 'outro-sha'),
+        dep(2, 'Preview – app', SHA),
       ],
       {
-        1: () => [{ state: 'success', environment_url: 'https://app-feature.vercel.app' }],
+        1: () => [{ state: 'success', environment_url: 'https://app-outro.vercel.app' }],
         2: () => [{ state: 'success', environment_url: 'https://app-abc.vercel.app' }],
       }
     )
     const r = await vercel.deployUat(ctxDe({ github }) as never)
     expect(r).toEqual({
       url: 'https://app-abc.vercel.app',
-      payload: { deploymentUrl: 'https://app-abc.vercel.app' },
+      payload: { deploymentId: 2, url: 'https://app-abc.vercel.app' },
     })
     expect(github.call).toHaveBeenCalledWith('GET', `/deployments?sha=${SHA}&per_page=100`)
   })
 
-  it('aceita o Custom Environment uat (Pro) e a integração do bloco esteira', async () => {
-    const github = githubFake(() => [dep(3, 'uat', 'integra')], {
+  it('casa o Custom Environment uat com sufixo de projeto (uat – app)', async () => {
+    const github = githubFake(() => [dep(3, 'uat – app', 'develop')], {
       3: () => [{ state: 'success', environment_url: 'https://app-uat-x.vercel.app' }],
     })
-    const r = await vercel.deployUat(ctxDe({ github, esteira: { integracao: 'integra' } }) as never)
+    const r = await vercel.deployUat(ctxDe({ github }) as never)
     expect(r.url).toBe('https://app-uat-x.vercel.app')
   })
 
-  it('só preview de outra branch → espera até o timeout com erro claro', async () => {
-    const github = githubFake(() => [dep(1, 'Preview – app', 'feature/x')], {
-      1: () => [{ state: 'success', environment_url: 'https://x' }],
-    })
+  it('não casa Production nem deploy de outro SHA → timeout com erro claro', async () => {
+    const github = githubFake(
+      () => [dep(1, 'Production – app'), dep(2, 'Preview – app', 'develop', undefined, 'outro')],
+      {
+        1: () => [{ state: 'success', environment_url: 'https://x' }],
+        2: () => [{ state: 'success', environment_url: 'https://y' }],
+      }
+    )
     await expect(vercel.deployUat(ctxDe({ github }) as never)).rejects.toThrow(
       /Nenhum deploy de UAT para cafe123/
     )
@@ -128,10 +134,27 @@ describe('vercel: promoverProd (CT-ESTEIRA-012)', () => {
     })
     const ctx = ctxDe({ github })
     expect(await vercel.promoverProd(ctx as never)).toEqual({
-      payload: { deploymentUrl: 'https://app.com' },
+      payload: { deploymentId: 9, url: 'https://app.com' },
     })
     expect(ctx.sleep).toHaveBeenCalledTimes(2)
     expect(ctx.exec).not.toHaveBeenCalled()
+  })
+
+  it('casa Production com sufixo de projeto (repo com mais de um projeto Vercel)', async () => {
+    const github = githubFake(() => [dep(9, 'Production – app', 'main')], {
+      9: () => [{ state: 'success', environment_url: 'https://app.com' }],
+    })
+    const r = await vercel.promoverProd(ctxDe({ github }) as never)
+    expect(r.payload.deploymentId).toBe(9)
+  })
+
+  it('ignora Production de outro SHA', async () => {
+    const github = githubFake(() => [dep(9, 'Production', 'main', undefined, 'outro')], {
+      9: () => [{ state: 'success', environment_url: 'https://velho.com' }],
+    })
+    await expect(vercel.promoverProd(ctxDe({ github }) as never)).rejects.toThrow(
+      /Nenhum deploy de Production/
+    )
   })
 
   it('ignora Preview do mesmo SHA', async () => {
@@ -167,7 +190,7 @@ describe('vercel: rollbackProd', () => {
     const ctx = ctxDe()
     await vercel.rollbackProd(ctx as never)
     expect(ctx.exec).toHaveBeenCalledWith('vercel', ['rollback', '--yes', '--scope', 'meu-time'], {
-      env: { VERCEL_TOKEN: TOKEN },
+      env: { VERCEL_TOKEN: TOKEN, VERCEL_ORG_ID: 'team_org', VERCEL_PROJECT_ID: 'prj_app' },
     })
     const argv = JSON.stringify(ctx.exec.mock.calls.map((c: unknown[]) => [c[0], c[1]]))
     expect(argv).not.toContain(TOKEN)
@@ -179,6 +202,23 @@ describe('vercel: rollbackProd', () => {
     await expect(vercel.rollbackProd(ctx as never)).rejects.toThrow(/VERCEL_TOKEN/)
     expect(ctx.exec).not.toHaveBeenCalled()
   })
+
+  it.each(['VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'])(
+    'sem %s → erro em pt-BR sem chamar o vercel',
+    async (variavel) => {
+      const env: Record<string, string> = {
+        VERCEL_TOKEN: TOKEN,
+        VERCEL_ORG_ID: 'team_org',
+        VERCEL_PROJECT_ID: 'prj_app',
+      }
+      delete env[variavel]
+      const ctx = ctxDe({ env })
+      const erro = await vercel.rollbackProd(ctx as never).catch((e) => e)
+      expect(String(erro.message)).toContain(`variável ${variavel} é obrigatória`)
+      expect(String(erro.message)).not.toContain(TOKEN)
+      expect(ctx.exec).not.toHaveBeenCalled()
+    }
+  )
 
   it('falha do vercel rollback → propaga sem o token', async () => {
     const exec = vi.fn(async () => {

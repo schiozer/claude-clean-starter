@@ -24,15 +24,17 @@ const transitorio = (error) =>
   (error.status >= 500 || error.status === 403 || error.status === 429)
 
 /**
+ * Espera um Deployment do GitHub do `sha` cujo ambiente casa com `ambienteDePreview` (apesar do
+ * nome, serve a qualquer ambiente: preview, UAT, Production). Devolve a URL e o `id` do deployment.
  * @param {{
  *   api: { call: (method: string, path: string) => Promise<unknown> },
  *   sha: string, ambienteDePreview?: (environment: string, deployment: Deployment) => boolean,
  *   rotulo?: string, timeoutMs?: number, intervalMs?: number,
  *   now?: () => number, sleep?: (ms: number) => Promise<void>,
  * }} opts
- * @returns {Promise<{ url: string }>}
+ * @returns {Promise<{ url: string, id: number }>}
  */
-export async function waitPreview({
+export async function aguardarDeployment({
   api,
   sha,
   ambienteDePreview = (e) => e.startsWith('Preview'),
@@ -65,7 +67,7 @@ export async function waitPreview({
     if (atual?.state === 'success') {
       const url = atual.environment_url || atual.target_url
       if (!url) throw new Error(`Deploy de ${rotulo} sem URL para ${sha} (status success sem URL)`)
-      return { url }
+      return { url, id: deploy.id }
     }
     if (atual && FALHOU.includes(atual.state)) {
       throw new Error(`Deploy de ${rotulo} falhou para ${sha} (status: ${atual.state})`)
@@ -90,4 +92,14 @@ export async function waitPreview({
     }
     await sleep(Math.min(intervalMs, Math.max(prazo - now(), 0)))
   }
+}
+
+/**
+ * Espera do deploy de preview (contrato atual): como `aguardarDeployment`, devolvendo só a URL.
+ * @param {Parameters<typeof aguardarDeployment>[0]} opts
+ * @returns {Promise<{ url: string }>}
+ */
+export async function waitPreview(opts) {
+  const { url } = await aguardarDeployment(opts)
+  return { url }
 }
