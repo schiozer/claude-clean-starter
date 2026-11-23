@@ -8,6 +8,7 @@ import {
   smokeHttp,
   executarPromocao,
   REGRESSAO_UAT,
+  MARCA_REGRESSAO_UAT,
 } from '../../scripts/esteira/promover.mjs'
 
 const ROOT = resolve(__dirname, '../..')
@@ -23,7 +24,14 @@ const ESTEIRA = {
 }
 
 type Chamada = { method: string; path: string; body?: Record<string, unknown> }
-type Check = { name: string; status: string; conclusion: string | null; id: number }
+type Check = {
+  name: string
+  status: string
+  conclusion: string | null
+  id: number
+  external_id?: string | null
+}
+const UAT = { name: 'Regressão (UAT)', external_id: 'esteira-uat' }
 
 interface Opcoes {
   uat?: { id: number; sha: string; state: string; created_at: string }[]
@@ -43,9 +51,7 @@ function cenario(o: Opcoes = {}) {
   const ordem: string[] = []
   const chamadas: Chamada[] = []
   const uat = o.uat ?? [{ id: 1, sha: SHA, state: 'success', created_at: '2026-11-20T10:00:00Z' }]
-  const checks = o.checks ?? [
-    { name: REGRESSAO_UAT, status: 'completed', conclusion: 'success', id: 10 },
-  ]
+  const checks = o.checks ?? [{ ...UAT, status: 'completed', conclusion: 'success', id: 10 }]
   const github = {
     call: vi.fn(async (method: string, path: string, body?: Record<string, unknown>) => {
       chamadas.push({ method, path, body })
@@ -208,7 +214,7 @@ describe('promover (Heroku/Cloud Run: deploy antes do FF)', () => {
 
   it('CT-ESTEIRA-007: Regressão (UAT) vermelha para o SHA → recusa', async () => {
     const c = cenario({
-      checks: [{ name: REGRESSAO_UAT, status: 'completed', conclusion: 'failure', id: 10 }],
+      checks: [{ ...UAT, status: 'completed', conclusion: 'failure', id: 10 }],
     })
     await expect(promover(c.args as never)).rejects.toThrow(
       `Regressão (UAT) não está verde para ${SHA.slice(0, 7)}`
@@ -220,7 +226,7 @@ describe('promover (Heroku/Cloud Run: deploy antes do FF)', () => {
     const casos: Check[][] = [
       [],
       [{ name: 'Outro', status: 'completed', conclusion: 'success', id: 1 }],
-      [{ name: REGRESSAO_UAT, status: 'in_progress', conclusion: null, id: 2 }],
+      [{ ...UAT, status: 'in_progress', conclusion: null, id: 2 }],
     ]
     for (const checks of casos) {
       const c = cenario({ checks })
@@ -232,11 +238,53 @@ describe('promover (Heroku/Cloud Run: deploy antes do FF)', () => {
   it('CT-ESTEIRA-007: vale o run mais recente da Regressão (re-run verde depois do vermelho)', async () => {
     const c = cenario({
       checks: [
-        { name: REGRESSAO_UAT, status: 'completed', conclusion: 'failure', id: 10 },
-        { name: REGRESSAO_UAT, status: 'completed', conclusion: 'success', id: 11 },
+        { ...UAT, status: 'completed', conclusion: 'failure', id: 10 },
+        { ...UAT, status: 'completed', conclusion: 'success', id: 11 },
       ],
     })
     expect((await promover(c.args as never)).promovido).toBe(true)
+  })
+
+  it('marca da regressão de UAT: o check publicado pelo deploy.yml (external_id esteira-uat)', () => {
+    expect(MARCA_REGRESSAO_UAT).toBe('esteira-uat')
+    expect(UAT.external_id).toBe(MARCA_REGRESSAO_UAT)
+  })
+
+  it('colisão: Regressão (UAT) do PR verde (sem marca) mais recente que a de UAT vermelha → recusa', async () => {
+    const c = cenario({
+      checks: [
+        { ...UAT, status: 'completed', conclusion: 'failure', id: 10 },
+        { name: REGRESSAO_UAT, status: 'completed', conclusion: 'success', id: 11 },
+      ],
+    })
+    await expect(promover(c.args as never)).rejects.toThrow(/Regressão \(UAT\) não está verde/)
+    semPromocao(c)
+  })
+
+  it('colisão: Regressão (UAT) do PR vermelha (sem marca) mais recente que a de UAT verde → promove', async () => {
+    const c = cenario({
+      checks: [
+        { ...UAT, status: 'completed', conclusion: 'success', id: 10 },
+        {
+          name: REGRESSAO_UAT,
+          status: 'completed',
+          conclusion: 'failure',
+          id: 11,
+          external_id: null,
+        },
+      ],
+    })
+    expect((await promover(c.args as never)).promovido).toBe(true)
+  })
+
+  it('só a Regressão (UAT) do PR (sem marca), mesmo verde → recusa como ausente', async () => {
+    const c = cenario({
+      checks: [{ name: REGRESSAO_UAT, status: 'completed', conclusion: 'success', id: 11 }],
+    })
+    await expect(promover(c.args as never)).rejects.toThrow(
+      `Regressão (UAT) não está verde para ${SHA.slice(0, 7)} (ausente)`
+    )
+    semPromocao(c)
   })
 
   it('consulta o check pelo nome exato no SHA do UAT', async () => {

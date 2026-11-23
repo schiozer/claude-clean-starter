@@ -19,8 +19,15 @@ import { adaptador, execReal } from '../deploy/index.mjs'
 import { marcar, registrar, ultimoOk } from '../deploy/githubDeployments.mjs'
 import { lerEsteira } from './config.mjs'
 
-/** Nome exato do check-run da regressão contra o UAT fixo (Task 10 publica no SHA). */
+/** Nome exato do check-run da regressão contra o UAT fixo (o deploy.yml publica no SHA). */
 export const REGRESSAO_UAT = 'Regressão (UAT)'
+
+/**
+ * `external_id` do check publicado pelo `deploy.yml` (job `publicar-regressao-uat`). A Regressão
+ * do PR tem o mesmo nome e pode cair no mesmo SHA (head do PR = ponta da integração): só o check
+ * com esta marca é o veredito do UAT.
+ */
+export const MARCA_REGRESSAO_UAT = 'esteira-uat'
 
 const curto = (sha) => String(sha).slice(0, 7)
 const mensagem = (error) => (error instanceof Error ? error.message : String(error))
@@ -42,7 +49,8 @@ async function exigirRegressaoVerde(github, sha) {
     'GET',
     `/commits/${sha}/check-runs?check_name=${nome}&filter=latest&per_page=100`
   )
-  const run = latestCheckRun(dados?.check_runs ?? [], REGRESSAO_UAT)
+  const doUat = (dados?.check_runs ?? []).filter((r) => r.external_id === MARCA_REGRESSAO_UAT)
+  const run = latestCheckRun(doUat, REGRESSAO_UAT)
   if (run?.status !== 'completed' || run?.conclusion !== 'success') {
     const estado = run ? `${run.status}/${run.conclusion ?? '-'}` : 'ausente'
     throw new Error(`promover: Regressão (UAT) não está verde para ${curto(sha)} (${estado})`)

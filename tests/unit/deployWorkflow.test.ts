@@ -144,7 +144,6 @@ describe('deploy.yml com a esteira', () => {
     expect(job).toBeDefined()
     const bloco = job.split(/\n {2}[a-z-]+:\n/)[0]
     expect(bloco).toMatch(/^ {4}needs: deploy$/m)
-    expect(bloco).toMatch(/^ {4}if: needs\.deploy\.outputs\.operacao == 'uat'$/m)
     expect(bloco).toContain('uses: ./.github/workflows/e2e-regressao.yml')
     expect(bloco).toContain('alvo: ${{ needs.deploy.outputs.url }}')
     expect(bloco).toContain('secrets: inherit')
@@ -162,18 +161,29 @@ describe('deploy.yml com a esteira', () => {
     expect(job).toBeDefined()
     expect(job).not.toMatch(/^ {4}name: Regressão \(UAT\)$/m)
     expect(job).toMatch(/^ {4}needs: \[deploy, regressao-uat\]$/m)
-    expect(job).toMatch(
-      /^ {4}if: always\(\) && needs\.deploy\.result == 'success' && needs\.deploy\.outputs\.operacao == 'uat'$/m
-    )
     expect(job).toMatch(/permissions:\n {6}checks: write\n/)
     expect(job).toContain('/check-runs')
     expect(job).toContain("-f name='Regressão (UAT)'")
     expect(job).toContain('-f head_sha="$GITHUB_SHA"')
     expect(job).toContain('-f status=completed')
+    // marca que o promover exige: a Regressão (UAT) do PR (mesmo nome) não vale como veredito.
+    expect(job).toContain("-f external_id='esteira-uat'")
     expect(job).toContain(
       "CONCLUSAO: ${{ needs.regressao-uat.result == 'success' && 'success' || 'failure' }}"
     )
     expect(job).toContain('GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}')
+  })
+
+  it('o veredito de UAT nunca vem de run local: sem URL do UAT, nada roda nem é publicado', () => {
+    const [, resto] = yml.split(/\n {2}regressao-uat:\n/)
+    const regressao = resto.split(/\n {2}[a-z-]+:\n/)[0]
+    expect(regressao).toMatch(
+      /^ {4}if: needs\.deploy\.outputs\.operacao == 'uat' && needs\.deploy\.outputs\.url != ''$/m
+    )
+    const [, publicar] = yml.split(/\n {2}publicar-regressao-uat:\n/)
+    expect(publicar).toMatch(
+      /^ {4}if: always\(\) && needs\.deploy\.result == 'success' && needs\.deploy\.outputs\.operacao == 'uat' && needs\.deploy\.outputs\.url != ''$/m
+    )
   })
 
   it('nenhum job do deploy.yml se chama "Regressão (UAT)" (evita check skipped no PR)', () => {
@@ -202,6 +212,14 @@ describe('workflow e2e-regressao.yml', () => {
 
   it('mantém o job "Regressão (UAT)" (check obrigatório)', () => {
     expect(yml).toMatch(/^ {4}name: Regressão \(UAT\)$/m)
+  })
+
+  it('workflow_call com alvo vazio falha antes de tudo (nunca cai no webServer local)', () => {
+    const p = passo('Recusar chamada sem alvo')
+    expect(passos.indexOf(p)).toBe(0)
+    expect(p).toMatch(/^ {8}if: github\.event_name != 'pull_request' && inputs\.alvo == ''$/m)
+    expect(p).toContain('::error::')
+    expect(p).toContain('exit 1')
   })
 
   it('com alvo: não espera o preview e usa o alvo como base URL', () => {

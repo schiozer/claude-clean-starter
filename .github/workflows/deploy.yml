@@ -163,7 +163,8 @@ jobs:
   regressao-uat:
     name: Regressão no UAT
     needs: deploy
-    if: needs.deploy.outputs.operacao == 'uat'
+    # sem URL do UAT o reutilizável cairia no webServer local: nunca vira veredito do UAT.
+    if: needs.deploy.outputs.operacao == 'uat' && needs.deploy.outputs.url != ''
     permissions:
       contents: read
       deployments: read
@@ -176,11 +177,12 @@ jobs:
   # O promover procura o check "Regressão (UAT)" no SHA da integração. O check do job reutilizável
   # sai como "Regressão no UAT / Regressão (UAT)", e um job deste workflow com o nome exato viraria
   # um check "skipped" no SHA de todo PR (mascarando o check obrigatório): por isso o check é
-  # publicado pela API, só aqui, com o resultado da regressão.
+  # publicado pela API, só aqui, com o resultado da regressão. `external_id` esteira-uat é a marca
+  # que o promover exige (a Regressão do PR tem o mesmo nome e pode estar no mesmo SHA).
   publicar-regressao-uat:
     name: Publicar a Regressão (UAT) no SHA
     needs: [deploy, regressao-uat]
-    if: always() && needs.deploy.result == 'success' && needs.deploy.outputs.operacao == 'uat'
+    if: always() && needs.deploy.result == 'success' && needs.deploy.outputs.operacao == 'uat' && needs.deploy.outputs.url != ''
     runs-on: ubuntu-latest
     permissions:
       checks: write
@@ -196,6 +198,7 @@ jobs:
             -f name='Regressão (UAT)' \
             -f head_sha="$GITHUB_SHA" \
             -f status=completed \
+            -f external_id='esteira-uat' \
             -f conclusion="$CONCLUSAO" \
             -f details_url="$RUN_URL" \
             -f 'output[title]'="Regressão contra o UAT: $CONCLUSAO" \
