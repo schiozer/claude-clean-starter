@@ -47,6 +47,8 @@
 > `/template-sync adotar` a partir do template; depois, `/template-sync` a cada Release (aviso
 > semanal na issue `template-sync`).
 >
+> **Adoção — esteira** ([ADR-020](./docs/adr/template/020-esteira-integracao-e-promocao.md)): **opt-in**; sem o bloco `esteira` em `hooks/protect-main/config.json`, tudo segue como hoje. Para ligar (`develop` + promoção do mesmo pacote), runbook [`adotar-esteira-develop.md`](./docs/runbooks/adotar-esteira-develop.md).
+>
 > **Adoção — demos** ([ADR-017](./docs/adr/template/017-bunny-videos-demos-treinamento.md)): `DEMOS_BUNNY`
 > nasce desligado; para ligar, runbook [`bunny-habilitar.md`](./docs/runbooks/bunny-habilitar.md).
 >
@@ -69,7 +71,8 @@ Se você está lendo isso, provavelmente sou eu mesmo (Claude) trabalhando no pr
 
 ### 0. **A `main` só recebe mudanças via PR — INEGOCIÁVEL** ⛔
 
-- A `main` só recebe mudanças via PR. **Sem exceção**, inclusive se o humano pedir.
+- A `main` só recebe mudanças via PR. **Sem exceção para o agente**, inclusive se o humano pedir
+  (a única exceção é o FF da promoção feito pela App da esteira, abaixo).
 - Trabalho terminado = commit em feature branch → push → PR → avisar o humano.
   **Nunca pergunte** se pode commitar, mergear ou dar push na `main` — essa pergunta é proibida.
 - O merge do PR é sempre do humano (`[R3]`); o agente nunca roda `gh pr merge`.
@@ -85,6 +88,10 @@ Se você está lendo isso, provavelmente sou eu mesmo (Claude) trabalhando no pr
   **antes** de `gh pr create`/atualizar o PR — ver [ADR-014](./docs/adr/template/014-release-management.md).
 - Nunca edite, desative ou contorne `hooks/protect-main`, `.githooks/` ou `core.hooksPath` (nem o
   `.claude/settings.json` que registra o hook) para passar por um bloqueio.
+- **Com a esteira** (bloco `esteira` em `hooks/protect-main/config.json`,
+  [ADR-020](./docs/adr/template/020-esteira-integracao-e-promocao.md)): `main` e `develop` só recebem
+  via PR, salvo o FF da promoção feito pela App (`esteira-promover[bot]`). Tudo acima vale para as
+  duas; disparar o `promover.yml` é `[R3]` (do humano). Sem o bloco, tudo como hoje.
 
 ### 1. **Superpowers Pipeline é OBRIGATÓRIO para features novas**
 
@@ -173,6 +180,10 @@ uma feature branch curta e um **Pull Request**. Ver
 [ADR-005](./docs/adr/template/005-trunk-based-development.md) (trunk-based) e a regra 5
 (conta git correta antes de push/PR/merge).
 
+Com a esteira ([ADR-020](./docs/adr/template/020-esteira-integracao-e-promocao.md)): `main` e
+`develop` só recebem via PR, salvo o FF da promoção feito pela App. O PR de feature tem base
+`develop`; só `hotfix/*` tem base `main` ([ADR-021](./docs/adr/template/021-hotfix-e-back-promotion.md)).
+
 ### 9. **Deploy é dirigido por PR: PR → UAT, merge → Prod**
 
 Abrir/atualizar um PR **dispara o deploy em UAT** (acessível por site/celular);
@@ -183,6 +194,12 @@ ver ADRs 002, 003 e 004. O host (Vercel, Heroku ou Cloud Run) vem de `deploy.con
 ([ADR-018](./docs/adr/template/018-camada-de-deploy.md)). Os passos estão nos runbooks
 [`deploy-uat.md`](./docs/runbooks/deploy-uat.md) e
 [`deploy-prod.md`](./docs/runbooks/deploy-prod.md) — o merge é sempre do humano.
+
+Com a esteira ([ADR-020](./docs/adr/template/020-esteira-integracao-e-promocao.md)): o PR dispara o
+preview; o **merge na `develop`** dispara o deploy no UAT fixo; Prod recebe **o mesmo pacote do
+UAT** pelo workflow `Promover para Prod`, disparado pelo humano
+([`promover-prod.md`](./docs/runbooks/promover-prod.md)); o hotfix vai direto a Prod
+([`hotfix.md`](./docs/runbooks/hotfix.md)). Sem o bloco `esteira`, vale o parágrafo acima.
 
 ### 10. **Operação só via runbook** ⚠️
 

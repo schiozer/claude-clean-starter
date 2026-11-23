@@ -19,6 +19,10 @@ passo a passo, com classe de risco e verificação em cada passo. Regras em
 | [deploy-uat.md](./deploy-uat.md)                             | Levar uma branch ao UAT (push + PR → preview) e fazer o smoke test                                                             |
 | [deploy-prod.md](./deploy-prod.md)                           | Promover um PR aprovado no UAT para Prod (o **merge é do humano**)                                                             |
 | [rollback.md](./rollback.md)                                 | Incidente: desligar flag, promover deploy anterior, revert por PR                                                              |
+| [promover-prod.md](./promover-prod.md)                       | **Esteira** (ADR-020): levar o pacote do UAT para Prod e avançar a `main` por FF (o **disparo é do humano**)                   |
+| [hotfix.md](./hotfix.md)                                     | **Esteira** (ADR-021): `hotfix/*` direto na `main`, deploy de Prod e back-promotion para a `develop`                           |
+| [esteira-github-app.md](./esteira-github-app.md)             | **Esteira**: criar/instalar a GitHub App `esteira-promover`, segredos, bypass da `main`, rotacionar a chave                    |
+| [adotar-esteira-develop.md](./adotar-esteira-develop.md)     | **Opcional** (esteira, ADR-020): criar a `develop`, preparar host/App/repo e ligar o bloco `esteira` por PR                    |
 | [migracao-banco.md](./migracao-banco.md)                     | Aplicar migração SQL (ADR-008) em preview/UAT/Prod                                                                             |
 | [segredos-e-env.md](./segredos-e-env.md)                     | Criar/alterar env não-secreta; criar/rotacionar segredo                                                                        |
 | [feature-flags.md](./feature-flags.md)                       | Ligar/desligar flags por ambiente (incl. kill switch e escrita MCP)                                                            |

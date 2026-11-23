@@ -3,7 +3,8 @@ name: Spec × código
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
-    branches: [main]
+    # develop: base dos PRs de feature com a esteira (sem ela, ninguém abre PR para a develop).
+    branches: [main, develop]
 
 permissions:
   contents: read

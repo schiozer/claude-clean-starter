@@ -1,7 +1,9 @@
 # 002. Estratégia de Ambientes (Dev / UAT / Prod)
 
 **Data**: 2026-08-27
-**Status**: Aceito
+**Status**: Aceito — parcialmente substituída pela [ADR-020](./020-esteira-integracao-e-promocao.md) (o fluxo "PR → UAT, merge → Prod" vale sem o bloco `esteira`; com ele, o UAT é a `develop` e Prod recebe o pacote promovido)
+
+> **Nota (ADR-020).** Com a esteira ligada, o UAT deixa de ser "o preview do PR apontado à mão": cada merge na `develop` vai sozinho para o UAT fixo, e Prod recebe o **mesmo pacote** pelo workflow `Promover para Prod` (hotfix: PR `hotfix/*` direto na `main`, [ADR-021](./021-hotfix-e-back-promotion.md)). Os três ambientes, a paridade e o isolamento seguem valendo.
 
 ## Contexto
 
@@ -26,11 +28,11 @@ Forças:
 **Todo o projeto existe sempre em três ambientes — Dev, UAT e Prod — para
 plataforma, banco e autenticação. Não há exceção.**
 
-| Ambiente | Plataforma / App | Como roda |
-|---|---|---|
-| **Dev** | roda **local** | Web: `localhost`. **App nativo iOS/Android: simulador obrigatório** (iOS Simulator / Android Emulator) para os testes de dev — nenhum teste de dev nativo é considerado válido sem rodar em simulador. |
-| **UAT** | deployado | Acessível por **site (browser desktop e mobile)** e **no celular**. App nativo: distribuição interna (TestFlight / Internal Testing track). |
-| **Prod** | produção | Prod é prod. |
+| Ambiente | Plataforma / App | Como roda                                                                                                                                                                                              |
+| -------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Dev**  | roda **local**   | Web: `localhost`. **App nativo iOS/Android: simulador obrigatório** (iOS Simulator / Android Emulator) para os testes de dev — nenhum teste de dev nativo é considerado válido sem rodar em simulador. |
+| **UAT**  | deployado        | Acessível por **site (browser desktop e mobile)** e **no celular**. App nativo: distribuição interna (TestFlight / Internal Testing track).                                                            |
+| **Prod** | produção         | Prod é prod.                                                                                                                                                                                           |
 
 Regras que decorrem da decisão:
 
@@ -62,11 +64,13 @@ Cloud Run) está no [ADR-018](./018-camada-de-deploy.md).
 ## Consequências
 
 **Fica mais fácil**
+
 - Paridade e previsibilidade: o que passou em UAT tende a se comportar igual em Prod.
 - Isolamento de dados/credenciais por ambiente, reduzindo risco de vazamento em Prod.
 - Onboarding: a regra é única e explícita para web e nativo.
 
 **Fica mais difícil / dívidas assumidas**
+
 - Custo operacional de manter três ambientes (banco, tenants de auth, deploy).
 - App nativo exige toolchain de simulador configurada em todo dev — passo a mais
   no setup, mas obrigatório.

@@ -3,10 +3,22 @@ name: Regressão (UAT)
 # Check obrigatório (spec e2e-regressao-docs §8.2): roda `@regressao` + os cenários novos/alterados
 # das specs do PR. Alvo: o preview do PR (host da camada de deploy) do SHA do PR (`vars.E2E_TARGET == 'preview'`) ou, no
 # template / antes do bootstrap, o app local subido pelo `webServer` do Playwright.
+#
+# Esteira (spec esteira-build-once-promote §3.1-4): o `deploy.yml` chama este workflow
+# (`workflow_call`) depois do deploy de UAT, com `alvo` = URL do UAT fixo; roda como remoto
+# (Auth0 e segredos do UAT), sem esperar preview nem comentar em PR. O check "Regressão (UAT)" no
+# SHA da integração é publicado pelo `deploy.yml` com o resultado deste.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    branches: [main]
+    # develop: base dos PRs de feature com a esteira (sem ela, ninguém abre PR para a develop).
+    branches: [main, develop]
+  workflow_call:
+    inputs:
+      alvo:
+        description: URL do UAT fixo (deploy de UAT da esteira)
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -14,8 +26,8 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: e2e-regressao-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: e2e-regressao-${{ github.event.pull_request.number || format('uat-{0}', github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   regressao:
@@ -23,6 +35,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      # O veredito do UAT nunca vem de run local: chamada sem alvo falha antes do checkout.
+      - name: Recusar chamada sem alvo
+        if: github.event_name != 'pull_request' && inputs.alvo == ''
+        run: |
+          echo "::error::Regressão (UAT) chamada sem alvo (URL do UAT vazia): a regressão não roda contra o app local no lugar do UAT."
+          exit 1
+
       - name: Recusar PR de fork no modo preview
         if: vars.E2E_TARGET == 'preview' && github.event.pull_request.head.repo.fork
         run: |
@@ -31,7 +50,7 @@ jobs:
 
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           # histórico completo: os cenários do PR saem do diff com origin/<base>.
           fetch-depth: 0
 
@@ -83,7 +102,7 @@ jobs:
 
       - name: Aguardar o preview do PR
         id: preview
-        if: steps.config.outputs.configurado == 'true' && vars.E2E_TARGET == 'preview'
+        if: steps.config.outputs.configurado == 'true' && vars.E2E_TARGET == 'preview' && !inputs.alvo
         run: node scripts/deploy/index.mjs aguardar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -101,7 +120,7 @@ jobs:
         if: steps.config.outputs.configurado == 'true'
         run: node scripts/e2e/grep-regressao.mjs
 
-      # Segredos só no modo preview. No modo local ficam vazios e o playwright.config.ts usa as
+      # Segredos só no modo remoto (preview do PR ou `alvo` do UAT). No modo local ficam vazios e o playwright.config.ts usa as
       # constantes de teste `LOCAL_SOMENTE_TESTE` (já públicas, versionadas, inócuas fora do app
       # efêmero do runner).
       - name: Regressão (Playwright)
@@ -111,19 +130,19 @@ jobs:
           CI: '1'
           E2E_GREP: ${{ steps.grep.outputs.grep }}
           DEPLOY_HOST: ${{ steps.host.outputs.host }}
-          E2E_BASE_URL: ${{ steps.preview.outputs.url }}
-          E2E_AUTH: ${{ vars.E2E_TARGET == 'preview' && 'auth0' || '' }}
-          E2E_RUN_PREFIX: ${{ vars.E2E_TARGET == 'preview' && github.run_id || '' }}
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ vars.E2E_TARGET == 'preview' && secrets.VERCEL_AUTOMATION_BYPASS_SECRET || '' }}
-          E2E_FAULTS_SECRET: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_FAULTS_SECRET || '' }}
-          E2E_PAT_USUARIO: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_PAT_USUARIO || '' }}
-          E2E_PAT_SEM_ESCOPO: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_PAT_SEM_ESCOPO || '' }}
-          E2E_PAT_RATE_LIMIT: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_PAT_RATE_LIMIT || '' }}
-          E2E_PAT_OUTRO_ATOR: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_PAT_OUTRO_ATOR || '' }}
-          E2E_USUARIO_EMAIL: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_USUARIO_EMAIL || '' }}
-          E2E_USUARIO_SENHA: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_USUARIO_SENHA || '' }}
-          E2E_INTERNO_EMAIL: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_INTERNO_EMAIL || '' }}
-          E2E_INTERNO_SENHA: ${{ vars.E2E_TARGET == 'preview' && secrets.E2E_INTERNO_SENHA || '' }}
+          E2E_BASE_URL: ${{ inputs.alvo || steps.preview.outputs.url }}
+          E2E_AUTH: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && 'auth0' || '' }}
+          E2E_RUN_PREFIX: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && github.run_id || '' }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && secrets.VERCEL_AUTOMATION_BYPASS_SECRET || '' }}
+          E2E_FAULTS_SECRET: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && secrets.E2E_FAULTS_SECRET || '' }}
+          E2E_PAT_USUARIO: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && secrets.E2E_PAT_USUARIO || '' }}
+          E2E_PAT_SEM_ESCOPO: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && secrets.E2E_PAT_SEM_ESCOPO || '' }}
+          E2E_PAT_RATE_LIMIT: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && secrets.E2E_PAT_RATE_LIMIT || '' }}
+          E2E_PAT_OUTRO_ATOR: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && secrets.E2E_PAT_OUTRO_ATOR || '' }}
+          E2E_USUARIO_EMAIL: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && secrets.E2E_USUARIO_EMAIL || '' }}
+          E2E_USUARIO_SENHA: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && secrets.E2E_USUARIO_SENHA || '' }}
+          E2E_INTERNO_EMAIL: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && secrets.E2E_INTERNO_EMAIL || '' }}
+          E2E_INTERNO_SENHA: ${{ (vars.E2E_TARGET == 'preview' || inputs.alvo) && secrets.E2E_INTERNO_SENHA || '' }}
 
       # Só para o relatório de rastreabilidade: quem bloqueia é o passo do `PR gate`.
       - name: Cenários × testes (relatório)
@@ -134,7 +153,7 @@ jobs:
       # Modo local: o relatório completo só contém as constantes `LOCAL_SOMENTE_TESTE` (públicas e
       # inócuas fora do app efêmero do runner) → artefato completo, 7 dias. Repo privado idem.
       - name: Publicar relatórios
-        if: always() && steps.config.outputs.configurado == 'true' && (vars.E2E_TARGET != 'preview' || github.event.repository.private)
+        if: always() && steps.config.outputs.configurado == 'true' && ((vars.E2E_TARGET != 'preview' && !inputs.alvo) || github.event.repository.private)
         uses: actions/upload-artifact@v4
         with:
           name: regressao-uat-${{ github.run_id }}
@@ -146,10 +165,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # Preview em repo público: qualquer usuário logado baixa artefatos, e os traces/relatório do
+      # Remoto (preview ou UAT) em repo público: qualquer usuário logado baixa artefatos, e os traces/relatório do
       # Playwright guardam o bypass da Vercel e o `x-e2e-secret` → sobe só a rastreabilidade.
       - name: Publicar rastreabilidade (sem traces)
-        if: always() && steps.config.outputs.configurado == 'true' && vars.E2E_TARGET == 'preview' && !github.event.repository.private
+        if: always() && steps.config.outputs.configurado == 'true' && (vars.E2E_TARGET == 'preview' || inputs.alvo) && !github.event.repository.private
         uses: actions/upload-artifact@v4
         with:
           name: regressao-uat-${{ github.run_id }}
@@ -161,7 +180,7 @@ jobs:
       # Upsert por marcador (não `gh pr comment --edit-last`): o `Spec × código` comenta com o
       # mesmo bot e não pode ser sobrescrito. PR de fork (token só leitura) não derruba o check.
       - name: Comentar o resultado no PR
-        if: always() && steps.config.outputs.configurado == 'true' && job.status != 'cancelled'
+        if: always() && steps.config.outputs.configurado == 'true' && job.status != 'cancelled' && github.event_name == 'pull_request'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

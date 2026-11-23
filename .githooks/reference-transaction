@@ -8,12 +8,16 @@ hook=$(basename "$0")
 guard_dir="$(dirname "$0")/../hooks/protect-main"
 
 # >>> extract_protected_branches
-# Nomes de `protectedBranches` do config.json, um por linha (só `sed`/`tr` POSIX).
+# Nomes de `protectedBranches` do config.json, um por linha, mais `esteira.integracao` quando
+# houver (só `sed`/`tr` POSIX).
 extract_protected_branches() {
-  tr -d '\n\r' <"$1" |
+  flat=$(tr -d '\n\r' <"$1") || return 1
+  printf '%s\n' "$flat" |
     sed -n 's/.*"protectedBranches"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' |
     tr ',' '\n' |
     sed -n 's/^[[:space:]]*"\([^"]*\)"[[:space:]]*$/\1/p'
+  printf '%s\n' "$flat" |
+    sed -n 's/.*"integracao"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
 }
 # <<< extract_protected_branches
 

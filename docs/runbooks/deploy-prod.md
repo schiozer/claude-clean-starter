@@ -13,6 +13,12 @@ confere, acompanha o deploy e faz o smoke test. Os passos de host chamam os bloc
 host do `deploy.config.json` ([host-vercel.md](./host-vercel.md), [host-heroku.md](./host-heroku.md),
 [host-cloudrun.md](./host-cloudrun.md)).
 
+**Com a esteira** (bloco `esteira` em `hooks/protect-main/config.json`,
+[ADR-020](../adr/template/020-esteira-integracao-e-promocao.md)) este runbook **não se aplica**: o
+merge de feature vai para a `develop` (UAT automático) e Prod sai pelo workflow
+`Promover para Prod` — [promover-prod.md](./promover-prod.md). A correção urgente direto na `main`
+é o [hotfix.md](./hotfix.md).
+
 ## Pré-condições
 
 - PR passou pelo [deploy-uat.md](./deploy-uat.md) e o **humano aprovou o UAT** (registrado no PR).

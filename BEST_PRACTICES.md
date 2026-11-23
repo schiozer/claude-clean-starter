@@ -286,6 +286,16 @@ uma única trunk (`main`), sempre deployável. Feature branches **curtas**
 incompleto fica atrás de **feature flags**. A promoção entre ambientes é por commit
 da trunk (ver [ADR-002](./docs/adr/template/002-estrategia-de-ambientes.md)).
 
+**Com a esteira** (opt-in, bloco `esteira` em `hooks/protect-main/config.json` —
+[ADR-020](./docs/adr/template/020-esteira-integracao-e-promocao.md) e
+[ADR-021](./docs/adr/template/021-hotfix-e-back-promotion.md)): duas branches longevas, `develop`
+(integração → UAT) e `main` (espelho de Prod). Feature branch sai da `develop` e o PR tem base
+`develop` (squash); a correção urgente é `hotfix/*` a partir da `main`, com base `main` (squash).
+A `main` só avança pelo FF da promoção (App `esteira-promover`) ou pelo hotfix. **Merge commit só
+na back-promotion** (`main` → `develop`, `chore(release): back-promotion de vX.Y.Z`); nunca
+cherry-pick. A versão é cortada **na promoção** (maior bump dos títulos dos PRs desde a última tag)
+e no hotfix.
+
 **Squash e versão** ([ADR-014](./docs/adr/template/014-release-management.md)): só _squash merge_; o
 **título do PR** é a mensagem do commit na `main` e a fonte da versão (`!`/`BREAKING CHANGE` →
 major, `feat` → minor, demais → patch). A versão vive na **tag** `vX.Y.Z` (uma por merge) e as

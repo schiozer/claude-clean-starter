@@ -11,6 +11,7 @@ import { readFileSync, realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BLOCK_PREFIX } from './evaluate.mjs'
+import { parseEsteira } from '../../scripts/esteira/config.mjs'
 
 /** @typedef {{ oldSha: string, newSha: string, ref: string }} RefUpdate */
 /** @typedef {{ localRef: string, localSha: string, remoteRef: string, remoteSha: string }} PushUpdate */
@@ -104,9 +105,22 @@ function revParse(ref) {
 const originSha = (branch) => revParse(`refs/remotes/${REMOTE}/${branch}`)
 const localSha = (branch) => revParse(heads(branch))
 
+/**
+ * Branches protegidas: `protectedBranches` mais a branch de integração da esteira (opt-in),
+ * sem duplicar. Sem bloco `esteira`, devolve só `protectedBranches`.
+ * @param {{ protectedBranches: string[], esteira?: unknown }} config
+ * @returns {string[]}
+ */
+export function branchesProtegidas(config) {
+  const esteira = parseEsteira(config.esteira)
+  const branches = [...config.protectedBranches]
+  if (esteira && !branches.includes(esteira.integracao)) branches.push(esteira.integracao)
+  return branches
+}
+
 function readProtectedBranches() {
   const configPath = join(dirname(fileURLToPath(import.meta.url)), 'config.json')
-  return JSON.parse(readFileSync(configPath, 'utf8')).protectedBranches
+  return branchesProtegidas(JSON.parse(readFileSync(configPath, 'utf8')))
 }
 
 /**

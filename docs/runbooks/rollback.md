@@ -13,6 +13,19 @@ não volta por aqui: migração é sempre aditiva e o reverso é uma nova migra�
 `deploy.config.json` ([host-vercel.md](./host-vercel.md), [host-heroku.md](./host-heroku.md),
 [host-cloudrun.md](./host-cloudrun.md)).
 
+**Com a esteira** ([ADR-020](../adr/template/020-esteira-integracao-e-promocao.md)): o smoke test
+falho da promoção já faz `rollbackProd` sozinho ([promover-prod.md](./promover-prod.md)); este
+runbook é para o incidente depois. O revert (passos 4–5) vai pela `develop` e é promovido; se for
+urgente, é um PR `hotfix/revert-<sha>` com base `main` ([hotfix.md](./hotfix.md)). O rollback
+automático de cada host:
+
+- **Heroku**: volta Prod para o `{slug}` da release anterior com o config **atual** do app (as
+  config vars não voltam) — escolha registrada.
+- **Cloud Run**: volta para a revisão que servia 100% antes do deploy (`payload.revisaoAnterior`
+  do Deployment `production`); sem ela, para a revisão pronta mais nova anterior à atual. Com
+  tráfego dividido, cai nessa regra determinística.
+- **Vercel**: `vercel rollback --yes --scope <team>` (volta para o deploy de Prod anterior).
+
 ## Pré-condições
 
 - Incidente identificado (erro, regressão) e ambiente afetado conhecido.
@@ -32,11 +45,11 @@ não volta por aqui: migração é sempre aditiva e o reverso é uma nova migra�
    Verificar: `/api/<ctx>` responde `404` e o erro parou nos logs. Resolveu → ir para a Verificação final; não resolveu → passo 3 (é o fluxo previsto, **não** é falha que dispara o Rollback deste runbook).
 3. [R2] Voltar Prod ao deploy anterior saudável: bloco **Rollback** do runbook do host (host-<host>.md) (em UAT, use o Rollback do [deploy-uat.md](./deploy-uat.md), que reaponta o UAT fixo).
    Verificar: os `Verificar:` do bloco mostram o deploy anterior servindo e o smoke test passa. Na Vercel, o rollback **desliga a atribuição automática** do domínio — novos deploys de Prod não entram no ar até o passo 6.
-4. [R1] Abrir o PR de revert: `git fetch origin && git switch -c revert/<sha> origin/main && git revert <sha>` (commit de merge: `git revert -m 1 <sha>`) e `git push -u origin revert/<sha> && gh pr create --base main --fill`.
+4. [R1] Abrir o PR de revert: `git fetch origin && git switch -c revert/<sha> origin/main && git revert <sha>` (commit de merge: `git revert -m 1 <sha>`) e `git push -u origin revert/<sha> && gh pr create --base main --fill`. Com a esteira: `revert/<sha>` a partir de `origin/develop` com `--base develop` (depois promover), ou `hotfix/revert-<sha>` a partir de `origin/main` com `--base main` ([hotfix.md](./hotfix.md)).
    Verificar: `gh pr checks <n> --watch` verde.
-5. [R3] Humano: fazer o merge do PR de revert na `main` e avisar quando terminar.
+5. [R3] Humano: fazer o merge do PR de revert na `main` (com a esteira, na base do PR e, se for a `develop`, disparar a promoção) e avisar quando terminar.
    Verificar: `gh pr view <n> --json state` → `MERGED` e o deploy do commit de revert fica pronto (bloco **Prod** do runbook do host).
-6. [R2] Só na Vercel, se o passo 3 foi executado e o domínio não serve o deploy do revert: passo de promover o deploy do revert do bloco **Rollback** do host-vercel.md (`promote`, que religa a atribuição automática). Nos demais hosts: não se aplica (no Heroku o auto-deploy e no Cloud Run o `--to-latest` do `deploy.yml` já põem o revert no ar).
+6. [R2] Só na Vercel, se o passo 3 foi executado e o domínio não serve o deploy do revert: passo de promover o deploy do revert do bloco **Rollback** do host-vercel.md (`promote`, que religa a atribuição automática). Nos demais hosts: não se aplica. Sem a esteira, o auto-deploy (Heroku) e o `--to-latest` do `deploy.yml` (Cloud Run) já põem o revert no ar. Com a esteira, o `-prod` do Heroku não tem auto-deploy: o revert entra no ar pela promoção ([promover-prod.md](./promover-prod.md)) ou como hotfix ([hotfix.md](./hotfix.md)).
    Verificar: o domínio de Prod serve o deploy do commit de revert (sem isso, merges futuros não chegam a Prod).
 
 ## Verificação final

@@ -1,6 +1,7 @@
 // Espera genérica do deploy de preview (spec camada-de-deploy): polling na API de deployments do
 // GitHub até `success` (URL do preview), `failure`/`error` ou timeout. O filtro do ambiente é
-// injetável (`ambienteDePreview`); o padrão é o da Vercel (`Preview*`).
+// injetável (`ambienteDePreview`, que também recebe o deployment, ex.: para filtrar por `ref`); o
+// padrão é o da Vercel (`Preview*`). `rotulo` nomeia o deploy nas mensagens (padrão `preview`).
 
 import { setTimeout as esperar } from 'node:timers/promises'
 
@@ -9,7 +10,7 @@ export const DEFAULT_INTERVAL_MS = 15_000
 
 const FALHOU = ['failure', 'error']
 
-/** @typedef {{ id: number, environment: string, created_at: string }} Deployment */
+/** @typedef {{ id: number, environment: string, ref?: string, created_at: string }} Deployment */
 /** @typedef {{ state: string, environment_url?: string, target_url?: string }} DeploymentStatus */
 
 const maisRecente = (a, b) =>
@@ -23,17 +24,21 @@ const transitorio = (error) =>
   (error.status >= 500 || error.status === 403 || error.status === 429)
 
 /**
+ * Espera um Deployment do GitHub do `sha` cujo ambiente casa com `ambienteDePreview` (apesar do
+ * nome, serve a qualquer ambiente: preview, UAT, Production). Devolve a URL e o `id` do deployment.
  * @param {{
  *   api: { call: (method: string, path: string) => Promise<unknown> },
- *   sha: string, ambienteDePreview?: (environment: string) => boolean, timeoutMs?: number, intervalMs?: number,
+ *   sha: string, ambienteDePreview?: (environment: string, deployment: Deployment) => boolean,
+ *   rotulo?: string, timeoutMs?: number, intervalMs?: number,
  *   now?: () => number, sleep?: (ms: number) => Promise<void>,
  * }} opts
- * @returns {Promise<{ url: string }>}
+ * @returns {Promise<{ url: string, id: number }>}
  */
-export async function waitPreview({
+export async function aguardarDeployment({
   api,
   sha,
   ambienteDePreview = (e) => e.startsWith('Preview'),
+  rotulo = 'preview',
   timeoutMs = DEFAULT_TIMEOUT_MS,
   intervalMs = DEFAULT_INTERVAL_MS,
   now = Date.now,
@@ -49,7 +54,7 @@ export async function waitPreview({
       await api.call('GET', `/deployments?sha=${encodeURIComponent(sha)}&per_page=100`)
     )
     const deploy = (deployments ?? [])
-      .filter((d) => typeof d.environment === 'string' && ambienteDePreview(d.environment))
+      .filter((d) => typeof d.environment === 'string' && ambienteDePreview(d.environment, d))
       .sort(maisRecente)
       .at(-1)
     if (!deploy) return null
@@ -61,11 +66,11 @@ export async function waitPreview({
     const atual = statuses?.[0]
     if (atual?.state === 'success') {
       const url = atual.environment_url || atual.target_url
-      if (!url) throw new Error(`Deploy de preview sem URL para ${sha} (status success sem URL)`)
-      return { url }
+      if (!url) throw new Error(`Deploy de ${rotulo} sem URL para ${sha} (status success sem URL)`)
+      return { url, id: deploy.id }
     }
     if (atual && FALHOU.includes(atual.state)) {
-      throw new Error(`Deploy de preview falhou para ${sha} (status: ${atual.state})`)
+      throw new Error(`Deploy de ${rotulo} falhou para ${sha} (status: ${atual.state})`)
     }
     return null
   }
@@ -81,10 +86,20 @@ export async function waitPreview({
     if (now() >= prazo) {
       throw new Error(
         (viuDeploy
-          ? `Deploy de preview para ${sha} não ficou pronto em ${minutos(timeoutMs)}`
-          : `Nenhum deploy de preview para ${sha} em ${minutos(timeoutMs)}`) + ultimoErro
+          ? `Deploy de ${rotulo} para ${sha} não ficou pronto em ${minutos(timeoutMs)}`
+          : `Nenhum deploy de ${rotulo} para ${sha} em ${minutos(timeoutMs)}`) + ultimoErro
       )
     }
     await sleep(Math.min(intervalMs, Math.max(prazo - now(), 0)))
   }
+}
+
+/**
+ * Espera do deploy de preview (contrato atual): como `aguardarDeployment`, devolvendo só a URL.
+ * @param {Parameters<typeof aguardarDeployment>[0]} opts
+ * @returns {Promise<{ url: string }>}
+ */
+export async function waitPreview(opts) {
+  const { url } = await aguardarDeployment(opts)
+  return { url }
 }

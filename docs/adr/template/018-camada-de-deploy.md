@@ -1,7 +1,9 @@
 # 018. Camada de deploy plugável: Vercel, Heroku ou Cloud Run
 
 **Data**: 2026-11-15
-**Status**: Aceito
+**Status**: Aceito — parcialmente substituída pela [ADR-020](./020-esteira-integracao-e-promocao.md) (com o bloco `esteira`, o contrato ganha `deployUat`, `urlUat`, `promoverProd` e `rollbackProd`, e Prod deixa de ser o auto-deploy/rebuild da `main`)
+
+> **Nota (ADR-020).** Com a esteira ligada: o contrato do adaptador ganha `deployUat`, `urlUat`, `promoverProd` e `rollbackProd`, e `deployProd` fica só para o hotfix. Heroku promove o slug do `-uat` (o `-prod` perde o auto-deploy da `main`), Cloud Run promove a imagem pelo digest, Vercel rebuilda o mesmo SHA no FF da `main`.
 
 ## Contexto
 

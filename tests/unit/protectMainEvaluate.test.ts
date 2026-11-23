@@ -9,6 +9,7 @@ type Opts = {
   detached?: boolean
   protectedBranches?: string[]
   env?: Record<string, string>
+  esteira?: boolean
 }
 
 // Branch do worktree que contém `dir` (o prefixo mais longo), como `git symbolic-ref` faria.
@@ -26,6 +27,7 @@ const evaluate = (command: string, opts: Opts = {}) =>
     branchOf: (dir: string) => (opts.detached ? null : fakeBranchOf(dir)),
     aliasOf: (_dir: string, name: string) => ALIASES[name] ?? null,
     env: opts.env,
+    esteira: opts.esteira,
   })
 
 const ON_FEAT: Opts = { cwd: '/repo/wt' }
@@ -435,5 +437,163 @@ describe('evaluateCommand', () => {
     expect(BLOCK_PREFIX).toBe(
       'Bloqueado: a `main` só recebe mudanças via PR (CLAUDE.md regra 0, ADR-005). Crie uma branch `tipo/descrição`, faça push e abra o PR; o merge é do humano.'
     )
+  })
+})
+
+describe('esteira: integração protegida e promoção só do humano', () => {
+  const MOTIVO = '`Promover para Prod` é disparado pelo humano (`[R3]`).'
+  const COM_ESTEIRA = { protectedBranches: ['main', 'develop'], esteira: true }
+  const onDevelop = (opts: Opts = {}): Opts => ({ ...COM_ESTEIRA, ...opts })
+  const evalDevelop = (command: string) =>
+    evaluateCommand(command, {
+      cwd: '/dev',
+      protectedBranches: ['main', 'develop'],
+      branchOf: () => 'develop',
+      aliasOf: () => null,
+      esteira: true,
+    })
+
+  it('com esteira bloqueia git push para a develop e commit na develop', () => {
+    expect(evaluate('git push origin develop', onDevelop(ON_FEAT)).allowed).toBe(false)
+    expect(evalDevelop('git commit -m x').allowed).toBe(false)
+  })
+
+  it('sem esteira git push origin develop continua permitido', () => {
+    expect(evaluate('git push origin develop', ON_FEAT).allowed).toBe(true)
+  })
+
+  const PROMOCAO = [
+    'gh workflow run promover.yml',
+    'gh workflow run "Promover para Prod"',
+    'gh workflow run "promover para prod" --ref main',
+    'gh workflow enable promover.yml',
+    'gh workflow disable promover.yml',
+    'gh api -X POST repos/o/r/actions/workflows/promover.yml/dispatches',
+    'gh api --method POST repos/o/r/actions/workflows/1/dispatches -f ref=main',
+    'gh api repos/o/r/dispatches -f event_type=x',
+    'gh api repos/o/r/dispatches --input payload.json',
+  ]
+  for (const cmd of PROMOCAO) {
+    it(`bloqueia com esteira: ${cmd}`, () => {
+      const verdict = evaluate(cmd, onDevelop(ON_FEAT))
+      expect(verdict.allowed).toBe(false)
+      if (!verdict.allowed) expect(verdict.reason).toContain(MOTIVO)
+    })
+    it(`sem esteira continua como antes (permitido): ${cmd}`, () => {
+      expect(evaluate(cmd, ON_FEAT)).toEqual({ allowed: true })
+    })
+  }
+
+  for (const cmd of [
+    'gh workflow list',
+    'gh workflow view promover.yml',
+    'gh workflow run ci.yml',
+    'gh api repos/o/r/actions/workflows/promover.yml/dispatches',
+  ]) {
+    it(`permite: ${cmd}`, () => {
+      expect(evaluate(cmd, ON_FEAT).allowed).toBe(true)
+    })
+  }
+
+  describe('contornos do bloqueio', () => {
+    const BLOQUEADOS = [
+      'gh workflow run 12345',
+      'gh workflow enable 12345',
+      'gh workflow disable 12345',
+      'gh run rerun 999',
+      'gh run rerun 999 --failed',
+      'gh api -X POST repos/o/r/actions/runs/999/rerun',
+      'gh api --method POST repos/o/r/actions/runs/999/rerun-failed-jobs',
+      'gh api -X POST repos/o/r/actions/jobs/77/rerun',
+      'gh api repos/o/r/actions/runs/999/rerun -f x=y',
+    ]
+    for (const cmd of BLOQUEADOS) {
+      it(`bloqueia com esteira: ${cmd}`, () => {
+        const verdict = evaluate(cmd, onDevelop(ON_FEAT))
+        expect(verdict.allowed).toBe(false)
+        if (!verdict.allowed) expect(verdict.reason).toContain(MOTIVO)
+      })
+      it(`sem esteira continua como antes (permitido): ${cmd}`, () => {
+        expect(evaluate(cmd, ON_FEAT)).toEqual({ allowed: true })
+      })
+    }
+
+    for (const cmd of [
+      'WF=promover.yml; gh workflow run $WF',
+      'gh workflow run "$(echo promover.yml)"',
+      'gh workflow run `echo promover.yml`',
+      'gh workflow enable "$WF"',
+    ]) {
+      it(`bloqueia alvo dinâmico com esteira: ${cmd}`, () => {
+        expect(evaluate(cmd, onDevelop(ON_FEAT)).allowed).toBe(false)
+      })
+    }
+
+    for (const cmd of [
+      'gh workflow run ci.yml',
+      'gh workflow list',
+      'gh workflow view 12345',
+      'gh run list',
+      'gh run view 999',
+      'gh run watch 999',
+      'gh api repos/o/r/actions/runs/999/rerun',
+      'gh api repos/o/r/actions/runs/999',
+    ]) {
+      it(`permite (com e sem esteira): ${cmd}`, () => {
+        expect(evaluate(cmd, ON_FEAT).allowed).toBe(true)
+        expect(evaluate(cmd, onDevelop(ON_FEAT)).allowed).toBe(true)
+      })
+    }
+  })
+
+  describe('gh alias set não contorna as regras', () => {
+    const COM_ESTEIRA_BLOQUEADOS = [
+      "gh alias set p 'workflow run promover'",
+      'gh alias set p "workflow run promover.yml --ref main"',
+      "gh alias set p 'workflow run 12345'",
+      "gh alias set rr 'run rerun'",
+      "gh alias set d 'api -X POST repos/o/r/actions/workflows/1/dispatches'",
+      "gh alias set --shell p 'gh workflow run promover.yml'",
+      "gh alias set p '!gh run rerun 999'",
+    ]
+    for (const cmd of COM_ESTEIRA_BLOQUEADOS) {
+      it(`bloqueia com esteira: ${cmd}`, () => {
+        const verdict = evaluate(cmd, onDevelop(ON_FEAT))
+        expect(verdict.allowed).toBe(false)
+        if (!verdict.allowed) expect(verdict.reason).toContain(MOTIVO)
+      })
+      it(`sem esteira permite: ${cmd}`, () => {
+        expect(evaluate(cmd, ON_FEAT)).toEqual({ allowed: true })
+      })
+    }
+
+    for (const cmd of [
+      "gh alias set m 'pr merge'",
+      "gh alias set m 'api -X PUT repos/o/r/pulls/1/merge'",
+      "gh alias set c 'api -X PUT repos/o/r/contents/README.md -f content=eA=='",
+      "gh alias set r 'api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc'",
+      'gh alias set u \'pr edit 1 --body "- [x] UAT ok"\'',
+      "gh alias set --shell p 'git push origin main'",
+      "gh alias set p '!git push origin main'",
+      'echo "workflow run promover" | gh alias set p -',
+      'gh alias set p "$X"',
+    ]) {
+      it(`bloqueia (com e sem esteira): ${cmd}`, () => {
+        expect(evaluate(cmd, ON_FEAT).allowed).toBe(false)
+        expect(evaluate(cmd, onDevelop(ON_FEAT)).allowed).toBe(false)
+      })
+    }
+
+    for (const cmd of [
+      "gh alias set co 'pr checkout'",
+      "gh alias set wf 'workflow run ci.yml'",
+      "gh alias set --shell l 'gh run list'",
+      'gh alias list',
+    ]) {
+      it(`permite (com e sem esteira): ${cmd}`, () => {
+        expect(evaluate(cmd, ON_FEAT)).toEqual({ allowed: true })
+        expect(evaluate(cmd, onDevelop(ON_FEAT))).toEqual({ allowed: true })
+      })
+    }
   })
 })

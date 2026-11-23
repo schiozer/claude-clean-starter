@@ -2,8 +2,9 @@
 // CLI da camada de deploy: `node scripts/deploy/index.mjs <op>` (spec camada-de-deploy).
 // Cada operação devolve pares chave=valor que a CLI grava em `$GITHUB_OUTPUT`.
 
-import { appendFileSync, realpathSync } from 'node:fs'
+import { appendFileSync, existsSync, realpathSync } from 'node:fs'
 import { execFile } from 'node:child_process'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { makeGithubClient } from '../github-api.mjs'
 import { lerDeployConfig } from './config.mjs'
@@ -12,8 +13,19 @@ import vercel from './hosts/vercel.mjs'
 import heroku, { urlDoReviewApp } from './hosts/heroku.mjs'
 import { lerConfigAuth0, obterToken, registrarUrl, removerUrl } from './auth0Callbacks.mjs'
 import cloudrun from './hosts/cloudrun.mjs'
+import { registrar } from './githubDeployments.mjs'
+import { lerEsteira } from '../esteira/config.mjs'
 
-export const OPERACOES = ['host', 'credenciais', 'preview', 'prod', 'encerrar', 'aguardar']
+export const OPERACOES = [
+  'host',
+  'credenciais',
+  'preview',
+  'prod',
+  'encerrar',
+  'aguardar',
+  'uat',
+  'promover',
+]
 
 const ADAPTADORES = { vercel, heroku, cloudrun }
 
@@ -27,6 +39,10 @@ const exigir = (env, nome) => {
   if (!env[nome]) throw new Error(`deploy: variável ${nome} é obrigatória`)
   return env[nome]
 }
+
+/** Esteira do repositório; sem `hooks/protect-main/config.json` (ex.: testes), desligada. */
+const esteiraDe = (raiz) =>
+  existsSync(join(raiz, 'hooks/protect-main/config.json')) ? lerEsteira(raiz) : null
 
 const numeroDoPr = (env) => {
   const texto = env.PR_NUMBER ?? ''
@@ -79,8 +95,9 @@ async function sincronizarAuth0({ acao, url, auth0, log, fetchFn }) {
  * @param {{
  *   env?: NodeJS.ProcessEnv,
  *   raiz?: string,
- *   exec?: (cmd: string, args: string[]) => Promise<string>,
- *   github?: Pick<ReturnType<typeof makeGithubClient>, 'call'>,
+ *   exec?: (cmd: string, args: string[], opts?: { env?: Record<string, string> }) => Promise<string>,
+ *   github?: Pick<ReturnType<typeof makeGithubClient>, 'call'> &
+ *     Partial<Pick<ReturnType<typeof makeGithubClient>, 'location'>>,
  *   fetchFn?: typeof fetch,
  * }} [opcoes]
  * @returns {Promise<Record<string,string>>}
@@ -92,7 +109,14 @@ export async function executar(
   if (!OPERACOES.includes(operacao)) {
     throw new Error(`deploy: operação '${operacao}' inválida (válidas: ${OPERACOES.join(', ')})`)
   }
-  const config = lerDeployConfig(raiz)
+  const esteira = esteiraDe(raiz)
+  if (operacao === 'promover') {
+    // import tardio: promover.mjs usa este módulo (adaptador, execReal).
+    const { executarPromocao } = await import('../esteira/promover.mjs')
+    const { promovido, sha, tag } = await executarPromocao({ raiz, env, fetchFn, rodar: exec })
+    return { promovido: String(promovido), ...(sha ? { sha } : {}), ...(tag ? { tag } : {}) }
+  }
+  const config = lerDeployConfig(raiz, { esteira })
   if (operacao === 'host') return { host: config.host }
   if (operacao === 'credenciais') return credenciais(config, env)
 
@@ -124,8 +148,11 @@ export async function executar(
   }
 
   const sha = exigir(env, 'DEPLOY_SHA')
+  if (operacao === 'uat')
+    return deployDeUat({ adapter, config, sha, exec, github, log, env, fetchFn, esteira })
+
   const pr = operacao === 'prod' ? undefined : numeroDoPr(env)
-  const ctx = { config, pr, sha, exec, github, log }
+  const ctx = { config, pr, sha, exec, github, log, env, fetchFn, esteira }
   if (operacao === 'preview') await adapter.deployPreview(ctx)
   else if (operacao === 'prod') await adapter.deployProd(ctx)
   else {
@@ -133,6 +160,24 @@ export async function executar(
     if (config.host === 'heroku') await removerUrlDoReviewApp({ config, pr, env, log, fetchFn })
   }
   return {}
+}
+
+/** Deploy de UAT fixo do SHA (push na integração) e registro do Deployment `uat`. */
+async function deployDeUat({ adapter, ...ctx }) {
+  if (!ctx.esteira) {
+    throw new Error(
+      'deploy: a operação uat exige o bloco esteira em hooks/protect-main/config.json'
+    )
+  }
+  if (!ctx.github) {
+    throw new Error(
+      'deploy: GITHUB_TOKEN e GITHUB_REPOSITORY são obrigatórios para o deploy de UAT'
+    )
+  }
+  const { url, payload } = await adapter.deployUat(ctx)
+  await registrar(ctx.github, { ambiente: 'uat', sha: ctx.sha, url, payload })
+  ctx.log(`deploy de UAT de ${ctx.sha.slice(0, 7)} registrado em ${url}`)
+  return { url }
 }
 
 async function removerUrlDoReviewApp({ config, pr, env, log, fetchFn }) {
@@ -145,12 +190,21 @@ async function removerUrlDoReviewApp({ config, pr, env, log, fetchFn }) {
   await sincronizarAuth0({ acao: 'remover', url, auth0, log, fetchFn })
 }
 
-const execReal = (cmd, args) =>
+/**
+ * `execFile` sem shell. `opts.env` (ex.: `VERCEL_TOKEN` do rollback) soma-se ao env do processo
+ * só no filho. Falha → Error com `code` = exit code (o `git merge-base --is-ancestor` usa 1).
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {{ env?: Record<string, string> }} [opts]
+ * @returns {Promise<string>}
+ */
+export const execReal = (cmd, args, { env } = {}) =>
   new Promise((resolve, reject) => {
-    execFile(cmd, args, { maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error)
-        reject(new Error(`deploy: '${cmd}' falhou: ${String(stderr).trim() || error.message}`))
-      else resolve(String(stdout))
+    const opcoes = { maxBuffer: 64 * 1024 * 1024, env: { ...process.env, ...env } }
+    execFile(cmd, args, opcoes, (error, stdout, stderr) => {
+      if (!error) return resolve(String(stdout))
+      const detalhe = String(stderr).trim() || error.message
+      reject(Object.assign(new Error(`deploy: '${cmd}' falhou: ${detalhe}`), { code: error.code }))
     })
   })
 

@@ -2,7 +2,9 @@
 // Guarda da main (camada 3, spec main-autogarantida §6): num push para uma branch protegida,
 // verifica se cada commit novo veio de um PR mergeado; senão abre/atualiza uma issue de alarme
 // e falha o job. Também alarma merges que pularam os gates de saúde (checks obrigatórios, UAT,
-// squash) — spec 2026-10-25 release-management §4.5. Não reverte nada — a decisão é do humano.
+// squash) — spec 2026-10-25 release-management §4.5. Com a esteira ligada (bloco `esteira` do
+// config), guarda também a integração e aceita o FF da produção feito pela App (spec esteira §5.3).
+// Não reverte nada — a decisão é do humano.
 
 import { readFileSync, realpathSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -10,6 +12,9 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { latestCheckRun, makeGithubClient } from './github-api.mjs'
 import { parseUat } from './pr-gate.mjs'
+import { lerEsteira } from './esteira/config.mjs'
+import { classificarPr, PUSHER_APP } from './esteira/regras.mjs'
+import { branchesProtegidas } from '../hooks/protect-main/git-guard.mjs'
 
 const LABEL = 'main-sem-pr'
 const GATES_LABEL = 'merge-sem-gates'
@@ -25,16 +30,25 @@ const ZERO_SHA = /^0+$/
 const BRANCH_PREFIX = 'refs/heads/'
 
 /**
- * @typedef {{ ref: string, before: string, after: string, forced?: boolean, deleted?: boolean }} PushEvent
+ * @typedef {{
+ *   ref: string, before: string, after: string, forced?: boolean, deleted?: boolean,
+ *   sender?: { login: string },
+ * }} PushEvent
  * @typedef {{
  *   number: number, title: string, body: string | null, merged_at: string | null,
- *   base: { ref: string }, head: { sha: string },
+ *   base: { ref: string }, head: { sha: string, ref?: string },
  * }} PullInfo
+ * @typedef {import('./esteira/config.mjs').Esteira} Esteira
  * @typedef {{
  *   name: string, status: string, conclusion: string | null, id?: number, started_at?: string | null,
  * }} CheckRun
  * @typedef {{
  *   compare(base: string, head: string): Promise<string[]>,
+ *   compareStatus(base: string, head: string):
+ *     Promise<{ status: string, aheadBy: number, behindBy: number }>,
+ *   deployments(sha: string, environment: string):
+ *     Promise<{ id: number, payload: { sha?: string }, creator: { login: string } }[]>,
+ *   deploymentOk(id: number): Promise<boolean>,
  *   pullsForCommit(sha: string): Promise<PullInfo[]>,
  *   checkRuns(sha: string): Promise<CheckRun[]>,
  *   commitParents(sha: string): Promise<string[]>,
@@ -80,13 +94,38 @@ const findUnmerged = async (api, commits, branch, retries, delayMs) => {
 }
 
 /**
+ * Gates que dependem da base/head do PR na esteira (spec §5.3/§5.4); null = sem esteira ou PR
+ * fora das branches da esteira (regras de hoje).
+ * @param {PullInfo} pr
+ * @param {Esteira | null | undefined} esteira
+ */
+const esteiraGates = (pr, esteira) => {
+  if (!esteira) return null
+  const base = pr.base.ref
+  if (base !== esteira.integracao && base !== esteira.producao) return null
+  const classe = classificarPr({ base, head: pr.head.ref ?? '' }, esteira)
+  return {
+    // na integração o UAT é depois do merge: o PR não marca UAT.
+    exigeUat: base === esteira.producao,
+    backPromotion: classe === 'back-promotion',
+    erro:
+      base === esteira.producao && classe !== 'hotfix'
+        ? `base ${esteira.producao} exige ${esteira.prefixoHotfix}*`
+        : null,
+  }
+}
+
+/**
  * Itens faltando (pt-BR) de um PR mergeado; lista vazia = todos os gates cumpridos.
  * @param {PullInfo} pr
- * @param {{ checkRuns: CheckRun[], parents: string[], requiredChecks: string[] }} ctx
+ * @param {{
+ *   checkRuns: CheckRun[], parents: string[], requiredChecks: string[], esteira?: Esteira | null,
+ * }} ctx
  * @returns {string[]}
  */
-export function evaluateGates(pr, { checkRuns, parents, requiredChecks }) {
-  const missing = []
+export function evaluateGates(pr, { checkRuns, parents, requiredChecks, esteira }) {
+  const regras = esteiraGates(pr, esteira)
+  const missing = regras?.erro ? [regras.erro] : []
   for (const name of requiredChecks) {
     const run = latestCheckRun(checkRuns, name)
     if (!run) missing.push(`check "${name}" ausente`)
@@ -94,11 +133,17 @@ export function evaluateGates(pr, { checkRuns, parents, requiredChecks }) {
       missing.push(`check "${name}" com conclusão ${run.conclusion ?? run.status}`)
     }
   }
-  const uat = parseUat(pr.body ?? '')
-  if (uat.approved && uat.notApplicable) missing.push('duas opções de UAT marcadas')
-  else if (uat.notApplicable && !uat.reason) missing.push('UAT "não se aplica" sem motivo')
-  else if (!uat.approved && !uat.notApplicable) missing.push('UAT não marcado')
-  if (parents.length > 1) missing.push('merge commit (2 pais): use squash')
+  if (regras?.exigeUat ?? true) {
+    const uat = parseUat(pr.body ?? '')
+    if (uat.approved && uat.notApplicable) missing.push('duas opções de UAT marcadas')
+    else if (uat.notApplicable && !uat.reason) missing.push('UAT "não se aplica" sem motivo')
+    else if (!uat.approved && !uat.notApplicable) missing.push('UAT não marcado')
+  }
+  if (regras?.backPromotion) {
+    if (parents.length < 2) {
+      missing.push('back-promotion mergeada sem merge commit: use "Create a merge commit"')
+    }
+  } else if (parents.length > 1) missing.push('merge commit (2 pais): use squash')
   return missing
 }
 
@@ -112,7 +157,7 @@ const hasPendingCheck = (checkRuns, requiredChecks) =>
  * Avalia os gates de um PR relendo checks/pais a cada rodada (checks podem chegar atrasados).
  * Check pendente espera até `pending.maxPolls` leituras extras; ausente/falho usa `retries`.
  */
-const gateFailureFor = async (api, { pr, shas }, requiredChecks, retries, delayMs, pending) => {
+const gateFailureFor = async (api, { pr, shas }, gates, retries, delayMs, pending) => {
   let missing = []
   let attempt = 1
   let polls = 0
@@ -123,9 +168,9 @@ const gateFailureFor = async (api, { pr, shas }, requiredChecks, retries, delayM
       const found = await api.commitParents(sha)
       if (found.length > parents.length) parents.splice(0, parents.length, ...found)
     }
-    missing = evaluateGates(pr, { checkRuns, parents, requiredChecks })
+    missing = evaluateGates(pr, { checkRuns, parents, ...gates })
     if (missing.length === 0) return null
-    if (hasPendingCheck(checkRuns, requiredChecks)) {
+    if (hasPendingCheck(checkRuns, gates.requiredChecks)) {
       if (polls >= pending.maxPolls) break
       polls++
       await sleep(pending.pollMs)
@@ -136,6 +181,50 @@ const gateFailureFor = async (api, { pr, shas }, requiredChecks, retries, delayM
     }
   }
   return { pr: pr.number, sha: shas[0], missing }
+}
+
+/**
+ * Motivo (pt-BR) pelo qual o push na produção NÃO é o FF legítimo da App; null = legítimo:
+ * Deployment `production` do `after` (payload.sha igual) com status success e `after` contido
+ * na integração (spec esteira §5.3).
+ */
+const motivoPromocaoInvalida = async (api, event, esteira) => {
+  try {
+    let deploymentOk = false
+    for (const deployment of await api.deployments(event.after, 'production')) {
+      if (deployment.payload?.sha !== event.after) continue
+      if (await api.deploymentOk(deployment.id)) {
+        deploymentOk = true
+        break
+      }
+    }
+    if (!deploymentOk) {
+      return (
+        `O push da App ${PUSHER_APP} não tem Deployment \`production\` bem-sucedido com ` +
+        `payload.sha ${event.after}.`
+      )
+    }
+    const { behindBy } = await api.compareStatus(event.after, esteira.integracao)
+    if (behindBy !== 0) {
+      return (
+        `O push da App ${PUSHER_APP} leva a \`${esteira.producao}\` para ${event.after}, que ` +
+        `não é alcançável pela \`${esteira.integracao}\` (${behindBy} commit(s) fora dela).`
+      )
+    }
+    return null
+  } catch (error) {
+    return `Não foi possível verificar a promoção da App ${PUSHER_APP} (${
+      error instanceof Error ? error.message : String(error)
+    }); tratado como alarme por segurança.`
+  }
+}
+
+/** Commits trazidos da produção pela back-promotion (contidos nela): dispensam PR na integração. */
+const vindosDaProducao = async (api, commits, esteira) => {
+  const contidos = await Promise.all(
+    commits.map(async (sha) => (await api.compareStatus(sha, esteira.producao)).behindBy === 0)
+  )
+  return commits.filter((_, index) => contidos[index])
 }
 
 const buildBody = (event, offending, note) =>
@@ -181,6 +270,7 @@ const raise = async (api, label, title, body) => {
  * @param {{
  *   retries?: number, delayMs?: number, pendingPollMs?: number, pendingMaxPolls?: number,
  *   protectedBranches?: string[], requiredChecks?: string[], specGate?: boolean,
+ *   esteira?: Esteira | null,
  * }} [opts]
  * @returns {Promise<{
  *   ok: boolean, offending: string[],
@@ -195,7 +285,11 @@ export async function runMainGuard(event, api, opts = {}) {
     maxPolls: opts.pendingMaxPolls ?? DEFAULT_PENDING_MAX_POLLS,
   }
   const config = readConfig()
-  const protectedBranches = opts.protectedBranches ?? config.protectedBranches
+  const esteira = 'esteira' in opts ? (opts.esteira ?? null) : lerEsteira()
+  const protectedBranches = branchesProtegidas({
+    protectedBranches: opts.protectedBranches ?? config.protectedBranches,
+    esteira,
+  })
   const specGate = opts.specGate ?? process.env.SPEC_GATE === 'on'
   const requiredChecks = [
     ...(opts.requiredChecks ?? config.requiredChecks ?? []),
@@ -230,22 +324,36 @@ export async function runMainGuard(event, api, opts = {}) {
   } else if (event.forced || failClosed) {
     offending = commits.length > 0 && !failClosed ? commits : [event.after]
     if (event.forced && !note) note = 'O push foi forçado (force push).'
+  } else if (esteira && branch === esteira.producao && event.sender?.login === PUSHER_APP) {
+    const motivo = await motivoPromocaoInvalida(api, event, esteira)
+    if (motivo) {
+      offending = commits.length > 0 ? commits : [event.after]
+      note = motivo
+    }
   } else {
     ;({ pending: offending, pulls } = await findUnmerged(api, commits, branch, retries, delayMs))
+    const backPromotion = pulls.some(
+      ({ pr }) => esteiraGates(pr, esteira)?.backPromotion && branch === esteira?.integracao
+    )
+    if (backPromotion && offending.length > 0) {
+      const trazidos = await vindosDaProducao(api, offending, esteira)
+      offending = offending.filter((sha) => !trazidos.includes(sha))
+    }
   }
 
   if (offending.length > 0) {
     await raise(
       api,
       LABEL,
-      `Commit na main sem PR: ${(deleted ? event.before : event.after).slice(0, 7)}`,
+      `Commit na ${branch} sem PR: ${(deleted ? event.before : event.after).slice(0, 7)}`,
       buildBody(event, offending, note)
     )
   }
 
   const gateFailures = []
   for (const entry of pulls) {
-    const failure = await gateFailureFor(api, entry, requiredChecks, retries, delayMs, pending)
+    const gates = { requiredChecks, esteira }
+    const failure = await gateFailureFor(api, entry, gates, retries, delayMs, pending)
     if (!failure) continue
     gateFailures.push(failure)
     await raise(
@@ -256,6 +364,16 @@ export async function runMainGuard(event, api, opts = {}) {
     )
   }
   return { ok: offending.length === 0 && gateFailures.length === 0, offending, gateFailures }
+}
+
+// o payload do Deployment pode vir como objeto ou como texto JSON.
+const parsePayload = (payload) => {
+  if (typeof payload !== 'string') return payload ?? {}
+  try {
+    return JSON.parse(payload)
+  } catch {
+    return {}
+  }
 }
 
 /** GuardApi sobre a REST do GitHub (fetch nativo). */
@@ -287,6 +405,30 @@ export function makeGithubApi({ token, repository, apiUrl, fetchFn }) {
         throw new CompareTruncatedError(`compare retornou ${shas.length} de ${total} commits`)
       }
       return shas
+    },
+    async compareStatus(base, head) {
+      const data = await call('GET', `/compare/${base}...${head}?per_page=1`)
+      if (!Number.isInteger(data?.behind_by) || !Number.isInteger(data?.ahead_by)) {
+        throw new Error('compare sem ahead_by/behind_by válidos')
+      }
+      return { status: data.status, aheadBy: data.ahead_by, behindBy: data.behind_by }
+    },
+    async deployments(sha, environment) {
+      const query = `sha=${sha}&environment=${encodeURIComponent(environment)}`
+      const list = await call('GET', `/deployments?${query}&per_page=${PAGE_SIZE}`)
+      return list.map((deployment) => ({
+        id: deployment.id,
+        payload: parsePayload(deployment.payload),
+        creator: deployment.creator,
+      }))
+    },
+    async deploymentOk(id) {
+      const statuses = await call('GET', `/deployments/${id}/statuses?per_page=${PAGE_SIZE}`)
+      const latest = statuses.reduce(
+        (best, status) => (!best || status.id > best.id ? status : best),
+        null
+      )
+      return latest?.state === 'success'
     },
     async pullsForCommit(sha) {
       return call('GET', `/commits/${sha}/pulls`)
@@ -333,10 +475,12 @@ if (isMain) {
     })
     const { ok, offending, gateFailures } = await runMainGuard(event, api)
     if (ok) {
-      process.stdout.write('main-guard: todos os commits vieram de PR mergeado, com gates ok.\n')
+      process.stdout.write('main-guard: commits legítimos (PR mergeado ou promoção), gates ok.\n')
     } else {
       if (offending.length > 0) {
-        process.stderr.write(`main-guard: commit(s) na main sem PR:\n${offending.join('\n')}\n`)
+        process.stderr.write(
+          `main-guard: commit(s) na branch protegida sem PR:\n${offending.join('\n')}\n`
+        )
       }
       for (const { pr, missing } of gateFailures) {
         process.stderr.write(`main-guard: PR #${pr} sem gates:\n- ${missing.join('\n- ')}\n`)

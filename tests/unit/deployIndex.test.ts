@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { executar, adaptador } from '../../scripts/deploy/index.mjs'
+import { executar, adaptador, execReal, OPERACOES } from '../../scripts/deploy/index.mjs'
 
 const dirs: string[] = []
 const raizCom = (config: object) => {
@@ -258,5 +258,107 @@ describe('executar: Auth0 de UAT (heroku)', () => {
       fetchFn: f as never,
     })
     expect(chamou(f, 'auth0.com')).toBe(false)
+  })
+})
+
+describe('executar: esteira (uat / promover)', () => {
+  const ESTEIRA = {
+    integracao: 'develop',
+    producao: 'main',
+    prefixoHotfix: 'hotfix/',
+    promotores: ['fulano'],
+  }
+  const raizEsteira = (deploy: object, esteira: object | null = ESTEIRA) => {
+    const dir = raizCom(deploy)
+    mkdirSync(join(dir, 'hooks/protect-main'), { recursive: true })
+    writeFileSync(
+      join(dir, 'hooks/protect-main/config.json'),
+      JSON.stringify({ protectedBranches: ['main'], ...(esteira ? { esteira } : {}) })
+    )
+    return dir
+  }
+  const VERCEL = { host: 'vercel', vercel: { uatAlias: 'uat.example', team: 'time' } }
+
+  it('OPERACOES inclui uat e promover', () => {
+    expect(OPERACOES).toEqual(expect.arrayContaining(['uat', 'promover']))
+  })
+
+  it('com esteira, valida o deploy.config para a esteira (heroku sem uatApp → erro)', async () => {
+    const raiz = raizEsteira({ host: 'heroku', heroku: { pipelineId: 'p' } })
+    await expect(executar('host', { env: {}, raiz })).rejects.toThrow(
+      /heroku.uatApp obrigatório com a esteira/
+    )
+  })
+
+  it('sem esteira, o mesmo deploy.config continua válido (como hoje)', async () => {
+    const raiz = raizEsteira({ host: 'heroku', heroku: { pipelineId: 'p' } }, null)
+    expect(await executar('host', { env: {}, raiz })).toEqual({ host: 'heroku' })
+  })
+
+  it('uat: deployUat do SHA e registra o Deployment uat com o payload do host', async () => {
+    const raiz = raizEsteira(VERCEL)
+    const vercel = adaptador('vercel')
+    const original = vercel.deployUat
+    const deployUat = vi.fn(async () => ({
+      url: 'https://uat.example',
+      payload: { deploymentId: 3, url: 'https://uat.example' },
+    }))
+    vercel.deployUat = deployUat
+    const call = vi.fn(async (method: string, path: string) =>
+      method === 'POST' && path === '/deployments' ? { id: 42 } : {}
+    )
+    try {
+      const r = await executar('uat', {
+        env: { DEPLOY_SHA: 'abc' },
+        raiz,
+        exec: vi.fn(),
+        github: { call } as never,
+      })
+      expect(r).toEqual({ url: 'https://uat.example' })
+    } finally {
+      vercel.deployUat = original
+    }
+    expect(deployUat).toHaveBeenCalledWith(
+      expect.objectContaining({ sha: 'abc', esteira: ESTEIRA, env: { DEPLOY_SHA: 'abc' } })
+    )
+    expect(call).toHaveBeenCalledWith('POST', '/deployments', {
+      ref: 'abc',
+      environment: 'uat',
+      payload: { sha: 'abc', deploymentId: 3, url: 'https://uat.example' },
+      auto_merge: false,
+      required_contexts: [],
+    })
+    expect(call).toHaveBeenCalledWith('POST', '/deployments/42/statuses', {
+      state: 'success',
+      environment_url: 'https://uat.example',
+    })
+  })
+
+  it('uat sem esteira → erro claro', async () => {
+    const raiz = raizEsteira(VERCEL, null)
+    await expect(
+      executar('uat', { env: { DEPLOY_SHA: 'abc' }, raiz, github: { call: vi.fn() } as never })
+    ).rejects.toThrow(/deploy: a operação uat exige o bloco esteira/)
+  })
+
+  it('promover sem esteira → não promove (aviso, sai ok)', async () => {
+    const raiz = raizEsteira(VERCEL, null)
+    expect(await executar('promover', { env: {}, raiz })).toEqual({ promovido: 'false' })
+  })
+})
+
+describe('execReal', () => {
+  it('repassa o env do 3º argumento somado ao do processo', async () => {
+    const saida = await execReal(
+      process.execPath,
+      ['-e', 'process.stdout.write(`${process.env.X_TESTE}:${Boolean(process.env.PATH)}`)'],
+      { env: { X_TESTE: 'ok' } }
+    )
+    expect(saida).toBe('ok:true')
+  })
+  it('falha preserva o código de saída', async () => {
+    await expect(execReal(process.execPath, ['-e', 'process.exit(3)'])).rejects.toMatchObject({
+      code: 3,
+    })
   })
 })

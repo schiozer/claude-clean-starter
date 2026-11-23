@@ -5,6 +5,8 @@
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { lerEsteira } from './esteira/config.mjs'
+import { classificarPr } from './esteira/regras.mjs'
 
 export const MAX_TITLE_LENGTH = 72
 export const TITLE_PATTERN =
@@ -155,17 +157,59 @@ const checkUat = (body, action) => {
   return errors
 }
 
+const BACK_PROMOTION_TITLE = /^chore\(release\): back-promotion de v\d+\.\d+\.\d+$/
+const AVISO_MERGE_COMMIT = 'mergeie com "Create a merge commit", nunca squash'
+
+/** Classificação por base/head; `null` = sem esteira ou base fora dela (comportamento de hoje). */
+const classify = (base, head, esteira) => {
+  if (!esteira || !base || !head) return null
+  if (base !== esteira.integracao && base !== esteira.producao) return null
+  return classificarPr({ base, head }, esteira)
+}
+
+const checkInvalid = (base, esteira) =>
+  base === esteira.producao
+    ? [`base ${base} só aceita ${esteira.prefixoHotfix}* (ou o FF do Promover para Prod)`]
+    : [`base ${base} não aceita ${esteira.prefixoHotfix}* — hotfix vai para ${esteira.producao}`]
+
+const checkHotfixUat = (body, action) => {
+  const errors = checkUat(body, action)
+  if (parseUat(body).approved) {
+    errors.push('hotfix não passa pelo UAT: use "UAT não se aplica — <motivo>"')
+  }
+  return errors
+}
+
+const checkBackPromotion = (title) =>
+  BACK_PROMOTION_TITLE.test(title)
+    ? []
+    : [
+        `Título da back-promotion deve ser "chore(release): back-promotion de vX.Y.Z" (recebido: "${title}"). Edite o título do PR.`,
+      ]
+
 /**
- * @param {{ title: string, body: string, action: string, fileExists: (path: string) => boolean }} input
+ * Avisos (não bloqueiam) que o entrypoint imprime.
+ * @param {{ base?: string, head?: string, esteira?: import('./esteira/config.mjs').Esteira | null }} input
+ * @returns {string[]}
+ */
+export function avisosDoPr({ base, head, esteira }) {
+  return classify(base, head, esteira) === 'back-promotion' ? [AVISO_MERGE_COMMIT] : []
+}
+
+/**
+ * @param {{ title: string, body: string, action: string, fileExists: (path: string) => boolean, base?: string, head?: string, esteira?: import('./esteira/config.mjs').Esteira | null }} input
  * @returns {string[]} erros em pt-BR, cada um com a correção; `[]` = ok.
  */
-export function checkPr({ title, body, action, fileExists }) {
+export function checkPr({ title, body, action, fileExists, base, head, esteira }) {
+  const kind = classify(base, head, esteira)
+  if (kind === 'invalido') return checkInvalid(base, esteira)
+  if (kind === 'back-promotion') return checkBackPromotion(title ?? '')
   const { parsed, errors: titleErrors } = checkTitle(title ?? '')
-  return [
-    ...titleErrors,
-    ...checkSpec(body ?? '', parsed, fileExists),
-    ...checkUat(body ?? '', action),
-  ]
+  const specErrors = checkSpec(body ?? '', parsed, fileExists)
+  if (kind === 'feature') return [...titleErrors, ...specErrors]
+  const uatErrors =
+    kind === 'hotfix' ? checkHotfixUat(body ?? '', action) : checkUat(body ?? '', action)
+  return [...titleErrors, ...specErrors, ...uatErrors]
 }
 
 const isMain = process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
@@ -175,12 +219,21 @@ if (isMain) {
     const { GITHUB_EVENT_PATH } = process.env
     if (!GITHUB_EVENT_PATH) throw new Error('GITHUB_EVENT_PATH é obrigatório')
     const event = JSON.parse(readFileSync(GITHUB_EVENT_PATH, 'utf8'))
+    const base = event.pull_request?.base?.ref
+    const head = event.pull_request?.head?.ref
+    const esteira = lerEsteira()
     const errors = checkPr({
+      base,
+      head,
+      esteira,
       title: event.pull_request?.title ?? '',
       body: event.pull_request?.body ?? '',
       action: event.action ?? '',
       fileExists: (path) => existsSync(path),
     })
+    for (const aviso of avisosDoPr({ base, head, esteira })) {
+      process.stdout.write(`pr-gate: aviso — ${aviso}\n`)
+    }
     if (errors.length === 0) {
       process.stdout.write('pr-gate: título, spec e seção de UAT ok.\n')
     } else {

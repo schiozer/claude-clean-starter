@@ -63,3 +63,81 @@ describe('parseDeployConfig', () => {
   it('heroku com pipelineId é válido', () =>
     expect(parseDeployConfig('{"host":"heroku","heroku":{"pipelineId":"p1"}}').host).toBe('heroku'))
 })
+
+describe('parseDeployConfig com esteira (heroku)', () => {
+  const ESTEIRA = {
+    integracao: 'develop',
+    producao: 'main',
+    prefixoHotfix: 'hotfix/',
+    promotores: ['a'],
+  }
+  const heroku = (extra: Record<string, unknown>) =>
+    JSON.stringify({ host: 'heroku', heroku: { pipelineId: 'p1', ...extra } })
+
+  it('sem esteira → uatApp/prodApp não são exigidos (como hoje)', () => {
+    expect(parseDeployConfig(heroku({})).host).toBe('heroku')
+    expect(parseDeployConfig(heroku({}), {}).host).toBe('heroku')
+    expect(parseDeployConfig(heroku({}), { esteira: null }).host).toBe('heroku')
+  })
+
+  it.each([
+    [{}, /heroku\.uatApp obrigatório/],
+    [{ uatApp: ' ', prodApp: 'app-prod' }, /heroku\.uatApp obrigatório/],
+    [{ uatApp: 'app-uat' }, /heroku\.prodApp obrigatório/],
+    [{ uatApp: 'app-uat', prodApp: '' }, /heroku\.prodApp obrigatório/],
+  ])('com esteira e %j → erro', (extra, erro) =>
+    expect(() => parseDeployConfig(heroku(extra), { esteira: ESTEIRA })).toThrow(erro)
+  )
+
+  it('com esteira, uatApp e prodApp → válido', () =>
+    expect(
+      parseDeployConfig(heroku({ uatApp: 'app-uat', prodApp: 'app-prod' }), { esteira: ESTEIRA })
+        .heroku
+    ).toMatchObject({ uatApp: 'app-uat', prodApp: 'app-prod' }))
+
+  it('com esteira e outro host → as regras do heroku não se aplicam', () =>
+    expect(parseDeployConfig(JSON.stringify(CFG), { esteira: ESTEIRA }).host).toBe('cloudrun'))
+})
+
+describe('parseDeployConfig com esteira (vercel e cloudrun)', () => {
+  const ESTEIRA = {
+    integracao: 'develop',
+    producao: 'main',
+    prefixoHotfix: 'hotfix/',
+    promotores: ['a'],
+  }
+  const vercelCfg = (bloco?: Record<string, unknown>) =>
+    JSON.stringify({ host: 'vercel', ...(bloco ? { vercel: bloco } : {}) })
+
+  it('vercel sem esteira → uatAlias/team não são exigidos (como hoje)', () =>
+    expect(parseDeployConfig(vercelCfg()).host).toBe('vercel'))
+
+  it('arquivo ausente sem esteira → { host: vercel } (como hoje)', () =>
+    expect(parseDeployConfig(null, { esteira: null })).toEqual({ host: 'vercel' }))
+
+  it('arquivo ausente com esteira → mesma validação da vercel (erro claro)', () =>
+    expect(() => parseDeployConfig(null, { esteira: ESTEIRA })).toThrow(
+      /vercel\.uatAlias obrigatório com a esteira ligada/
+    ))
+
+  it.each([
+    [undefined, /vercel\.uatAlias obrigatório/],
+    [{ team: 't' }, /vercel\.uatAlias obrigatório/],
+    [{ uatAlias: ' ', team: 't' }, /vercel\.uatAlias obrigatório/],
+    [{ uatAlias: 'uat.app.com' }, /vercel\.team obrigatório/],
+    [{ uatAlias: 'uat.app.com', team: '' }, /vercel\.team obrigatório/],
+  ])('vercel com esteira e %j → erro', (bloco, erro) =>
+    expect(() => parseDeployConfig(vercelCfg(bloco), { esteira: ESTEIRA })).toThrow(erro)
+  )
+
+  it('vercel com esteira, uatAlias e team → válido', () =>
+    expect(
+      parseDeployConfig(vercelCfg({ uatAlias: 'uat.app.com', team: 't' }), { esteira: ESTEIRA })
+        .vercel
+    ).toMatchObject({ uatAlias: 'uat.app.com', team: 't' }))
+
+  it('cloudrun com esteira: o bloco atual (uat.service etc.) basta', () =>
+    expect(parseDeployConfig(JSON.stringify(CFG), { esteira: ESTEIRA }).cloudrun).toEqual(
+      CFG.cloudrun
+    ))
+})

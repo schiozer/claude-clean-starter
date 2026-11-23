@@ -54,7 +54,7 @@ comandos de host ficam nos blocos do runbook dele ([host-vercel.md](./host-verce
 6. [R1] Ligar o alvo preview: `gh variable set E2E_TARGET --body preview --repo <preencher: owner/repo>` (com ela, o workflow espera o preview do SHA pelo `node scripts/deploy/index.mjs aguardar`, define `E2E_AUTH=auth0` e passa os segredos do passo 5).
    Verificar: `gh variable list --repo <preencher: owner/repo>` mostra `E2E_TARGET` = `preview`.
    Na Vercel, o bypass vai só nas requisições à origem do Preview: no navegador, o `test` de `tests/e2e/support` (fixture `context`, rota por origem) põe `x-vercel-protection-bypass` + `x-vercel-set-bypass-cookie` só nas requisições ao `baseURL`; no `request` da API (que só fala com o `baseURL`), o header vai no `APIRequestContext`. Auth0, CDN e terceiros nunca recebem o segredo. Testes do projeto importam `test`/`expect` de `tests/e2e/support`, não de `@playwright/test`.
-7. [R1] Rodar a regressão num PR de teste (aberto a partir de uma branch do repositório): push na branch ou `gh run rerun <run-id>` (o `<run-id>` sai de `gh run list --workflow e2e-regressao.yml --branch <branch>`).
+7. [R1] Rodar a regressão num PR de teste (aberto a partir de uma branch do repositório): push na branch ou `gh run rerun <run-id>` (o `<run-id>` sai de `gh run list --workflow e2e-regressao.yml --branch <branch>`). Sem esteira, o passo é R1 do agente; com a esteira ([ADR-020](../adr/template/020-esteira-integracao-e-promocao.md)), o `gh run rerun` é R3, do humano (o `protect-main` barra o agente) e o agente usa o push na branch.
    Verificar: `gh pr checks <n>` mostra `Regressão (UAT)` `pass` e o comentário do `github-actions[bot]` diz `alvo: https://…` (a URL do preview, não `app local (webServer)`).
 
 ## Verificação final

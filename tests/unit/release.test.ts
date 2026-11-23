@@ -7,6 +7,7 @@ import {
   makeReleaseApi,
   nextVersion,
   runRelease,
+  runReleasePromocao,
 } from '../../scripts/release.mjs'
 
 const ROOT = resolve(__dirname, '../..')
@@ -249,7 +250,97 @@ describe('workflow release.yml', () => {
     'group: release',
     'cancel-in-progress: false',
     'node scripts/release.mjs',
+    "if: github.event.sender.login != 'esteira-promover[bot]'",
+    'name: Tag e release por merge',
   ])('contém %s', (snippet) => {
     expect(workflow).toContain(snippet)
+  })
+})
+
+describe('runReleasePromocao (CT-ESTEIRA-009)', () => {
+  const esteira = {
+    integracao: 'develop',
+    producao: 'main',
+    prefixoHotfix: 'hotfix/',
+    promotores: ['x'],
+  }
+  const pull = (
+    number: number,
+    title: string,
+    base = 'develop',
+    head = 'feature/x',
+    body = ''
+  ) => ({
+    number,
+    title,
+    body,
+    merged_at: '2026-01-01' as string | null,
+    base: { ref: base },
+    head: { sha: 'c'.repeat(40), ref: head },
+  })
+  const make = (
+    pulls: Record<string, ReturnType<typeof pull>[]>,
+    tags = [{ name: 'v1.2.3', sha: BEFORE }]
+  ) => ({
+    tags: vi.fn(async () => tags),
+    pullsForCommit: vi.fn(async (sha: string) => pulls[sha] ?? []),
+    commitMessage: vi.fn(async () => 'x'),
+    compare: vi.fn(async () => ['s1', 's2', 's3']),
+    checkRuns: vi.fn(async () => []),
+    releaseExists: vi.fn(async () => false),
+    createTag: vi.fn(async () => undefined),
+    createRelease: vi.fn<(t: string, n: string, b: string) => Promise<void>>(async () => undefined),
+  })
+  const opts = { packageVersion: '0.1.0', esteira }
+
+  it('usa o maior bump dos PRs, deduplica e lista #n título ordenado', async () => {
+    const api = make({
+      s1: [pull(7, 'fix: b')],
+      s2: [pull(5, 'feat: a'), pull(7, 'fix: b')],
+      s3: [pull(6, 'feat(x)!: c')],
+    })
+    const r = await runReleasePromocao({ de: 'v1.2.3', ate: AFTER }, api, opts)
+    expect(r).toEqual({ created: true, tag: 'v2.0.0' })
+    expect(api.compare).toHaveBeenCalledWith('v1.2.3', AFTER)
+    expect(api.createTag).toHaveBeenCalledWith('v2.0.0', AFTER, expect.any(String))
+    const notes = api.createRelease.mock.calls[0][2] as string
+    expect(notes.match(/#\d+ /g)).toEqual(['#5 ', '#6 ', '#7 '])
+    expect(notes).toContain('#5 feat: a')
+  })
+  it('minor quando o maior é feat', async () => {
+    const api = make({ s1: [pull(1, 'fix: a')], s2: [pull(2, 'feat: b')] })
+    expect((await runReleasePromocao({ de: 'v1.2.3', ate: AFTER }, api, opts)).tag).toBe('v1.3.0')
+  })
+  it('ignora back-promotion no bump e nas notas', async () => {
+    const api = make({
+      s1: [pull(1, 'fix: a')],
+      s2: [pull(2, 'feat!: x', 'develop', 'main')],
+      s3: [
+        pull(3, 'feat!: y', 'develop', 'backpromotion/v1'),
+        pull(4, 'chore(release): back-promotion de v1.2.3', 'main', 'feature/z'),
+      ],
+    })
+    const r = await runReleasePromocao({ de: 'v1.2.3', ate: AFTER }, api, opts)
+    expect(r.tag).toBe('v1.2.4')
+    const notes = api.createRelease.mock.calls[0][2] as string
+    expect(notes).toContain('#1 fix: a')
+    expect(notes).not.toMatch(/#[234] /)
+  })
+  it('ignora PR não mergeado e de base que não é a integração', async () => {
+    const naoMerge = { ...pull(8, 'feat: n'), merged_at: null }
+    const api = make({ s1: [naoMerge, pull(9, 'feat: h', 'main', 'hotfix/a')] })
+    expect((await runReleasePromocao({ de: 'v1.2.3', ate: AFTER }, api, opts)).tag).toBe('v1.2.4')
+  })
+  it('idempotente: tag no SHA com Release → created false', async () => {
+    const api = make({}, [
+      { name: 'v1.2.3', sha: BEFORE },
+      { name: 'v1.3.0', sha: AFTER },
+    ])
+    api.releaseExists.mockResolvedValue(true)
+    expect(await runReleasePromocao({ de: 'v1.2.3', ate: AFTER }, api, opts)).toEqual({
+      created: false,
+      tag: 'v1.3.0',
+    })
+    expect(api.createTag).not.toHaveBeenCalled()
   })
 })

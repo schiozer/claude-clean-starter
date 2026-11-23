@@ -40,9 +40,31 @@ function validarCloudRun(bloco) {
   return cloudrun
 }
 
-/** `texto` null = arquivo ausente (host padrão: vercel). */
-export function parseDeployConfig(texto) {
-  if (texto === null) return { host: 'vercel' }
+/** Com a esteira, cada campo de `bloco` (do host) é um texto obrigatório. */
+function exigirComEsteira(json, host, campos) {
+  const bloco = ehObjeto(json[host]) ? json[host] : {}
+  for (const campo of campos) {
+    const valor = bloco[campo]
+    if (typeof valor !== 'string' || valor.trim() === '') {
+      throw erro(`${host}.${campo} obrigatório com a esteira ligada (texto não vazio)`)
+    }
+  }
+}
+
+/**
+ * `texto` null = arquivo ausente (host padrão: vercel). Com `esteira` ligada (spec
+ * esteira-build-once-promote §5.6), o heroku exige também `uatApp` e `prodApp` e a vercel exige
+ * `uatAlias` (alias estável da branch de integração) e `team` (`--scope` do `vercel rollback`).
+ * O cloudrun já declara o serviço de UAT (`cloudrun.uat.service`): nada a mais.
+ * @param {string | null} texto
+ * @param {{ esteira?: object | null }} [opcoes]
+ */
+export function parseDeployConfig(texto, { esteira = null } = {}) {
+  if (texto === null) {
+    // Ausente = vercel sem bloco: com a esteira, cai na mesma validação (uatAlias/team).
+    if (esteira) exigirComEsteira({}, 'vercel', ['uatAlias', 'team'])
+    return { host: 'vercel' }
+  }
 
   let json
   try {
@@ -56,19 +78,25 @@ export function parseDeployConfig(texto) {
     throw erro(`host '${json.host}' inválido (válidos: ${HOSTS.join(', ')})`)
   }
 
-  // Bloco de vercel é aceito sem validação; o de heroku só exige `pipelineId`.
+  // Sem esteira, o bloco de vercel é aceito sem validação; o de heroku exige `pipelineId`.
   const config = { ...json }
   if (json.host === 'heroku') {
     const pipelineId = ehObjeto(json.heroku) ? json.heroku.pipelineId : undefined
     if (typeof pipelineId !== 'string' || pipelineId.trim() === '') {
       throw erro('heroku.pipelineId obrigatório (texto não vazio)')
     }
+    if (esteira) exigirComEsteira(json, 'heroku', ['uatApp', 'prodApp'])
   }
+  if (json.host === 'vercel' && esteira) exigirComEsteira(json, 'vercel', ['uatAlias', 'team'])
   if (json.host === 'cloudrun') config.cloudrun = validarCloudRun(json.cloudrun)
   return config
 }
 
-export function lerDeployConfig(raiz = process.cwd()) {
+/**
+ * @param {string} [raiz]
+ * @param {{ esteira?: object | null }} [opcoes] com a esteira, valida também os campos dela.
+ */
+export function lerDeployConfig(raiz = process.cwd(), opcoes = {}) {
   const caminho = join(raiz, CONFIG_PATH)
-  return parseDeployConfig(existsSync(caminho) ? readFileSync(caminho, 'utf8') : null)
+  return parseDeployConfig(existsSync(caminho) ? readFileSync(caminho, 'utf8') : null, opcoes)
 }

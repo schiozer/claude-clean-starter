@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { BLOCK_PREFIX } from '../../hooks/protect-main/evaluate.mjs'
@@ -142,5 +150,60 @@ describe('protect-main run.mjs', () => {
     const config = JSON.parse(readFileSync(join(ROOT, 'hooks/protect-main/config.json'), 'utf8'))
     expect(config.protectedBranches).toContain('main')
     expect(config).not.toHaveProperty('enabled')
+  })
+
+  describe('bloqueio de rerun/dispatch conforme o bloco esteira do config', () => {
+    // Cópia de hooks/protect-main (+ scripts/esteira, que o run importa) com config próprio.
+    const hookWithConfig = (config: object | string) => {
+      const layout = join(tmp, 'layout')
+      cpSync(join(ROOT, 'hooks/protect-main'), join(layout, 'hooks/protect-main'), {
+        recursive: true,
+      })
+      cpSync(join(ROOT, 'scripts/esteira'), join(layout, 'scripts/esteira'), { recursive: true })
+      writeFileSync(
+        join(layout, 'hooks/protect-main/config.json'),
+        typeof config === 'string' ? config : JSON.stringify(config)
+      )
+      return join(layout, 'hooks/protect-main/run.mjs')
+    }
+    const runWith = (run: string, command: string) =>
+      spawnSync(process.execPath, [run], {
+        input: payloadFor(command, repo),
+        encoding: 'utf8',
+        env: ENV,
+      })
+    const ESTEIRA = {
+      integracao: 'develop',
+      producao: 'main',
+      prefixoHotfix: 'hotfix/',
+      promotores: ['humano'],
+    }
+
+    beforeEach(() => {
+      commitInitial()
+      git(repo, 'switch', '-q', '-c', 'feat/x')
+    })
+
+    it('sem esteira libera gh run rerun (caminho padrão)', () => {
+      const run = hookWithConfig({ protectedBranches: ['main'] })
+      expect(runWith(run, 'gh run rerun 999').status).toBe(0)
+      expect(runWith(run, 'gh workflow run 12345').status).toBe(0)
+    })
+
+    it('com esteira bloqueia gh run rerun e gh workflow run por id', () => {
+      const run = hookWithConfig({ protectedBranches: ['main'], esteira: ESTEIRA })
+      for (const command of ['gh run rerun 999', 'gh workflow run 12345']) {
+        const result = runWith(run, command)
+        expect(result.status).toBe(2)
+        expect(result.stderr).toContain('`Promover para Prod` é disparado pelo humano')
+      }
+    })
+
+    it('bloco esteira inválido falha fechado', () => {
+      const run = hookWithConfig({ protectedBranches: ['main'], esteira: { integracao: '' } })
+      const result = runWith(run, 'gh run rerun 999')
+      expect(result.status).toBe(2)
+      expect(result.stderr).toContain(BLOCK_PREFIX)
+    })
   })
 })

@@ -3,7 +3,11 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { checkPrePush, checkRefTransaction } from '../../hooks/protect-main/git-guard.mjs'
+import {
+  branchesProtegidas,
+  checkPrePush,
+  checkRefTransaction,
+} from '../../hooks/protect-main/git-guard.mjs'
 import { BLOCK_PREFIX } from '../../hooks/protect-main/evaluate.mjs'
 
 const ROOT = resolve(__dirname, '../..')
@@ -91,6 +95,69 @@ describe('git-guard checkRefTransaction', () => {
   })
 })
 
+const ESTEIRA = {
+  integracao: 'develop',
+  producao: 'main',
+  prefixoHotfix: 'hotfix/',
+  promotores: ['alguem'],
+}
+
+describe('git-guard branchesProtegidas', () => {
+  it('should return only protectedBranches without esteira', () => {
+    expect(branchesProtegidas({ protectedBranches: ['main'] })).toEqual(['main'])
+  })
+
+  it('should add the integration branch when the esteira is on', () => {
+    expect(branchesProtegidas({ protectedBranches: ['main'], esteira: ESTEIRA })).toEqual([
+      'main',
+      'develop',
+    ])
+  })
+
+  it('should not duplicate an integration branch already protected', () => {
+    const config = { protectedBranches: ['main', 'develop'], esteira: ESTEIRA }
+    expect(branchesProtegidas(config)).toEqual(['main', 'develop'])
+  })
+
+  it('should refuse an invalid esteira block', () => {
+    expect(() => branchesProtegidas({ protectedBranches: ['main'], esteira: {} })).toThrow(
+      /esteira/
+    )
+  })
+})
+
+describe('git-guard with the esteira on', () => {
+  const protectedWithEsteira = branchesProtegidas({
+    protectedBranches: ['main'],
+    esteira: ESTEIRA,
+  })
+
+  it('should refuse pre-push to develop', () => {
+    const reason = checkPrePush([push('refs/heads/develop')], protectedWithEsteira)
+    expect(reason?.startsWith(BLOCK_PREFIX)).toBe(true)
+    expect(reason).toContain('refs/heads/develop')
+  })
+
+  it('should allow pre-push to develop without esteira', () => {
+    expect(checkPrePush([push('refs/heads/develop')], ['main'])).toBeNull()
+  })
+
+  it('should allow aligning develop to origin/develop', () => {
+    const lines = [{ oldSha: A, newSha: B, ref: 'refs/heads/develop' }]
+    expect(refTx(lines, { develop: B }, protectedWithEsteira)).toBeNull()
+  })
+
+  it('should refuse a local commit on develop', () => {
+    const lines = [{ oldSha: A, newSha: C, ref: 'refs/heads/develop' }]
+    expect(refTx(lines, { develop: B }, protectedWithEsteira)).not.toBeNull()
+  })
+
+  it('should allow a local commit on develop without esteira', () => {
+    const lines = [{ oldSha: A, newSha: C, ref: 'refs/heads/develop' }]
+    expect(refTx(lines, { develop: B })).toBeNull()
+  })
+})
+
 describe('git-guard checkPrePush', () => {
   it.each([
     ['push to main', [push('refs/heads/main')]],
@@ -153,6 +220,18 @@ describe('git hook shims', () => {
       const branches = ['main', 'release/1.x']
       writeFileSync(config, JSON.stringify({ protectedBranches: branches }, null, 2))
       expect(runExtraction(shim, config)).toEqual(branches)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it.each(SHIMS)('should also extract esteira.integracao in %s', (shim) => {
+    const dir = mkdtempSync(join(tmpdir(), 'git-guard-'))
+    try {
+      const config = join(dir, 'config.json')
+      const esteira = { integracao: 'develop', producao: 'main', prefixoHotfix: 'hotfix/' }
+      writeFileSync(config, JSON.stringify({ protectedBranches: ['main'], esteira }, null, 2))
+      expect(runExtraction(shim, config)).toEqual(['main', 'develop'])
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

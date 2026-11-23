@@ -3,11 +3,18 @@ name: Deploy
 # Camada de deploy (spec camada-de-deploy): PR aberto/atualizado -> preview (UAT); PR fechado ->
 # encerra o preview; push na main -> prod. O host (vercel | heroku | cloudrun) vem de deploy.config.
 # Não é check obrigatório: a espera do preview fica na Regressão (UAT).
+#
+# Esteira (bloco `esteira` em hooks/protect-main/config.json, spec esteira-build-once-promote):
+# push na integração -> deploy de UAT + Regressão (UAT) contra o UAT fixo, no SHA; push na produção
+# pelo FF da App esteira-promover -> nada (o Promover para Prod já levou o pacote); outro push na
+# produção (hotfix) -> deploy de Prod. Sem esteira: o push na develop não faz nada (como hoje).
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
   push:
-    branches: [main]
+    # `develop` fixo: workflow não lê o config. Integração com outro nome: ajuste aqui (runbook de
+    # adoção da esteira).
+    branches: [main, develop]
 
 permissions:
   contents: read
@@ -15,7 +22,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}', github.event.pull_request.number) || 'deploy-prod' }}
+  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}', github.event.pull_request.number) || (github.ref == 'refs/heads/main' && 'deploy-prod' || 'deploy-uat') }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -23,6 +30,9 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      operacao: ${{ steps.op.outputs.operacao }}
+      url: ${{ steps.uat.outputs.url }}
     steps:
       - name: Recusar PR de fork
         id: fork
@@ -40,33 +50,68 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Esteira
+        id: esteira
+        if: steps.fork.outcome == 'skipped' && github.event_name == 'push'
+        run: node scripts/esteira/index.mjs ativa
+
+      # pull_request -> preview | encerrar; push sem esteira -> prod (só a main, como hoje); push
+      # na integração -> uat; push na produção pelo FF da App -> nenhuma; outro -> hotfix.
+      - name: Escolher a operação
+        id: op
+        if: steps.fork.outcome == 'skipped'
+        env:
+          EVENTO: ${{ github.event_name }}
+          ACAO: ${{ github.event.action }}
+          BRANCH: ${{ github.ref_name }}
+          ATIVA: ${{ steps.esteira.outputs.ativa }}
+          INTEGRACAO: ${{ steps.esteira.outputs.integracao }}
+          PRODUCAO: ${{ steps.esteira.outputs.producao }}
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          if [ "$EVENTO" = 'pull_request' ]; then
+            if [ "$ACAO" = 'closed' ]; then echo 'operacao=encerrar' >> "$GITHUB_OUTPUT"; else echo 'operacao=preview' >> "$GITHUB_OUTPUT"; fi
+          elif [ "$ATIVA" != 'true' ]; then
+            if [ "$BRANCH" = 'main' ]; then echo 'operacao=prod' >> "$GITHUB_OUTPUT"; else echo 'operacao=nenhuma' >> "$GITHUB_OUTPUT"; fi
+          elif [ "$BRANCH" = "$INTEGRACAO" ]; then
+            echo 'operacao=uat' >> "$GITHUB_OUTPUT"
+          elif [ "$BRANCH" = "$PRODUCAO" ] && [ "$SENDER" = 'esteira-promover[bot]' ]; then
+            echo 'operacao=nenhuma' >> "$GITHUB_OUTPUT"
+            echo "::notice::Fast-forward da App esteira-promover: o Promover para Prod já levou o pacote para Prod; sem redeploy."
+          elif [ "$BRANCH" = "$PRODUCAO" ]; then
+            echo 'operacao=hotfix' >> "$GITHUB_OUTPUT"
+          else
+            echo 'operacao=nenhuma' >> "$GITHUB_OUTPUT"
+            echo "::warning::Push em $BRANCH fora da esteira ($INTEGRACAO/$PRODUCAO): nenhum deploy."
+          fi
+
       - name: Descobrir o host
         id: host
-        if: steps.fork.outcome == 'skipped'
+        if: steps.fork.outcome == 'skipped' && steps.op.outputs.operacao != 'nenhuma'
         run: node scripts/deploy/index.mjs host
 
       - name: Credenciais do Cloud Run
         id: cred
-        if: steps.fork.outcome == 'skipped' && steps.host.outputs.host == 'cloudrun'
+        if: steps.fork.outcome == 'skipped' && steps.op.outputs.operacao != 'nenhuma' && steps.host.outputs.host == 'cloudrun'
         run: node scripts/deploy/index.mjs credenciais
         env:
-          DEPLOY_AMBIENTE: ${{ github.event_name == 'pull_request' && 'uat' || 'prod' }}
+          DEPLOY_AMBIENTE: ${{ (github.event_name == 'pull_request' || steps.op.outputs.operacao == 'uat') && 'uat' || 'prod' }}
 
       - uses: google-github-actions/auth@v2
-        if: steps.fork.outcome == 'skipped' && steps.host.outputs.host == 'cloudrun'
+        if: steps.fork.outcome == 'skipped' && steps.op.outputs.operacao != 'nenhuma' && steps.host.outputs.host == 'cloudrun'
         with:
           workload_identity_provider: ${{ steps.cred.outputs.wifProvider }}
           service_account: ${{ steps.cred.outputs.serviceAccount }}
 
       - uses: google-github-actions/setup-gcloud@v2
-        if: steps.fork.outcome == 'skipped' && steps.host.outputs.host == 'cloudrun'
+        if: steps.fork.outcome == 'skipped' && steps.op.outputs.operacao != 'nenhuma' && steps.host.outputs.host == 'cloudrun'
 
       - name: Configurar o Docker para o Artifact Registry
-        if: steps.fork.outcome == 'skipped' && steps.host.outputs.host == 'cloudrun'
+        if: steps.fork.outcome == 'skipped' && steps.op.outputs.operacao != 'nenhuma' && steps.host.outputs.host == 'cloudrun'
         run: gcloud auth configure-docker ${{ steps.cred.outputs.region }}-docker.pkg.dev --quiet
 
       - name: Encerrar o preview do PR
-        if: steps.fork.outcome == 'skipped' && github.event_name == 'pull_request' && github.event.action == 'closed'
+        if: steps.fork.outcome == 'skipped' && github.event_name == 'pull_request' && steps.op.outputs.operacao == 'encerrar'
         run: node scripts/deploy/index.mjs encerrar
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -80,7 +125,7 @@ jobs:
           AUTH0_CALLBACK_PATH: ${{ steps.host.outputs.host == 'heroku' && vars.AUTH0_CALLBACK_PATH || '' }}
 
       - name: Deploy do preview (PR)
-        if: steps.fork.outcome == 'skipped' && github.event_name == 'pull_request' && github.event.action != 'closed'
+        if: steps.fork.outcome == 'skipped' && github.event_name == 'pull_request' && steps.op.outputs.operacao == 'preview'
         run: node scripts/deploy/index.mjs preview
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -88,8 +133,73 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy de produção
-        if: steps.fork.outcome == 'skipped' && github.event_name == 'push'
+        if: steps.fork.outcome == 'skipped' && github.event_name == 'push' && steps.op.outputs.operacao == 'prod'
         run: node scripts/deploy/index.mjs prod
         env:
           DEPLOY_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # A chave de escrita do Heroku só nestes dois passos de push: nunca em pull_request.
+      - name: Deploy de UAT (esteira)
+        id: uat
+        if: steps.fork.outcome == 'skipped' && github.event_name == 'push' && steps.op.outputs.operacao == 'uat'
+        run: node scripts/deploy/index.mjs uat
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEROKU_DEPLOY_API_KEY: ${{ steps.host.outputs.host == 'heroku' && secrets.HEROKU_DEPLOY_API_KEY || '' }}
+
+      # Hotfix: pacote novo direto em Prod (hotfix não tem pacote de UAT). Heroku/Cloud Run buildam
+      # o SHA; na Vercel o push na main já dispara o deploy de Production (deployProd é no-op).
+      - name: Deploy do hotfix (esteira)
+        if: steps.fork.outcome == 'skipped' && github.event_name == 'push' && steps.op.outputs.operacao == 'hotfix'
+        run: node scripts/deploy/index.mjs prod
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEROKU_DEPLOY_API_KEY: ${{ steps.host.outputs.host == 'heroku' && secrets.HEROKU_DEPLOY_API_KEY || '' }}
+
+  # Regressão contra o UAT fixo, depois do deploy de UAT (push na integração com a esteira).
+  regressao-uat:
+    name: Regressão no UAT
+    needs: deploy
+    # sem URL do UAT o reutilizável cairia no webServer local: nunca vira veredito do UAT.
+    if: needs.deploy.outputs.operacao == 'uat' && needs.deploy.outputs.url != ''
+    permissions:
+      contents: read
+      deployments: read
+      pull-requests: write
+    uses: ./.github/workflows/e2e-regressao.yml
+    with:
+      alvo: ${{ needs.deploy.outputs.url }}
+    secrets: inherit
+
+  # O promover procura o check "Regressão (UAT)" no SHA da integração. O check do job reutilizável
+  # sai como "Regressão no UAT / Regressão (UAT)", e um job deste workflow com o nome exato viraria
+  # um check "skipped" no SHA de todo PR (mascarando o check obrigatório): por isso o check é
+  # publicado pela API, só aqui, com o resultado da regressão. `external_id` esteira-uat é a marca
+  # que o promover exige (a Regressão do PR tem o mesmo nome e pode estar no mesmo SHA).
+  publicar-regressao-uat:
+    name: Publicar a Regressão (UAT) no SHA
+    needs: [deploy, regressao-uat]
+    if: always() && needs.deploy.result == 'success' && needs.deploy.outputs.operacao == 'uat' && needs.deploy.outputs.url != ''
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+    steps:
+      - name: Check Regressão (UAT)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONCLUSAO: ${{ needs.regressao-uat.result == 'success' && 'success' || 'failure' }}
+          ALVO: ${{ needs.deploy.outputs.url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/check-runs" \
+            -f name='Regressão (UAT)' \
+            -f head_sha="$GITHUB_SHA" \
+            -f status=completed \
+            -f external_id='esteira-uat' \
+            -f conclusion="$CONCLUSAO" \
+            -f details_url="$RUN_URL" \
+            -f 'output[title]'="Regressão contra o UAT: $CONCLUSAO" \
+            -f 'output[summary]'="Alvo: $ALVO. Detalhes no run: $RUN_URL" > /dev/null

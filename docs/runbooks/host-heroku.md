@@ -88,11 +88,19 @@ Depende dos tenants Auth0 e das envs dos apps (passos 4–7 do bootstrap-ambient
 A URL do UAT deste host é `https://<gerado: host do app UAT>`.
 
 **Se o login falhar com _callback mismatch_ no review app**: duas `Regressão (UAT)` de PRs diferentes
-podem ler e regravar a lista de callbacks ao mesmo tempo, e uma URL se perde. Rode de novo o job
-`Regressão (UAT)` do PR (`gh run rerun <run-id> --failed`): o `aguardar` registra a URL outra vez,
+podem ler e regravar a lista de callbacks ao mesmo tempo, e uma URL se perde. O humano (`[R3]`; o
+`protect-main` barra o agente) roda de novo o job `Regressão (UAT)` do PR (`gh run rerun <run-id> --failed`): o `aguardar` registra a URL outra vez,
 de forma idempotente.
 
 ### Prod
+
+**Com a esteira** ([ADR-020](../adr/template/020-esteira-integracao-e-promocao.md)): o `-prod` fica
+**sem auto-deploy** da `main`; Prod recebe por _pipeline promotion_ o **slug** que está no `-uat`
+(`heroku.uatApp`/`heroku.prodApp` no `deploy.config.json`), pelo `promover.yml`
+([promover-prod.md](./promover-prod.md)), ou o build do tarball do hotfix ([hotfix.md](./hotfix.md)).
+A escrita usa `HEROKU_DEPLOY_API_KEY` (só nos jobs de push e no `promover.yml`); o `HEROKU_API_KEY`
+segue só leitura. Os passos 12 e 14 valem iguais; no 13, acompanhar o run do `promover.yml` (ou do
+`deploy.yml` do hotfix) em vez do auto-deploy.
 
 12. [R0] Anotar a release atual de Prod (alvo do rollback): `heroku releases -a <preencher: nome do app>-prod -n 3`.
     Verificar: a release de topo está `succeeded`; anotar `<versão-atual>` (ex.: `v41`).
@@ -105,9 +113,14 @@ A URL de Prod deste host é `https://<preencher: domínio de Prod>`.
 
 ### Rollback
 
+**Com a esteira**: o smoke test falho da promoção já volta Prod para o `{slug}` da release
+anterior com o config **atual** (as config vars não voltam — escolha registrada no ADR-020). Os
+passos abaixo são o rollback manual; sem auto-deploy, o revert chega a Prod pela promoção ou por
+hotfix, não pelo merge.
+
 15. [R0] Identificar a release atual e a anterior saudável: `heroku releases -a <preencher: nome do app>-prod -n 5` e diagnosticar com `heroku logs -a <preencher: nome do app>-prod -n 500`.
     Verificar: `<versão-atual>` e `<versão-anterior>` anotadas; a feature/commit suspeito está identificado.
-16. [R2] Voltar Prod para a release anterior saudável: `heroku releases:rollback <versão-anterior> -a <preencher: nome do app>-prod`. O auto-deploy continua ligado: o próximo merge (o revert) entra no ar normalmente.
+16. [R2] Voltar Prod para a release anterior saudável: `heroku releases:rollback <versão-anterior> -a <preencher: nome do app>-prod`. Sem a esteira, o auto-deploy continua ligado: o próximo merge (o revert) entra no ar normalmente. Com a esteira, o `-prod` não tem auto-deploy: o revert só entra no ar pela promoção ([promover-prod.md](./promover-prod.md)) ou como hotfix ([hotfix.md](./hotfix.md)).
     Verificar: `heroku releases -a <preencher: nome do app>-prod -n 1` mostra `Rollback to <versão-anterior>` e o smoke test passa.
 17. [R2] Se o rollback piorou o cenário, voltar à release anotada: `heroku releases:rollback <versão-atual> -a <preencher: nome do app>-prod`.
     Verificar: `heroku releases -a <preencher: nome do app>-prod -n 1` mostra `Rollback to <versão-atual>`.
