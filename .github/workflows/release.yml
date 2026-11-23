@@ -16,6 +16,8 @@ concurrency:
 jobs:
   release:
     name: Tag e release por merge
+    # promoção da esteira: a release sai do runReleasePromocao, não deste job
+    if: github.event.sender.login != 'esteira-promover[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

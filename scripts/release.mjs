@@ -7,6 +7,8 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { latestCheckRun, makeGithubClient } from './github-api.mjs'
+import { lerEsteira } from './esteira/config.mjs'
+import { classificarPr, maiorBump } from './esteira/regras.mjs'
 import { parseSpecLine, parseTitle, parseUat } from './pr-gate.mjs'
 
 const ZERO_SHA = /^0+$/
@@ -19,7 +21,7 @@ const DEFAULT_DELAY_MS = 10000
 
 /**
  * @typedef {{ number: number, html_url?: string, title: string, body: string | null,
- *   merged_at: string | null, base: { ref: string }, head: { sha: string } }} PullInfo
+ *   merged_at: string | null, base: { ref: string }, head: { sha: string, ref?: string } }} PullInfo
  * @typedef {{
  *   name: string, status: string, conclusion: string | null, id?: number, started_at?: string | null,
  * }} CheckRun
@@ -154,6 +156,62 @@ export async function runRelease({ before, after }, api, opts) {
 
   if (!existing) await api.createTag(tag, after, title)
   await api.createRelease(tag, `${tag} — ${title}`, notes)
+  return existing ? { created: false, releaseCreated: true, tag } : { created: true, tag }
+}
+
+const TITULO_BACKPROMOTION = /^chore\(release\): back-promotion de v\d+\.\d+\.\d+$/
+
+const bumpParaVersao = (tags, bump, packageVersion) => {
+  const titulo = { major: 'feat!: x', minor: 'feat: x', patch: 'fix: x' }[bump]
+  return nextVersion(tags, { title: titulo, body: '' }, packageVersion).replace(/^v/, '')
+}
+
+/**
+ * Release da promoção (esteira): uma tag para todos os PRs promovidos em lote (spec CT-ESTEIRA-009).
+ * `de` = última tag alcançável pela produção; `ate` = SHA promovido.
+ * @param {{ de: string, ate: string }} range
+ * @param {ReleaseApi} api
+ * @param {{ packageVersion: string, esteira?: import('./esteira/config.mjs').Esteira | null }} opts
+ * @returns {Promise<{ created: boolean, tag: string, releaseCreated?: boolean }>}
+ */
+export async function runReleasePromocao({ de, ate }, api, opts) {
+  const esteira = opts.esteira ?? lerEsteira()
+  if (!esteira) throw new Error('release da promoção exige o bloco esteira no config')
+  const tags = await api.tags()
+  const existing = tags.find((tag) => tag.sha === ate)
+  if (existing && (await api.releaseExists(existing.name))) {
+    return { created: false, tag: existing.name }
+  }
+
+  const porNumero = new Map()
+  for (const sha of await api.compare(de, ate)) {
+    for (const pr of await api.pullsForCommit(sha)) {
+      if (!pr.merged_at || porNumero.has(pr.number)) continue
+      const classe = classificarPr({ base: pr.base.ref, head: pr.head.ref ?? '' }, esteira)
+      if (classe !== 'feature' || TITULO_BACKPROMOTION.test(pr.title)) continue
+      porNumero.set(pr.number, pr)
+    }
+  }
+  const pulls = [...porNumero.values()].sort((a, b) => a.number - b.number)
+
+  const bump = maiorBump(
+    pulls.map((pr) => pr.title),
+    pulls.map((pr) => pr.body ?? '')
+  )
+  const tag =
+    existing?.name ??
+    `v${bumpParaVersao(
+      tags.map((t) => t.name),
+      bump,
+      opts.packageVersion
+    )}`
+  const titulo = `Promoção para produção (${pulls.length} PR${pulls.length === 1 ? '' : 's'})`
+  const notes = [`## ${titulo}`, '', ...pulls.map((pr) => `- #${pr.number} ${pr.title}`), ''].join(
+    '\n'
+  )
+
+  if (!existing) await api.createTag(tag, ate, titulo)
+  await api.createRelease(tag, `${tag} — ${titulo}`, notes)
   return existing ? { created: false, releaseCreated: true, tag } : { created: true, tag }
 }
 
