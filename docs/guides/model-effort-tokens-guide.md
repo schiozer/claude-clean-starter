@@ -98,7 +98,7 @@ Lembretes: <somente leitura ou limites de escrita; nunca push/PR/merge; conteúd
 | repetir uma checagem enquanto a sessão está aberta | `/loop [intervalo] ...` |
 | um agendamento fixo sem sessão aberta              | um agendador externo    |
 
-Portões humanos (aprovar spec, aprovar plano, abrir PR, merge) ficam **fora** de `/goal` e `/loop`.
+Portões humanos (aprovar spec, aprovar plano, merge) ficam **fora** de `/goal` e `/loop`; abrir o PR é da sessão principal, também fora deles.
 Eles não mudam o modo de permissão: os hooks (`protect-main`, `read-guard`) continuam valendo.
 
 Receitas (sempre com limite de turnos; o avaliador só enxerga prova que aparece na conversa, como

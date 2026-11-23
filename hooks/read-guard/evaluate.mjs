@@ -43,7 +43,9 @@ export function classifyRead(toolInput, cwd) {
     )
   }
 
-  if (presente(toolInput.offset) || presente(toolInput.limit)) return null
+  // `offset: 1` sem `limit` equivale a ler o arquivo inteiro: só conta como fatia com limit ou offset > 1.
+  if (presente(toolInput.limit) || (presente(toolInput.offset) && toolInput.offset !== 1))
+    return null
   if (tamanho <= TEXT_MAX_BYTES) return null
   const kb = Math.round(tamanho / 1024)
   return (

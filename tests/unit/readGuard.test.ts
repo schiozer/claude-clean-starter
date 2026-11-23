@@ -44,6 +44,13 @@ describe('classifyRead', () => {
     expect(classifyRead({ file_path: grande, limit: 0 }, dir)).toMatch(/offset\/limit/)
   })
 
+  it('não aceita offset 1 sem limit como fatia (equivale a ler tudo)', () => {
+    const grande = file('grande6.log', TEXT_MAX_BYTES + 1)
+    expect(classifyRead({ file_path: grande, offset: 1 }, dir)).toMatch(/offset\/limit/)
+    expect(classifyRead({ file_path: grande, offset: 2 }, dir)).toBeNull()
+    expect(classifyRead({ file_path: grande, offset: 1, limit: 100 }, dir)).toBeNull()
+  })
+
   it('ignora imagens e notebooks de qualquer tamanho', () => {
     for (const nome of ['a.png', 'a.JPG', 'a.svg', 'a.ipynb']) {
       expect(classifyRead({ file_path: file(nome, TEXT_MAX_BYTES * 2) }, dir)).toBeNull()
