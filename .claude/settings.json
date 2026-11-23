@@ -29,6 +29,16 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/hooks/protect-main/run.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/hooks/read-guard/run.mjs\"",
+            "timeout": 5
+          }
+        ]
       }
     ]
   },
