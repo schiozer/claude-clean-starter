@@ -42,6 +42,8 @@ interface Opcoes {
   promoveAposFF?: boolean
   ffFalha?: boolean
   promoverFalha?: boolean
+  /** promoverProd falha antes de mudar Prod (erro com `prodAlterada: false`). */
+  promoverFalhaAntes?: boolean
   ultimaTag?: string | null
   urlProd?: string
   actor?: string
@@ -90,6 +92,9 @@ function cenario(o: Opcoes = {}) {
     promoverProd: vi.fn(async () => {
       ordem.push('promoverProd')
       if (o.promoverFalha) throw new Error('deploy de Production falhou')
+      if (o.promoverFalhaAntes) {
+        throw Object.assign(new Error('slug do UAT não é de abc1234'), { prodAlterada: false })
+      }
       return { payload: payloadProd }
     }),
     rollbackProd: vi.fn(async () => {
@@ -369,6 +374,18 @@ describe('promover (Heroku/Cloud Run: deploy antes do FF)', () => {
     expect(c.ordem).not.toContain('registrar:production')
   })
 
+  it('I-2: promoverProd falha antes de mudar Prod → sem rollback, erro original, sem FF', async () => {
+    const c = cenario({ promoverFalhaAntes: true })
+    await expect(promover(c.args as never)).rejects.toThrow(
+      'promover: slug do UAT não é de abc1234 (Prod não foi alterada: sem rollback)'
+    )
+    expect(c.adapter.rollbackProd).not.toHaveBeenCalled()
+    expect(c.git.ff).not.toHaveBeenCalled()
+    expect(c.release).not.toHaveBeenCalled()
+    // o Deployment production só é registrado depois do promoverProd: nada a marcar.
+    expect(c.ordem).not.toContain('registrar:production')
+  })
+
   it('I-1: promoverProd e rollback falham → erro manda verificar Prod manualmente', async () => {
     const c = cenario({ promoverFalha: true })
     c.adapter.rollbackProd.mockRejectedValueOnce(new Error('sem release anterior'))
@@ -425,6 +442,16 @@ describe('promover (Vercel: promoveAposFF)', () => {
     expect(c.ordem).toContain('issue')
     expect(c.smoke).not.toHaveBeenCalled()
     expect(c.release).not.toHaveBeenCalled()
+  })
+
+  it('I-2: promoverProd sinaliza Prod intocada → sem rollback, mas failure, issue e erro', async () => {
+    const c = cenario({ promoveAposFF: true, promoverFalhaAntes: true })
+    await expect(promover(c.args as never)).rejects.toThrow(
+      /slug do UAT não é de abc1234 \(Prod não foi alterada: sem rollback\)/
+    )
+    expect(c.adapter.rollbackProd).not.toHaveBeenCalled()
+    expect(c.ordem).toContain('status:failure')
+    expect(c.ordem).toContain('issue')
   })
 
   it('I-1: deploy de Production e rollback falham → erro manda verificar Prod manualmente', async () => {

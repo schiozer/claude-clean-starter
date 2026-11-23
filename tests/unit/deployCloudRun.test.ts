@@ -330,6 +330,26 @@ describe('cloudrun: esteira (build once, promote)', () => {
       await expect(cloudrun.promoverProd(ctx as never)).rejects.toThrow(/digest/)
       expect(exec).not.toHaveBeenCalled()
     })
+
+    it('I-2: SHA/digest divergente sinaliza prodAlterada: false (antes do deploy)', async () => {
+      for (const deploys of [[deployUatDe(SHA_B)], [deployUatDe(SHA_A, { digest: 'latest' })]]) {
+        const ctx = ctxDe({ exec: execCom({}), github: githubUat(deploys) })
+        await expect(cloudrun.promoverProd(ctx as never)).rejects.toMatchObject({
+          prodAlterada: false,
+        })
+      }
+    })
+
+    it('I-2: falha no gcloud run deploy não diz Prod intocada', async () => {
+      const exec = vi.fn(async (_cmd: string, args: string[]) => {
+        if (args[1] === 'deploy') throw new Error('gcloud: deploy falhou')
+        return prodJson([{ revisionName: 'svc-prod-00006-old', percent: 100 }])
+      })
+      const ctx = ctxDe({ exec, github: githubUat([deployUatDe(SHA_A)]) })
+      const erro = await cloudrun.promoverProd(ctx as never).catch((e: unknown) => e)
+      expect(erro).toBeInstanceOf(Error)
+      expect((erro as { prodAlterada?: boolean }).prodAlterada).toBeUndefined()
+    })
   })
 
   describe('rollbackProd', () => {

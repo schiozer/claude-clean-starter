@@ -340,6 +340,21 @@ describe('adaptador heroku: esteira (build once, promote)', () => {
       expect(chamadas(fetchFn, 'POST', '')).toHaveLength(0)
     })
 
+    it('I-2: falha antes do POST /pipeline-promotions sinaliza prodAlterada: false', async () => {
+      const ctx = makeCtx(fetchHeroku(rotas({ commit: 'outrosha999' })))
+      await expect(heroku.promoverProd(ctx)).rejects.toMatchObject({ prodAlterada: false })
+      const semToken = makeCtx(fetchHeroku(rotas()), { env: {} })
+      await expect(heroku.promoverProd(semToken)).rejects.toMatchObject({ prodAlterada: false })
+    })
+
+    it('I-2: falha depois da promoção (slug errado em Prod, alvo failed) não diz Prod intocada', async () => {
+      for (const r of [rotas({ slugEmProd: 'slug-intruso' }), rotas({ alvo: ['failed'] })]) {
+        const erro = await heroku.promoverProd(makeCtx(fetchHeroku(r))).catch((e: unknown) => e)
+        expect(erro).toBeInstanceOf(Error)
+        expect((erro as { prodAlterada?: boolean }).prodAlterada).toBeUndefined()
+      }
+    })
+
     it('lê as releases do UAT em ordem desc (Range) e o commit pelo slug, não por /builds', async () => {
       const fetchFn = fetchHeroku(rotas())
       await heroku.promoverProd(makeCtx(fetchFn))

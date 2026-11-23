@@ -8,6 +8,7 @@
 // repositório do UAT (runbook de adoção da esteira).
 
 import { ultimoOk } from '../githubDeployments.mjs'
+import { antesDeMudarProd } from '../prodIntocada.mjs'
 
 const RUNBOOK = 'docs/runbooks/host-cloudrun.md'
 
@@ -223,14 +224,17 @@ async function deployUat(ctx) {
  */
 async function promoverProd({ config, sha, exec, github, log }) {
   const cfg = config.cloudrun
-  const uat = await ultimoOk(github, 'uat')
-  if (!uat || uat.sha !== sha) throw new Error(`sem deploy de UAT para ${sha7(sha)}`)
-  const digest = uat.payload?.digest
-  if (typeof digest !== 'string' || !DIGEST.test(digest)) {
-    throw new Error(`deploy: deploy de UAT de ${sha7(sha)} sem digest válido no payload`)
-  }
-  const img = `${repositorio(cfg, 'uat')}@${digest}`
-  const revisaoAnterior = await revisaoServindo(exec, cfg, 'prod')
+  // Até o `gcloud run deploy` nada mudou em Prod: falha aqui não pede rollback.
+  const { digest, img, revisaoAnterior } = await antesDeMudarProd(async () => {
+    const uat = await ultimoOk(github, 'uat')
+    if (!uat || uat.sha !== sha) throw new Error(`sem deploy de UAT para ${sha7(sha)}`)
+    const digest = uat.payload?.digest
+    if (typeof digest !== 'string' || !DIGEST.test(digest)) {
+      throw new Error(`deploy: deploy de UAT de ${sha7(sha)} sem digest válido no payload`)
+    }
+    const img = `${repositorio(cfg, 'uat')}@${digest}`
+    return { digest, img, revisaoAnterior: await revisaoServindo(exec, cfg, 'prod') }
+  })
   await exec('gcloud', ['run', 'deploy', cfg.prod.service, '--image', img, ...local(cfg, 'prod')])
   await moverTrafegoParaUltima(exec, cfg, 'prod')
   log?.(`prod promovida com ${img}${revisaoAnterior ? ` (anterior: ${revisaoAnterior})` : ''}`)

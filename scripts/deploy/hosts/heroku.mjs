@@ -8,6 +8,7 @@
 
 import { setTimeout as esperar } from 'node:timers/promises'
 import { DEFAULT_INTERVAL_MS, DEFAULT_TIMEOUT_MS } from '../aguardar.mjs'
+import { antesDeMudarProd } from '../prodIntocada.mjs'
 
 const API = 'https://api.heroku.com'
 
@@ -281,17 +282,21 @@ const idDoApp = async (api, appNome) => {
  * terminar, confere que Prod ficou com o slug verificado (UAT pode ter mudado no meio).
  */
 async function promoverProd(ctx) {
-  const { api, espera } = esteiraCtx(ctx)
   const { pipelineId, uatApp, prodApp } = ctx.config.heroku
-  const slug = releaseAtual(await releasesPorVersao(api, uatApp))?.slug?.id
-  const dadosDoSlug = slug
-    ? await api('GET', `${app(uatApp)}/slugs/${encodeURIComponent(slug)}`)
-    : undefined
-  if (!dadosDoSlug || dadosDoSlug.commit !== ctx.sha) {
-    throw new Error(`deploy: slug do UAT não é de ${curto(ctx.sha)}: rode o deploy de UAT do SHA`)
-  }
+  // Até o POST da promoção nada mudou em Prod: falha aqui não pede rollback.
+  const { api, espera, slug, uatId, prodId } = await antesDeMudarProd(async () => {
+    const { api, espera } = esteiraCtx(ctx)
+    const slug = releaseAtual(await releasesPorVersao(api, uatApp))?.slug?.id
+    const dadosDoSlug = slug
+      ? await api('GET', `${app(uatApp)}/slugs/${encodeURIComponent(slug)}`)
+      : undefined
+    if (!dadosDoSlug || dadosDoSlug.commit !== ctx.sha) {
+      throw new Error(`deploy: slug do UAT não é de ${curto(ctx.sha)}: rode o deploy de UAT do SHA`)
+    }
+    const [uatId, prodId] = [await idDoApp(api, uatApp), await idDoApp(api, prodApp)]
+    return { api, espera, slug, uatId, prodId }
+  })
 
-  const [uatId, prodId] = [await idDoApp(api, uatApp), await idDoApp(api, prodApp)]
   const promocao = await api('POST', '/pipeline-promotions', {
     pipeline: { id: pipelineId },
     source: { app: { id: uatId } },

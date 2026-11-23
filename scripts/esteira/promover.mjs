@@ -17,6 +17,7 @@ import { makeReleaseApi, runReleasePromocao } from '../release.mjs'
 import { lerDeployConfig } from '../deploy/config.mjs'
 import { adaptador, execReal } from '../deploy/index.mjs'
 import { marcar, registrar, ultimoOk } from '../deploy/githubDeployments.mjs'
+import { prodIntocada } from '../deploy/prodIntocada.mjs'
 import { lerEsteira } from './config.mjs'
 
 /** Nome exato do check-run da regressão contra o UAT fixo (o deploy.yml publica no SHA). */
@@ -75,9 +76,12 @@ async function abrirIssueMainAFrente(github, { sha, motivo, esteira }) {
 /**
  * Volta Prod para a release anterior depois de uma falha (`motivo`). `payload` = o que o
  * `promoverProd` devolveu, se devolveu (ex.: `revisaoAnterior` do Cloud Run); pode ser `{}`.
+ * Se o `erro` diz que Prod não foi alterada (`prodAlterada: false`, ver `deploy/prodIntocada.mjs`),
+ * não reverte: rebaixar uma Prod saudável é pior que o erro.
  * @returns {Promise<string>} o motivo, acrescido da falha do rollback se ele também falhar.
  */
-async function reverterProd({ adapter, adapterCtx, payload, motivo }) {
+async function reverterProd({ adapter, adapterCtx, payload, motivo, erro }) {
+  if (prodIntocada(erro)) return `${motivo} (Prod não foi alterada: sem rollback)`
   try {
     await adapter.rollbackProd({ ...adapterCtx, payload: payload ?? {} })
     adapterCtx.log(`rollback de Prod feito: ${motivo}`)
@@ -93,7 +97,8 @@ async function reverterProd({ adapter, adapterCtx, payload, motivo }) {
 /**
  * Heroku/Cloud Run: promoverProd → registrar production → smoke → ancestralidade de novo → FF.
  * Qualquer falha a partir do promoverProd (inclusive dele: no Heroku ele pode falhar depois de
- * Prod já ter mudado) faz rollback e marca o Deployment `failure`, sem FF.
+ * Prod já ter mudado) faz rollback e marca o Deployment `failure`, sem FF — salvo falha do
+ * promoverProd antes de mudar Prod (`prodAlterada: false`): aí só o erro.
  */
 async function promoverAntesDoFF({ adapter, github, git, smoke, esteira, adapterCtx, urlProd }) {
   const { sha } = adapterCtx
@@ -113,7 +118,13 @@ async function promoverAntesDoFF({ adapter, github, git, smoke, esteira, adapter
       throw new Error(`fast-forward da ${esteira.producao} recusado: ${mensagem(error)}`)
     }
   } catch (error) {
-    const motivo = await reverterProd({ adapter, adapterCtx, payload, motivo: mensagem(error) })
+    const motivo = await reverterProd({
+      adapter,
+      adapterCtx,
+      payload,
+      motivo: mensagem(error),
+      erro: error,
+    })
     if (id !== undefined) await marcar(github, id, 'failure', urlProd)
     throw new Error(`promover: ${motivo}`)
   }
@@ -144,7 +155,13 @@ async function promoverAposFF({ adapter, github, git, smoke, esteira, adapterCtx
     if (!url) throw new Error('deploy de Production sem URL para o smoke test (defina PROD_URL)')
     if (!(await smoke(url))) throw new Error(`smoke test em Prod falhou (${url})`)
   } catch (error) {
-    const motivo = await reverterProd({ adapter, adapterCtx, payload, motivo: mensagem(error) })
+    const motivo = await reverterProd({
+      adapter,
+      adapterCtx,
+      payload,
+      motivo: mensagem(error),
+      erro: error,
+    })
     await marcar(github, id, 'failure', url)
     await abrirIssueMainAFrente(github, { sha, motivo, esteira })
     throw new Error(`promover: ${motivo}`)
