@@ -71,7 +71,8 @@ Se você está lendo isso, provavelmente sou eu mesmo (Claude) trabalhando no pr
 
 ### 0. **A `main` só recebe mudanças via PR — INEGOCIÁVEL** ⛔
 
-- A `main` só recebe mudanças via PR. **Sem exceção**, inclusive se o humano pedir.
+- A `main` só recebe mudanças via PR. **Sem exceção para o agente**, inclusive se o humano pedir
+  (a única exceção é o FF da promoção feito pela App da esteira, abaixo).
 - Trabalho terminado = commit em feature branch → push → PR → avisar o humano.
   **Nunca pergunte** se pode commitar, mergear ou dar push na `main` — essa pergunta é proibida.
 - O merge do PR é sempre do humano (`[R3]`); o agente nunca roda `gh pr merge`.

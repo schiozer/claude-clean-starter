@@ -88,8 +88,8 @@ Depende dos tenants Auth0 e das envs dos apps (passos 4–7 do bootstrap-ambient
 A URL do UAT deste host é `https://<gerado: host do app UAT>`.
 
 **Se o login falhar com _callback mismatch_ no review app**: duas `Regressão (UAT)` de PRs diferentes
-podem ler e regravar a lista de callbacks ao mesmo tempo, e uma URL se perde. Rode de novo o job
-`Regressão (UAT)` do PR (`gh run rerun <run-id> --failed`): o `aguardar` registra a URL outra vez,
+podem ler e regravar a lista de callbacks ao mesmo tempo, e uma URL se perde. O humano (`[R3]`; o
+`protect-main` barra o agente) roda de novo o job `Regressão (UAT)` do PR (`gh run rerun <run-id> --failed`): o `aguardar` registra a URL outra vez,
 de forma idempotente.
 
 ### Prod
@@ -120,7 +120,7 @@ hotfix, não pelo merge.
 
 15. [R0] Identificar a release atual e a anterior saudável: `heroku releases -a <preencher: nome do app>-prod -n 5` e diagnosticar com `heroku logs -a <preencher: nome do app>-prod -n 500`.
     Verificar: `<versão-atual>` e `<versão-anterior>` anotadas; a feature/commit suspeito está identificado.
-16. [R2] Voltar Prod para a release anterior saudável: `heroku releases:rollback <versão-anterior> -a <preencher: nome do app>-prod`. O auto-deploy continua ligado: o próximo merge (o revert) entra no ar normalmente.
+16. [R2] Voltar Prod para a release anterior saudável: `heroku releases:rollback <versão-anterior> -a <preencher: nome do app>-prod`. Sem a esteira, o auto-deploy continua ligado: o próximo merge (o revert) entra no ar normalmente. Com a esteira, o `-prod` não tem auto-deploy: o revert só entra no ar pela promoção ([promover-prod.md](./promover-prod.md)) ou como hotfix ([hotfix.md](./hotfix.md)).
     Verificar: `heroku releases -a <preencher: nome do app>-prod -n 1` mostra `Rollback to <versão-anterior>` e o smoke test passa.
 17. [R2] Se o rollback piorou o cenário, voltar à release anotada: `heroku releases:rollback <versão-atual> -a <preencher: nome do app>-prod`.
     Verificar: `heroku releases -a <preencher: nome do app>-prod -n 1` mostra `Rollback to <versão-atual>`.

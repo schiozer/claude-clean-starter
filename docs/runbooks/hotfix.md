@@ -51,8 +51,8 @@ trivial, precisa de aceite) → **não** é hotfix: entra por `develop` (esteira
    Verificar: `200` e o bug não se reproduz.
 8. [R0] Conferir o PR de back-promotion aberto pelo CI: `gh pr list --base develop --head main --state open --json number,title`.
    Verificar: um PR `chore(release): back-promotion de vX.Y.Z`. Ausente (a Release falhou e **não há aviso**) → passo 9; presente → passo 10.
-9. [R1] Só se o CI não abriu: re-rodar a Release que falhou (`gh run rerun <run-id> --failed`), o que cria a tag e dispara a back-promotion; se ela não passar, abrir à mão com a versão do hotfix (o `PR gate` exige o formato `vX.Y.Z` no título): `gh pr create --base develop --head main --title 'chore(release): back-promotion de vX.Y.Z' --body 'Back-promotion do hotfix vX.Y.Z (merge commit).'`.
-   Verificar: `gh pr list --base develop --head main --state open` lista o PR.
+9. [R3] Humano: só se o CI não abriu, re-rodar a Release que falhou (`gh run rerun <run-id> --failed` ou _Re-run failed jobs_ no Actions; o agente é barrado pelo `protect-main`), o que cria a tag e dispara a back-promotion, e avisar; se ela não passar, abrir à mão com a versão do hotfix (o `PR gate` exige o formato `vX.Y.Z` no título): `gh pr create --base develop --head main --title 'chore(release): back-promotion de vX.Y.Z' --body 'Back-promotion do hotfix vX.Y.Z (merge commit).'`.
+   Verificar: `gh pr list --base develop --head main --state open` lista o PR (o agente pode abrir o PR à mão depois do aviso do humano).
 10. [R1] Só se houver conflito (o CI abre o PR mesmo assim e comenta): `git switch -c backpromotion/vX.Y.Z origin/develop && git merge origin/main`, resolver, commitar o merge e `git push -u origin backpromotion/vX.Y.Z`; abrir o PR com base `develop` a partir dela (merge commit permitido) e fechar o do CI apontando o novo.
     Verificar: `gh pr checks <n> --watch` verde e `git merge-base --is-ancestor origin/main HEAD && echo ok` → `ok`.
 11. [R3] Humano: mergear a back-promotion na `develop` com **Create a merge commit** (nunca squash) e avisar.

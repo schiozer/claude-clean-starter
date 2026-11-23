@@ -49,7 +49,7 @@ automático de cada host:
    Verificar: `gh pr checks <n> --watch` verde.
 5. [R3] Humano: fazer o merge do PR de revert na `main` (com a esteira, na base do PR e, se for a `develop`, disparar a promoção) e avisar quando terminar.
    Verificar: `gh pr view <n> --json state` → `MERGED` e o deploy do commit de revert fica pronto (bloco **Prod** do runbook do host).
-6. [R2] Só na Vercel, se o passo 3 foi executado e o domínio não serve o deploy do revert: passo de promover o deploy do revert do bloco **Rollback** do host-vercel.md (`promote`, que religa a atribuição automática). Nos demais hosts: não se aplica (no Heroku o auto-deploy e no Cloud Run o `--to-latest` do `deploy.yml` já põem o revert no ar).
+6. [R2] Só na Vercel, se o passo 3 foi executado e o domínio não serve o deploy do revert: passo de promover o deploy do revert do bloco **Rollback** do host-vercel.md (`promote`, que religa a atribuição automática). Nos demais hosts: não se aplica. Sem a esteira, o auto-deploy (Heroku) e o `--to-latest` do `deploy.yml` (Cloud Run) já põem o revert no ar. Com a esteira, o `-prod` do Heroku não tem auto-deploy: o revert entra no ar pela promoção ([promover-prod.md](./promover-prod.md)) ou como hotfix ([hotfix.md](./hotfix.md)).
    Verificar: o domínio de Prod serve o deploy do commit de revert (sem isso, merges futuros não chegam a Prod).
 
 ## Verificação final

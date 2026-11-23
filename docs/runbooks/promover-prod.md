@@ -93,7 +93,7 @@ Quem pode promover: os logins de `esteira.promotores`. O workflow só roda a par
   - Smoke falhou na Vercel → `vercel rollback` já feito, issue `esteira` "main à frente de Prod"
     aberta; corrigir por [hotfix.md](./hotfix.md).
   - Release falhou **depois** do FF → re-rodar o workflow é no-op (a `main` já é o SHA) e **não
-    cria a tag**. Recuperar à mão (rodar a release do SHA) ou aguardar a próxima promoção, que
+    cria a tag**. Recuperar à mão: o **humano** (`[R3]`, o `protect-main` barra o agente) re-roda ou dispara a release do SHA no Actions; ou aguardar a próxima promoção, que
     absorve o intervalo na versão.
 - A Release criada pela promoção usa o `GITHUB_TOKEN` do job e **não dispara** outros workflows
   (intencional; o `release.yml` também pula o push da App).
