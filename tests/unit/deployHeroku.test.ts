@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import heroku, { aguardarReviewApp } from '../../scripts/deploy/hosts/heroku.mjs'
+import heroku, { aguardarReviewApp, tarballUrl } from '../../scripts/deploy/hosts/heroku.mjs'
 
 const SHA = 'abc1234def'
 const TOKEN = 'segredo-token-123'
@@ -173,4 +173,238 @@ describe('adaptador heroku', () => {
         env: {},
       })
     ).rejects.toThrow(/HEROKU_API_KEY/))
+})
+
+describe('adaptador heroku: esteira (build once, promote)', () => {
+  const SHA_E = 'f00dbabe1234567890'
+  const TOKEN_W = 'tok-escrita-999'
+  const TARBALL = 'https://codeload.github.com/o/r/legacy.tar.gz/f00d?token=URL-SECRETA-777'
+  const SEGREDOS = [TOKEN_W, TARBALL, 'URL-SECRETA-777']
+
+  type Rotas = Record<string, (body?: unknown) => Response>
+  const fetchHeroku = (rotas: Rotas) =>
+    vi.fn(async (url: string, init: RequestInit = {}) => {
+      const chave = `${init.method ?? 'GET'} ${url.replace('https://api.heroku.com', '')}`
+      const rota = rotas[chave]
+      if (!rota) return json(404, {})
+      return rota(init.body ? JSON.parse(String(init.body)) : undefined)
+    })
+
+  const makeCtx = (fetchFn: unknown, extra: Record<string, unknown> = {}) => ({
+    config: {
+      host: 'heroku',
+      heroku: { pipelineId: 'pipe-1', uatApp: 'app-uat', prodApp: 'app-prod' },
+    },
+    sha: SHA_E,
+    github: { call: vi.fn(), location: vi.fn(async () => TARBALL) },
+    log: vi.fn(),
+    env: { HEROKU_DEPLOY_API_KEY: TOKEN_W },
+    fetchFn: fetchFn as typeof fetch,
+    ...makeClock(),
+    ...extra,
+  })
+
+  const semSegredos = async (ctx: ReturnType<typeof makeCtx>, p: Promise<unknown>) => {
+    const erro = await p.then(
+      () => null,
+      (e) => e
+    )
+    const textos = [
+      ...ctx.log.mock.calls.map((c: unknown[]) => c.map(String).join(' ')),
+      erro ? String(erro.message) : '',
+    ]
+    for (const texto of textos) for (const s of SEGREDOS) expect(texto).not.toContain(s)
+  }
+
+  it('promoveAposFF é false', () => expect(heroku.promoveAposFF).toBe(false))
+
+  it('tarballUrl devolve o Location do GET /tarball/{sha}', async () => {
+    const github = { location: vi.fn(async () => TARBALL) }
+    expect(await tarballUrl(github, SHA_E)).toBe(TARBALL)
+    expect(github.location).toHaveBeenCalledWith(`/tarball/${SHA_E}`)
+  })
+
+  describe('deployUat', () => {
+    const rotasOk = (estados: string[]): Rotas => ({
+      'POST /apps/app-uat/builds': () => json(201, { id: 'b-1', status: 'pending' }),
+      'GET /apps/app-uat/builds/b-1': () =>
+        json(200, {
+          id: 'b-1',
+          status: estados.shift() ?? 'succeeded',
+          slug: { id: 'slug-uat' },
+          source_blob: { version: SHA_E },
+        }),
+      'GET /apps/app-uat': () => json(200, { web_url: 'https://app-uat.herokuapp.com/' }),
+    })
+
+    it('cria build do tarball no uatApp, espera succeeded e devolve url + slug', async () => {
+      const fetchFn = fetchHeroku(rotasOk(['pending']))
+      const ctx = makeCtx(fetchFn)
+      expect(await heroku.deployUat(ctx)).toEqual({
+        url: 'https://app-uat.herokuapp.com/',
+        payload: { slug: 'slug-uat' },
+      })
+      const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit]
+      expect(url).toBe('https://api.heroku.com/apps/app-uat/builds')
+      expect(init.method).toBe('POST')
+      expect(init.headers).toMatchObject({ Authorization: `Bearer ${TOKEN_W}` })
+      expect(JSON.parse(String(init.body))).toEqual({
+        source_blob: { url: TARBALL, version: SHA_E },
+      })
+      expect(ctx.sleep).toHaveBeenCalledTimes(1)
+    })
+
+    it('a URL do tarball e o token nunca aparecem em log', async () => {
+      const ctx = makeCtx(fetchHeroku(rotasOk([])))
+      await semSegredos(ctx, heroku.deployUat(ctx))
+      expect(ctx.log).toHaveBeenCalled()
+    })
+
+    it('build failed → erro, sem URL do tarball nem token', async () => {
+      const ctx = makeCtx(fetchHeroku(rotasOk(['failed'])))
+      const p = heroku.deployUat(ctx)
+      await expect(p).rejects.toThrow(/Build.*app-uat.*falhou/)
+      await semSegredos(ctx, p)
+    })
+
+    it('POST do build com erro HTTP → mensagem sem a URL do tarball', async () => {
+      const ctx = makeCtx(
+        fetchHeroku({ 'POST /apps/app-uat/builds': () => json(422, { message: 'x' }) })
+      )
+      const p = heroku.deployUat(ctx)
+      await expect(p).rejects.toThrow(/HTTP 422/)
+      await semSegredos(ctx, p)
+    })
+
+    it('sem HEROKU_DEPLOY_API_KEY → erro claro, sem chamar a API', async () => {
+      const fetchFn = fetchHeroku({})
+      const ctx = makeCtx(fetchFn, { env: { HEROKU_API_KEY: 'leitura' } })
+      await expect(heroku.deployUat(ctx)).rejects.toThrow(/HEROKU_DEPLOY_API_KEY/)
+      expect(fetchFn).not.toHaveBeenCalled()
+    })
+
+    it('401 aponta HEROKU_DEPLOY_API_KEY, sem vazar o token', async () => {
+      const ctx = makeCtx(fetchHeroku({ 'POST /apps/app-uat/builds': () => json(401, {}) }))
+      const p = heroku.deployUat(ctx)
+      await expect(p).rejects.toThrow(/HEROKU_DEPLOY_API_KEY/)
+      await semSegredos(ctx, p)
+    })
+  })
+
+  it('urlUat devolve a web_url do uatApp', async () => {
+    const fetchFn = fetchHeroku({
+      'GET /apps/app-uat': () => json(200, { web_url: 'https://app-uat.herokuapp.com/' }),
+    })
+    expect(await heroku.urlUat(makeCtx(fetchFn))).toBe('https://app-uat.herokuapp.com/')
+  })
+
+  describe('promoverProd', () => {
+    const rotas = ({ versao = SHA_E, alvo = ['pending', 'succeeded'] } = {}): Rotas => ({
+      'GET /apps/app-uat/releases': () =>
+        json(200, [
+          { id: 'r-1', version: 1, status: 'succeeded', slug: { id: 'slug-velho' } },
+          { id: 'r-2', version: 2, status: 'succeeded', current: true, slug: { id: 'slug-uat' } },
+        ]),
+      'GET /apps/app-uat/builds': () =>
+        json(200, [
+          { id: 'b-0', slug: { id: 'slug-velho' }, source_blob: { version: 'velho' } },
+          { id: 'b-1', slug: { id: 'slug-uat' }, source_blob: { version: versao } },
+        ]),
+      'POST /pipeline-promotions': () => json(201, { id: 'promo-1', status: 'pending' }),
+      'GET /pipeline-promotions/promo-1/promotion-targets': () =>
+        json(200, [{ app: { id: 'app-prod' }, status: alvo.shift() ?? 'succeeded' }]),
+    })
+
+    it('CT-ESTEIRA-010: slug do UAT de outro SHA → recusa sem promover', async () => {
+      const fetchFn = fetchHeroku(rotas({ versao: 'outrosha999' }))
+      const ctx = makeCtx(fetchFn)
+      await expect(heroku.promoverProd(ctx)).rejects.toThrow(
+        `slug do UAT não é de ${SHA_E.slice(0, 7)}`
+      )
+      const posts = fetchFn.mock.calls.filter(
+        (c) => (c as unknown as [string, RequestInit])[1]?.method === 'POST'
+      )
+      expect(posts).toHaveLength(0)
+    })
+
+    it('slug certo → POST /pipeline-promotions do uatApp para o prodApp e espera succeeded', async () => {
+      const fetchFn = fetchHeroku(rotas())
+      const ctx = makeCtx(fetchFn)
+      expect(await heroku.promoverProd(ctx)).toEqual({ payload: { slug: 'slug-uat' } })
+      const promo = fetchFn.mock.calls.find((c) => String(c[0]).endsWith('/pipeline-promotions'))
+      const body = JSON.parse(String((promo as unknown as [string, RequestInit])[1].body))
+      expect(body).toEqual({
+        pipeline: { id: 'pipe-1' },
+        source: { app: { id: 'app-uat' } },
+        targets: [{ app: { id: 'app-prod' } }],
+      })
+      expect(ctx.sleep).toHaveBeenCalledTimes(1)
+    })
+
+    it('alvo da promoção failed → erro', async () => {
+      const ctx = makeCtx(fetchHeroku(rotas({ alvo: ['failed'] })))
+      await expect(heroku.promoverProd(ctx)).rejects.toThrow(/Promoção.*app-prod.*falhou/)
+    })
+
+    it('sem HEROKU_DEPLOY_API_KEY → erro claro', async () => {
+      const ctx = makeCtx(fetchHeroku(rotas()), { env: {} })
+      await expect(heroku.promoverProd(ctx)).rejects.toThrow(/HEROKU_DEPLOY_API_KEY/)
+    })
+  })
+
+  describe('rollbackProd', () => {
+    it('cria release no prodApp com o slug anterior ao atual', async () => {
+      const fetchFn = fetchHeroku({
+        'GET /apps/app-prod/releases': () =>
+          json(200, [
+            { version: 3, status: 'succeeded', current: true, slug: { id: 'slug-novo' } },
+            { version: 1, status: 'succeeded', slug: { id: 'slug-antigo' } },
+            { version: 2, status: 'succeeded', slug: { id: 'slug-novo' } },
+            { version: 0, status: 'failed', slug: { id: 'slug-quebrado' } },
+          ]),
+        'POST /apps/app-prod/releases': () => json(201, { id: 'r-4' }),
+      })
+      await heroku.rollbackProd(makeCtx(fetchFn))
+      const post = fetchFn.mock.calls.find(
+        (c) => (c as unknown as [string, RequestInit])[1]?.method === 'POST'
+      ) as unknown as [string, RequestInit]
+      expect(post[0]).toBe('https://api.heroku.com/apps/app-prod/releases')
+      expect(JSON.parse(String(post[1].body))).toEqual({ slug: 'slug-antigo' })
+    })
+
+    it('sem release anterior → erro', async () => {
+      const fetchFn = fetchHeroku({
+        'GET /apps/app-prod/releases': () =>
+          json(200, [{ version: 1, status: 'succeeded', current: true, slug: { id: 's' } }]),
+      })
+      await expect(heroku.rollbackProd(makeCtx(fetchFn))).rejects.toThrow(/sem release anterior/)
+    })
+  })
+
+  describe('deployProd (hotfix)', () => {
+    it('com prodApp: build do tarball no prodApp e espera succeeded', async () => {
+      const fetchFn = fetchHeroku({
+        'POST /apps/app-prod/builds': () => json(201, { id: 'b-9' }),
+        'GET /apps/app-prod/builds/b-9': () =>
+          json(200, { id: 'b-9', status: 'succeeded', slug: { id: 'slug-hotfix' } }),
+      })
+      const ctx = makeCtx(fetchFn)
+      await heroku.deployProd(ctx)
+      const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit]
+      expect(JSON.parse(String(init.body))).toEqual({
+        source_blob: { url: TARBALL, version: SHA_E },
+      })
+      await semSegredos(ctx, Promise.resolve())
+    })
+
+    it('sem prodApp (sem esteira) → no-op, como hoje', async () => {
+      const fetchFn = fetchHeroku({})
+      await heroku.deployProd({
+        ...makeCtx(fetchFn),
+        config: { host: 'heroku', heroku: { pipelineId: 'pipe-1' } },
+        env: {},
+      })
+      expect(fetchFn).not.toHaveBeenCalled()
+    })
+  })
 })

@@ -20,24 +20,23 @@ export function makeGithubClient({
   userAgent,
 }) {
   /** JSON parseado da resposta; `null` em 204 ou corpo vazio. HTTP != 2xx lança Error com `status`. */
+  const headers = (body) => ({
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': userAgent,
+    ...(body ? { 'Content-Type': 'application/json' } : {}),
+  })
+  const falhou = (method, path, status) =>
+    Object.assign(new Error(`GitHub API ${method} ${path} falhou: HTTP ${status}`), { status })
+
   const call = async (method, path, body) => {
     const response = await fetchFn(`${apiUrl}/repos/${repository}${path}`, {
       method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': userAgent,
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-      },
+      headers: headers(body),
       body: body ? JSON.stringify(body) : undefined,
     })
-    if (!response.ok) {
-      throw Object.assign(
-        new Error(`GitHub API ${method} ${path} falhou: HTTP ${response.status}`),
-        { status: response.status }
-      )
-    }
+    if (!response.ok) throw falhou(method, path, response.status)
     if (response.status === 204) return null
     const text = await response.text()
     return text ? JSON.parse(text) : null
@@ -54,7 +53,25 @@ export function makeGithubClient({
     }
   }
 
-  return { call, paginate }
+  /**
+   * `Location` de um GET que redireciona (ex.: `/tarball/{sha}`), sem seguir o redirect. A URL
+   * devolvida pode ser temporária e autenticada: nunca vai para log nem para mensagem de erro.
+   */
+  const location = async (path) => {
+    const response = await fetchFn(`${apiUrl}/repos/${repository}${path}`, {
+      method: 'GET',
+      headers: headers(),
+      redirect: 'manual',
+    })
+    if (response.status < 300 || response.status >= 400) {
+      throw falhou('GET', path, response.status)
+    }
+    const destino = response.headers.get('location')
+    if (!destino) throw new Error(`GitHub API GET ${path}: redirect sem Location`)
+    return destino
+  }
+
+  return { call, paginate, location }
 }
 
 const runOrder = (a, b) =>

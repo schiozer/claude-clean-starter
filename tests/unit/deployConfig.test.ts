@@ -63,3 +63,38 @@ describe('parseDeployConfig', () => {
   it('heroku com pipelineId é válido', () =>
     expect(parseDeployConfig('{"host":"heroku","heroku":{"pipelineId":"p1"}}').host).toBe('heroku'))
 })
+
+describe('parseDeployConfig com esteira (heroku)', () => {
+  const ESTEIRA = {
+    integracao: 'develop',
+    producao: 'main',
+    prefixoHotfix: 'hotfix/',
+    promotores: ['a'],
+  }
+  const heroku = (extra: Record<string, unknown>) =>
+    JSON.stringify({ host: 'heroku', heroku: { pipelineId: 'p1', ...extra } })
+
+  it('sem esteira → uatApp/prodApp não são exigidos (como hoje)', () => {
+    expect(parseDeployConfig(heroku({})).host).toBe('heroku')
+    expect(parseDeployConfig(heroku({}), {}).host).toBe('heroku')
+    expect(parseDeployConfig(heroku({}), { esteira: null }).host).toBe('heroku')
+  })
+
+  it.each([
+    [{}, /heroku\.uatApp obrigatório/],
+    [{ uatApp: ' ', prodApp: 'app-prod' }, /heroku\.uatApp obrigatório/],
+    [{ uatApp: 'app-uat' }, /heroku\.prodApp obrigatório/],
+    [{ uatApp: 'app-uat', prodApp: '' }, /heroku\.prodApp obrigatório/],
+  ])('com esteira e %j → erro', (extra, erro) =>
+    expect(() => parseDeployConfig(heroku(extra), { esteira: ESTEIRA })).toThrow(erro)
+  )
+
+  it('com esteira, uatApp e prodApp → válido', () =>
+    expect(
+      parseDeployConfig(heroku({ uatApp: 'app-uat', prodApp: 'app-prod' }), { esteira: ESTEIRA })
+        .heroku
+    ).toMatchObject({ uatApp: 'app-uat', prodApp: 'app-prod' }))
+
+  it('com esteira e outro host → nada muda', () =>
+    expect(parseDeployConfig('{"host":"vercel"}', { esteira: ESTEIRA }).host).toBe('vercel'))
+})

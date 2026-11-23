@@ -64,6 +64,27 @@ describe('makeGithubClient', () => {
   })
 })
 
+describe('makeGithubClient.location', () => {
+  it('GET com redirect manual devolve o Location, sem seguir o redirect', async () => {
+    const { client, fetchFn } = makeClient(
+      () => new Response(null, { status: 302, headers: { Location: 'https://dl.test/x?token=S' } })
+    )
+    expect(await client.location('/tarball/abc')).toBe('https://dl.test/x?token=S')
+    expect(fetchFn.mock.calls[0][0]).toBe('https://gh.test/repos/o/r/tarball/abc')
+    expect((fetchFn.mock.calls[0] as unknown[])[1]).toMatchObject({
+      method: 'GET',
+      redirect: 'manual',
+    })
+  })
+
+  it('sem redirect (ou sem Location) → erro com status e path, sem URL', async () => {
+    const { client } = makeClient(() => json({}, 404))
+    await expect(client.location('/tarball/abc')).rejects.toThrow(/GET \/tarball\/abc.*HTTP 404/)
+    const semLocation = makeClient(() => new Response(null, { status: 302 }))
+    await expect(semLocation.client.location('/tarball/abc')).rejects.toThrow(/sem Location/)
+  })
+})
+
 describe('latestCheckRun', () => {
   const novo = { name: 'X', status: 'completed', conclusion: 'success', id: 20 }
   const velho = { name: 'X', status: 'completed', conclusion: 'failure', id: 10 }

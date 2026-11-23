@@ -40,8 +40,13 @@ function validarCloudRun(bloco) {
   return cloudrun
 }
 
-/** `texto` null = arquivo ausente (host padrão: vercel). */
-export function parseDeployConfig(texto) {
+/**
+ * `texto` null = arquivo ausente (host padrão: vercel). Com `esteira` ligada (spec
+ * esteira-build-once-promote §5.6), o heroku exige também `uatApp` e `prodApp`.
+ * @param {string | null} texto
+ * @param {{ esteira?: object | null }} [opcoes]
+ */
+export function parseDeployConfig(texto, { esteira = null } = {}) {
   if (texto === null) return { host: 'vercel' }
 
   let json
@@ -56,12 +61,21 @@ export function parseDeployConfig(texto) {
     throw erro(`host '${json.host}' inválido (válidos: ${HOSTS.join(', ')})`)
   }
 
-  // Bloco de vercel é aceito sem validação; o de heroku só exige `pipelineId`.
+  // Bloco de vercel é aceito sem validação; o de heroku exige `pipelineId` (e, com esteira,
+  // `uatApp`/`prodApp`).
   const config = { ...json }
   if (json.host === 'heroku') {
     const pipelineId = ehObjeto(json.heroku) ? json.heroku.pipelineId : undefined
     if (typeof pipelineId !== 'string' || pipelineId.trim() === '') {
       throw erro('heroku.pipelineId obrigatório (texto não vazio)')
+    }
+    if (esteira) {
+      for (const campo of ['uatApp', 'prodApp']) {
+        const valor = json.heroku[campo]
+        if (typeof valor !== 'string' || valor.trim() === '') {
+          throw erro(`heroku.${campo} obrigatório com a esteira ligada (texto não vazio)`)
+        }
+      }
     }
   }
   if (json.host === 'cloudrun') config.cloudrun = validarCloudRun(json.cloudrun)

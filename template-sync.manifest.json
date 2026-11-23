@@ -36,6 +36,7 @@
     "tests/unit/deployAuth0Callbacks.test.ts",
     "tests/unit/deployCloudRun.test.ts",
     "tests/unit/deployConfig.test.ts",
+    "tests/unit/deployGithubDeployments.test.ts",
     "tests/unit/deployHeroku.test.ts",
     "tests/unit/deployIndex.test.ts",
     "tests/unit/deployTemplates.test.ts",
