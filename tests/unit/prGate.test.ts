@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { checkPr, parseSpecLine, parseTitle, parseUat } from '../../scripts/pr-gate.mjs'
+import { avisosDoPr, checkPr, parseSpecLine, parseTitle, parseUat } from '../../scripts/pr-gate.mjs'
 
 const ROOT = resolve(__dirname, '../..')
 const read = (path: string) => readFileSync(resolve(ROOT, path), 'utf8')
@@ -197,7 +197,7 @@ describe('workflow pr-gate.yml', () => {
 
   it.each([
     'types: [opened, edited, synchronize, reopened]',
-    'branches: [main]',
+    'branches: [main, develop]',
     'name: PR gate',
     'contents: read',
     'ref: ${{ github.event.pull_request.head.sha }}',
@@ -205,5 +205,116 @@ describe('workflow pr-gate.yml', () => {
     'run: node scripts/check-cenarios.mjs',
   ])('contém %s', (snippet) => {
     expect(workflow).toContain(snippet)
+  })
+})
+
+describe('workflow ci.yml', () => {
+  it('dispara em PR para main e develop', () => {
+    const ci = read('.github/workflows/ci.yml')
+    expect(ci).toMatch(/pull_request:\n\s+branches: \[main, develop\]/)
+  })
+})
+
+describe('esteira (regras por base)', () => {
+  const esteira = {
+    integracao: 'develop',
+    producao: 'main',
+    prefixoHotfix: 'hotfix/',
+    promotores: ['fulano'],
+  }
+  const UAT_NA = '## UAT\n\n- [ ] UAT aprovado\n- [x] UAT não se aplica — correção urgente\n'
+  const UAT_OK = '## UAT\n\n- [x] UAT aprovado\n- [ ] UAT não se aplica — <motivo>\n'
+  const SEM_UAT = '## O quê\n\nx\n\nSpec: docs/superpowers/specs/x.md\n'
+  const gate = (o: Record<string, unknown>) => run({ esteira, action: 'edited', ...o } as never)
+
+  it('sem esteira ignora base/head (como hoje)', () => {
+    expect(run({ base: 'main', head: 'feature/x' } as never)).toEqual([])
+    expect(run({ base: 'main', head: 'feature/x', body: SEM_UAT } as never)).toHaveLength(1)
+  })
+
+  it('base develop + feature não exige UAT', () => {
+    expect(gate({ base: 'develop', head: 'feature/x', body: SEM_UAT, title: 'docs: x' })).toEqual(
+      []
+    )
+  })
+
+  it('feature ainda exige título e spec', () => {
+    expect(gate({ base: 'develop', head: 'feature/x', title: 'ruim' })).not.toEqual([])
+  })
+
+  it('base main + feature/x é inválido', () => {
+    expect(gate({ base: 'main', head: 'feature/x' })).toEqual([
+      'base main só aceita hotfix/* (ou o FF do Promover para Prod)',
+    ])
+  })
+
+  it('base develop + hotfix/x é inválido', () => {
+    expect(gate({ base: 'develop', head: 'hotfix/x' })).toEqual([
+      'base develop não aceita hotfix/* — hotfix vai para main',
+    ])
+  })
+
+  it('base main + hotfix/x com "não se aplica" ok', () => {
+    expect(
+      gate({ base: 'main', head: 'hotfix/x', body: bodyWith(`Spec: ${SPEC}`, UAT_NA) })
+    ).toEqual([])
+  })
+
+  it('hotfix exige a seção UAT', () => {
+    expect(gate({ base: 'main', head: 'hotfix/x', body: SEM_UAT })).toHaveLength(1)
+  })
+
+  it('hotfix com "UAT aprovado" é erro', () => {
+    const errors = gate({
+      base: 'main',
+      head: 'hotfix/x',
+      body: bodyWith(`Spec: ${SPEC}`, UAT_OK),
+    })
+    expect(errors).toContain('hotfix não passa pelo UAT: use "UAT não se aplica — <motivo>"')
+  })
+
+  it('back-promotion main -> develop ok, sem spec nem UAT', () => {
+    expect(
+      gate({
+        base: 'develop',
+        head: 'main',
+        title: 'chore(release): back-promotion de v1.2.3',
+        body: '',
+      })
+    ).toEqual([])
+  })
+
+  it('back-promotion via backpromotion/* também ok', () => {
+    expect(
+      gate({
+        base: 'develop',
+        head: 'backpromotion/v1.2.3',
+        title: 'chore(release): back-promotion de v1.2.3',
+        body: '',
+      })
+    ).toEqual([])
+  })
+
+  it('back-promotion com título errado falha', () => {
+    const errors = gate({ base: 'develop', head: 'main', title: 'chore: sync', body: '' })
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('chore(release): back-promotion de vX.Y.Z')
+  })
+
+  it('base fora da esteira se comporta como hoje', () => {
+    expect(gate({ base: 'outra', head: 'feature/x' })).toEqual([])
+    expect(gate({ base: 'outra', head: 'feature/x', body: SEM_UAT })).toHaveLength(1)
+  })
+
+  describe('avisosDoPr', () => {
+    it('avisa merge commit na back-promotion', () => {
+      const aviso = 'mergeie com "Create a merge commit", nunca squash'
+      expect(avisosDoPr({ base: 'develop', head: 'main', esteira })).toEqual([aviso])
+      expect(avisosDoPr({ base: 'develop', head: 'backpromotion/x', esteira })).toEqual([aviso])
+    })
+    it('sem aviso nos demais casos', () => {
+      expect(avisosDoPr({ base: 'develop', head: 'feature/x', esteira })).toEqual([])
+      expect(avisosDoPr({ base: 'develop', head: 'main' })).toEqual([])
+    })
   })
 })

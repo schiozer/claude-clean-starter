@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { classificarPr, maiorBump, PUSHER_APP } from '../../scripts/esteira/regras.mjs'
+import {
+  classificarPr,
+  maiorBump,
+  PREFIXO_BACKPROMOTION,
+  PUSHER_APP,
+} from '../../scripts/esteira/regras.mjs'
 
 const esteira = {
   integracao: 'develop',
@@ -12,6 +17,8 @@ describe('classificarPr', () => {
   it.each([
     [{ base: 'develop', head: 'feature/x' }, 'feature'],
     [{ base: 'develop', head: 'main' }, 'back-promotion'],
+    [{ base: 'develop', head: 'backpromotion/v1-2-3' }, 'back-promotion'],
+    [{ base: 'main', head: 'backpromotion/x' }, 'invalido'],
     [{ base: 'main', head: 'hotfix/x' }, 'hotfix'],
     [{ base: 'main', head: 'feature/x' }, 'invalido'],
     [{ base: 'develop', head: 'hotfix/x' }, 'invalido'],
@@ -35,4 +42,8 @@ describe('maiorBump', () => {
 
 it('PUSHER_APP', () => {
   expect(PUSHER_APP).toBe('esteira-promover[bot]')
+})
+
+it('PREFIXO_BACKPROMOTION', () => {
+  expect(PREFIXO_BACKPROMOTION).toBe('backpromotion/')
 })

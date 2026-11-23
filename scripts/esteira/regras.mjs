@@ -3,6 +3,9 @@ import { bumpType } from '../release.mjs'
 /** Login do bot da App que faz o fast-forward da produção. */
 export const PUSHER_APP = 'esteira-promover[bot]'
 
+/** Prefixo da branch em que o agente resolve conflito da back-promotion (spec §3.2.7). */
+export const PREFIXO_BACKPROMOTION = 'backpromotion/'
+
 /**
  * Classifica um PR pela base/head (spec §5.4).
  * @param {{ base: string, head: string }} pr
@@ -12,7 +15,9 @@ export const PUSHER_APP = 'esteira-promover[bot]'
 export function classificarPr({ base, head }, esteira) {
   const ehHotfix = head.startsWith(esteira.prefixoHotfix)
   if (base === esteira.integracao) {
-    if (head === esteira.producao) return 'back-promotion'
+    if (head === esteira.producao || head.startsWith(PREFIXO_BACKPROMOTION)) {
+      return 'back-promotion'
+    }
     return ehHotfix ? 'invalido' : 'feature'
   }
   if (base === esteira.producao && ehHotfix) return 'hotfix'
