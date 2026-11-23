@@ -34,6 +34,35 @@ describe('workflow promover.yml', () => {
     expect(yml).toMatch(/token: \$\{\{ steps\.app\.outputs\.token \}\}/)
   })
 
+  it('I-2: o token da App pede só contents, deployments e workflows (write)', () => {
+    const passo = yml.split(/\n {6}- /).find((p) => p.includes('create-github-app-token'))
+    expect(passo).toBeDefined()
+    expect(passo).toMatch(/^ {10}permission-contents: write$/m)
+    expect(passo).toMatch(/^ {10}permission-deployments: write$/m)
+    expect(passo).toMatch(/^ {10}permission-workflows: write$/m)
+    expect(passo?.match(/permission-/g)).toHaveLength(3)
+  })
+
+  it('I-3: o job com Environment production só roda a partir da main', () => {
+    const [antes, job] = yml.split(/\n {2}promover:\n/)
+    expect(job).toMatch(
+      /^ {4}if: needs\.esteira\.outputs\.ativa == 'true' && github\.ref == 'refs\/heads\/main'$/m
+    )
+    // o 1º job (sem segredos) avisa por que não promove fora da main.
+    expect(antes).toMatch(/if: github\.ref != 'refs\/heads\/main'/)
+    expect(antes).toMatch(/::warning::[^\n]*refs\/heads\/main/)
+  })
+
+  it('vercel: instala o CLI fixado na major, só com host vercel', () => {
+    const [antes, job] = yml.split(/\n {2}promover:\n/)
+    expect(antes).toMatch(/^ {6}host: \$\{\{ steps\.host\.outputs\.host \}\}$/m)
+    const passo = job.split(/\n {6}- /).find((p) => p.includes('npm i -g vercel@'))
+    expect(passo).toBeDefined()
+    expect(passo).toMatch(/npm i -g vercel@\d+\b/)
+    expect(passo).not.toMatch(/vercel@latest/)
+    expect(passo).toMatch(/if: needs\.esteira\.outputs\.host == 'vercel'/)
+  })
+
   it('o token da App só vai para o checkout (FF por git); a API usa o token do job', () => {
     expect(yml.match(/steps\.app\.outputs\.token/g)).toHaveLength(1)
     expect(yml).toContain('GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}')
@@ -54,7 +83,7 @@ describe('workflow promover.yml', () => {
     expect(antes).not.toContain('secrets.')
     expect(antes).not.toContain('environment:')
     expect(job).toMatch(/^ {4}needs: esteira$/m)
-    expect(job).toMatch(/^ {4}if: needs\.esteira\.outputs\.ativa == 'true'$/m)
+    expect(job).toMatch(/^ {4}if: needs\.esteira\.outputs\.ativa == 'true'/m)
   })
 
   it('credenciais do host: Cloud Run de prod pelo OIDC e só com host cloudrun', () => {

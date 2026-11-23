@@ -65,14 +65,34 @@ async function abrirIssueMainAFrente(github, { sha, motivo, esteira }) {
 }
 
 /**
+ * Volta Prod para a release anterior depois de uma falha (`motivo`). `payload` = o que o
+ * `promoverProd` devolveu, se devolveu (ex.: `revisaoAnterior` do Cloud Run); pode ser `{}`.
+ * @returns {Promise<string>} o motivo, acrescido da falha do rollback se ele também falhar.
+ */
+async function reverterProd({ adapter, adapterCtx, payload, motivo }) {
+  try {
+    await adapter.rollbackProd({ ...adapterCtx, payload: payload ?? {} })
+    adapterCtx.log(`rollback de Prod feito: ${motivo}`)
+    return motivo
+  } catch (falhaDoRollback) {
+    return (
+      `${motivo}; rollback também falhou: ${mensagem(falhaDoRollback)} — ` +
+      'verifique Prod manualmente'
+    )
+  }
+}
+
+/**
  * Heroku/Cloud Run: promoverProd → registrar production → smoke → ancestralidade de novo → FF.
- * Qualquer falha depois do promoverProd faz rollback e marca o Deployment `failure` (sem FF).
+ * Qualquer falha a partir do promoverProd (inclusive dele: no Heroku ele pode falhar depois de
+ * Prod já ter mudado) faz rollback e marca o Deployment `failure`, sem FF.
  */
 async function promoverAntesDoFF({ adapter, github, git, smoke, esteira, adapterCtx, urlProd }) {
-  const { sha, log } = adapterCtx
-  const { payload } = await adapter.promoverProd(adapterCtx)
+  const { sha } = adapterCtx
+  let payload
   let id
   try {
+    ;({ payload } = await adapter.promoverProd(adapterCtx))
     id = await registrar(github, { ambiente: 'production', sha, url: urlProd, payload })
     if (!(await smoke(urlProd))) throw new Error(`smoke test em Prod falhou (${urlProd})`)
     const mainAgora = await git.shaDe(esteira.producao)
@@ -85,13 +105,7 @@ async function promoverAntesDoFF({ adapter, github, git, smoke, esteira, adapter
       throw new Error(`fast-forward da ${esteira.producao} recusado: ${mensagem(error)}`)
     }
   } catch (error) {
-    let motivo = mensagem(error)
-    try {
-      await adapter.rollbackProd({ ...adapterCtx, payload })
-      log(`rollback de Prod feito: ${motivo}`)
-    } catch (falhaDoRollback) {
-      motivo = `${motivo}; rollback também falhou: ${mensagem(falhaDoRollback)}`
-    }
+    const motivo = await reverterProd({ adapter, adapterCtx, payload, motivo: mensagem(error) })
     if (id !== undefined) await marcar(github, id, 'failure', urlProd)
     throw new Error(`promover: ${motivo}`)
   }
@@ -99,11 +113,12 @@ async function promoverAntesDoFF({ adapter, github, git, smoke, esteira, adapter
 
 /**
  * Vercel (`promoveAposFF`): registrar production → FF (dispara o build de Production do mesmo
- * SHA) → espera o deploy → smoke. Depois do FF, falha = rollback + issue "main à frente de Prod".
+ * SHA) → espera o deploy → smoke. Depois do FF, qualquer falha (deploy ou smoke) = rollback,
+ * `failure` e issue "main à frente de Prod".
  * @returns {Promise<void>}
  */
 async function promoverAposFF({ adapter, github, git, smoke, esteira, adapterCtx, urlProd }) {
-  const { sha, log } = adapterCtx
+  const { sha } = adapterCtx
   const id = await registrar(github, { ambiente: 'production', sha, url: urlProd ?? '' })
   try {
     await git.ff(sha)
@@ -112,30 +127,20 @@ async function promoverAposFF({ adapter, github, git, smoke, esteira, adapterCtx
     throw new Error(`promover: fast-forward da ${esteira.producao} recusado: ${mensagem(error)}`)
   }
 
+  let payload
   let url = urlProd
   try {
-    const { payload } = await adapter.promoverProd(adapterCtx)
+    ;({ payload } = await adapter.promoverProd(adapterCtx))
     url = urlProd ?? payload?.url
     await marcar(github, id, 'success', url)
     if (!url) throw new Error('deploy de Production sem URL para o smoke test (defina PROD_URL)')
-    if (await smoke(url)) return
+    if (!(await smoke(url))) throw new Error(`smoke test em Prod falhou (${url})`)
   } catch (error) {
-    const motivo = mensagem(error)
+    const motivo = await reverterProd({ adapter, adapterCtx, payload, motivo: mensagem(error) })
     await marcar(github, id, 'failure', url)
     await abrirIssueMainAFrente(github, { sha, motivo, esteira })
     throw new Error(`promover: ${motivo}`)
   }
-
-  let motivo = `smoke test em Prod falhou (${url})`
-  try {
-    await adapter.rollbackProd(adapterCtx)
-    log(`rollback de Prod feito: ${motivo}`)
-  } catch (falhaDoRollback) {
-    motivo = `${motivo}; rollback também falhou: ${mensagem(falhaDoRollback)}`
-  }
-  await marcar(github, id, 'failure', url)
-  await abrirIssueMainAFrente(github, { sha, motivo, esteira })
-  throw new Error(`promover: ${motivo}`)
 }
 
 /**

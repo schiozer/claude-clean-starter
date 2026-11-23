@@ -20,7 +20,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ativa: ${{ steps.esteira.outputs.ativa }}
+      host: ${{ steps.host.outputs.host }}
     steps:
+      # o Environment `production` (segredos da App e de deploy) só é usado a partir da main.
+      - name: Recusar ref fora da main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::warning::A promoção só roda a partir de refs/heads/main (disparada em $GITHUB_REF): o job com o Environment production foi pulado. Dispare o workflow escolhendo a branch main."
+
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
@@ -36,10 +43,15 @@ jobs:
             echo "::warning::Esteira desligada (sem o bloco esteira em hooks/protect-main/config.json): nada a promover."
           fi
 
+      - name: Descobrir o host
+        id: host
+        if: steps.esteira.outputs.ativa == 'true'
+        run: node scripts/deploy/index.mjs host
+
   promover:
     name: Promover para Prod
     needs: esteira
-    if: needs.esteira.outputs.ativa == 'true'
+    if: needs.esteira.outputs.ativa == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production
@@ -57,6 +69,10 @@ jobs:
         with:
           app-id: ${{ secrets.ESTEIRA_APP_ID }}
           private-key: ${{ secrets.ESTEIRA_APP_PRIVATE_KEY }}
+          # escopo mínimo do token; workflows: o FF é recusado se o intervalo mexe em .github/workflows/.
+          permission-contents: write
+          permission-deployments: write
+          permission-workflows: write
 
       # histórico completo: ancestralidade (`merge-base --is-ancestor`) e última tag da main.
       - uses: actions/checkout@v5
@@ -87,6 +103,11 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
         if: steps.host.outputs.host == 'cloudrun'
+
+      # `vercel rollback` no smoke falho.
+      - name: Instalar o CLI da Vercel
+        if: needs.esteira.outputs.host == 'vercel'
+        run: npm i -g vercel@66
 
       - name: Promover o UAT para Prod
         run: node scripts/esteira/promover.mjs

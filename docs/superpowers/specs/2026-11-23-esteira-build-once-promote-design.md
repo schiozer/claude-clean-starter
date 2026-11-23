@@ -232,8 +232,8 @@ Por host:
 
 ### 5.9 GitHub App `esteira-promover`
 
-- Criada pelo humano (R3) uma vez, instalada nos repositórios que adotam a esteira, com permissão
-  `contents: write` e `deployments: write`. ID e chave privada em segredos (`ESTEIRA_APP_ID`,
+- Criada pelo humano (R3) uma vez, instalada nos repositórios que adotam a esteira, com permissões
+  Contents, Deployments e Workflows (write) — o token pede só essas três. ID e chave privada em segredos (`ESTEIRA_APP_ID`,
   `ESTEIRA_APP_PRIVATE_KEY`) disponíveis **só** para o `promover.yml` (Environment `production`).
 - Com branch protection no GitHub, a App fica na lista de bypass da `main`; sem ela, nada muda.
 - O token é gerado a cada execução (`actions/create-github-app-token`), vale 1 h e nunca vai para

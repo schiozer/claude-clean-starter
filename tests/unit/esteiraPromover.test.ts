@@ -283,7 +283,7 @@ describe('promover (Heroku/Cloud Run: deploy antes do FF)', () => {
     const c = cenario({ smokeOk: false })
     c.adapter.rollbackProd.mockRejectedValueOnce(new Error('sem revisão anterior'))
     await expect(promover(c.args as never)).rejects.toThrow(
-      /smoke test em Prod falhou.*rollback também falhou: sem revisão anterior/
+      /smoke test em Prod falhou.*rollback também falhou: sem revisão anterior — verifique Prod manualmente/
     )
     expect(c.ordem).toContain('status:failure')
     expect(c.git.ff).not.toHaveBeenCalled()
@@ -306,6 +306,28 @@ describe('promover (Heroku/Cloud Run: deploy antes do FF)', () => {
     expect(c.adapter.rollbackProd).toHaveBeenCalledTimes(1)
     expect(c.ordem).toContain('status:failure')
     expect(c.release).not.toHaveBeenCalled()
+  })
+
+  it('I-1: promoverProd que falha depois de mexer em Prod → rollback, erro com o motivo, sem FF', async () => {
+    const c = cenario({ promoverFalha: true })
+    await expect(promover(c.args as never)).rejects.toThrow('promover: deploy de Production falhou')
+    expect(c.adapter.rollbackProd).toHaveBeenCalledTimes(1)
+    // sem payload do promoverProd: o rollback recebe o ctx com payload vazio.
+    expect(c.adapter.rollbackProd).toHaveBeenCalledWith(
+      expect.objectContaining({ sha: SHA, payload: {} })
+    )
+    expect(c.git.ff).not.toHaveBeenCalled()
+    expect(c.release).not.toHaveBeenCalled()
+    expect(c.ordem).not.toContain('registrar:production')
+  })
+
+  it('I-1: promoverProd e rollback falham → erro manda verificar Prod manualmente', async () => {
+    const c = cenario({ promoverFalha: true })
+    c.adapter.rollbackProd.mockRejectedValueOnce(new Error('sem release anterior'))
+    await expect(promover(c.args as never)).rejects.toThrow(
+      /deploy de Production falhou; rollback também falhou: sem release anterior — verifique Prod manualmente/
+    )
+    expect(c.git.ff).not.toHaveBeenCalled()
   })
 
   it('sem URL de Prod para o smoke → erro antes de promover', async () => {
@@ -346,13 +368,24 @@ describe('promover (Vercel: promoveAposFF)', () => {
     expect(c.release).not.toHaveBeenCalled()
   })
 
-  it('deploy de Production que falha depois do FF → failure, issue e erro', async () => {
+  it('I-1: deploy de Production que falha depois do FF → rollback, failure, issue e erro', async () => {
     const c = cenario({ promoveAposFF: true, promoverFalha: true })
-    await expect(promover(c.args as never)).rejects.toThrow(/deploy de Production falhou/)
+    await expect(promover(c.args as never)).rejects.toThrow('promover: deploy de Production falhou')
+    expect(c.adapter.rollbackProd).toHaveBeenCalledTimes(1)
+    expect(c.adapter.rollbackProd).toHaveBeenCalledWith(expect.objectContaining({ payload: {} }))
     expect(c.ordem).toContain('status:failure')
     expect(c.ordem).toContain('issue')
     expect(c.smoke).not.toHaveBeenCalled()
     expect(c.release).not.toHaveBeenCalled()
+  })
+
+  it('I-1: deploy de Production e rollback falham → erro manda verificar Prod manualmente', async () => {
+    const c = cenario({ promoveAposFF: true, promoverFalha: true })
+    c.adapter.rollbackProd.mockRejectedValueOnce(new Error('VERCEL_TOKEN ausente'))
+    await expect(promover(c.args as never)).rejects.toThrow(
+      /rollback também falhou: VERCEL_TOKEN ausente — verifique Prod manualmente/
+    )
+    expect(c.ordem).toContain('issue')
   })
 
   it('FF recusado → deployment failure, sem rollback (Prod não mudou)', async () => {
