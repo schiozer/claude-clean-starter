@@ -1,13 +1,16 @@
 name: Guarda da main
 
+# Com a esteira (bloco `esteira` em hooks/protect-main/config.json) a guarda vale também para a
+# integração (`develop`). Sem esteira, o script ignora o push na `develop` e sai ok.
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   contents: read
   pull-requests: read
   checks: read
+  deployments: read
   issues: write
 
 concurrency:
