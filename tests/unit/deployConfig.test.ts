@@ -95,6 +95,41 @@ describe('parseDeployConfig com esteira (heroku)', () => {
         .heroku
     ).toMatchObject({ uatApp: 'app-uat', prodApp: 'app-prod' }))
 
-  it('com esteira e outro host → nada muda', () =>
-    expect(parseDeployConfig('{"host":"vercel"}', { esteira: ESTEIRA }).host).toBe('vercel'))
+  it('com esteira e outro host → as regras do heroku não se aplicam', () =>
+    expect(parseDeployConfig(JSON.stringify(CFG), { esteira: ESTEIRA }).host).toBe('cloudrun'))
+})
+
+describe('parseDeployConfig com esteira (vercel e cloudrun)', () => {
+  const ESTEIRA = {
+    integracao: 'develop',
+    producao: 'main',
+    prefixoHotfix: 'hotfix/',
+    promotores: ['a'],
+  }
+  const vercelCfg = (bloco?: Record<string, unknown>) =>
+    JSON.stringify({ host: 'vercel', ...(bloco ? { vercel: bloco } : {}) })
+
+  it('vercel sem esteira → uatAlias/team não são exigidos (como hoje)', () =>
+    expect(parseDeployConfig(vercelCfg()).host).toBe('vercel'))
+
+  it.each([
+    [undefined, /vercel\.uatAlias obrigatório/],
+    [{ team: 't' }, /vercel\.uatAlias obrigatório/],
+    [{ uatAlias: ' ', team: 't' }, /vercel\.uatAlias obrigatório/],
+    [{ uatAlias: 'uat.app.com' }, /vercel\.team obrigatório/],
+    [{ uatAlias: 'uat.app.com', team: '' }, /vercel\.team obrigatório/],
+  ])('vercel com esteira e %j → erro', (bloco, erro) =>
+    expect(() => parseDeployConfig(vercelCfg(bloco), { esteira: ESTEIRA })).toThrow(erro)
+  )
+
+  it('vercel com esteira, uatAlias e team → válido', () =>
+    expect(
+      parseDeployConfig(vercelCfg({ uatAlias: 'uat.app.com', team: 't' }), { esteira: ESTEIRA })
+        .vercel
+    ).toMatchObject({ uatAlias: 'uat.app.com', team: 't' }))
+
+  it('cloudrun com esteira: o bloco atual (uat.service etc.) basta', () =>
+    expect(parseDeployConfig(JSON.stringify(CFG), { esteira: ESTEIRA }).cloudrun).toEqual(
+      CFG.cloudrun
+    ))
 })

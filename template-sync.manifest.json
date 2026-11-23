@@ -40,6 +40,7 @@
     "tests/unit/deployHeroku.test.ts",
     "tests/unit/deployIndex.test.ts",
     "tests/unit/deployTemplates.test.ts",
+    "tests/unit/deployVercel.test.ts",
     "tests/unit/deployWorkflow.test.ts",
     "tests/unit/demosPublicar.test.ts",
     "tests/unit/demosSelecao.test.ts",
