@@ -1,0 +1,101 @@
+name: Promover para Prod
+
+# Esteira "build once, promote" (spec esteira-build-once-promote §3.1-7): leva para Prod o pacote
+# que está no UAT, faz o smoke test, avança a `main` por fast-forward com o token da GitHub App
+# `esteira-promover` e corta a Release. Disparo só pelo humano (`[R3]` para o agente). Sem o bloco
+# `esteira` em hooks/protect-main/config.json, sai com aviso sem tocar segredo nem Environment.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promover
+  cancel-in-progress: false
+
+jobs:
+  esteira:
+    name: Esteira ligada?
+    runs-on: ubuntu-latest
+    outputs:
+      ativa: ${{ steps.esteira.outputs.ativa }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Ler o bloco esteira
+        id: esteira
+        run: |
+          ativa=$(node --input-type=module -e "import { lerEsteira } from './scripts/esteira/config.mjs'; process.stdout.write(lerEsteira() ? 'true' : 'false')")
+          echo "ativa=$ativa" >> "$GITHUB_OUTPUT"
+          if [ "$ativa" != "true" ]; then
+            echo "::warning::Esteira desligada (sem o bloco esteira em hooks/protect-main/config.json): nada a promover."
+          fi
+
+  promover:
+    name: Promover para Prod
+    needs: esteira
+    if: needs.esteira.outputs.ativa == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    permissions:
+      contents: write
+      deployments: write
+      checks: read
+      issues: write
+      pull-requests: read
+      id-token: write
+    steps:
+      - name: Token da App esteira-promover
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.ESTEIRA_APP_ID }}
+          private-key: ${{ secrets.ESTEIRA_APP_PRIVATE_KEY }}
+
+      # histórico completo: ancestralidade (`merge-base --is-ancestor`) e última tag da main.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Descobrir o host
+        id: host
+        run: node scripts/deploy/index.mjs host
+
+      - name: Credenciais do Cloud Run
+        id: cred
+        if: steps.host.outputs.host == 'cloudrun'
+        run: node scripts/deploy/index.mjs credenciais
+        env:
+          DEPLOY_AMBIENTE: prod
+
+      - uses: google-github-actions/auth@v2
+        if: steps.host.outputs.host == 'cloudrun'
+        with:
+          workload_identity_provider: ${{ steps.cred.outputs.wifProvider }}
+          service_account: ${{ steps.cred.outputs.serviceAccount }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.host.outputs.host == 'cloudrun'
+
+      - name: Promover o UAT para Prod
+        run: node scripts/esteira/promover.mjs
+        env:
+          # API (deployments, checks, issues, release) com o token do job; o FF da main sai pelo
+          # git com a credencial da App gravada pelo checkout (pusher esteira-promover[bot]).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROD_URL: ${{ vars.PROD_URL }}
+          HEROKU_DEPLOY_API_KEY: ${{ steps.host.outputs.host == 'heroku' && secrets.HEROKU_DEPLOY_API_KEY || '' }}
+          VERCEL_TOKEN: ${{ steps.host.outputs.host == 'vercel' && secrets.VERCEL_TOKEN || '' }}
+          VERCEL_ORG_ID: ${{ steps.host.outputs.host == 'vercel' && vars.VERCEL_ORG_ID || '' }}
+          VERCEL_PROJECT_ID: ${{ steps.host.outputs.host == 'vercel' && vars.VERCEL_PROJECT_ID || '' }}

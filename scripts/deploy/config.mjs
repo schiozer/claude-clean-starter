@@ -92,7 +92,11 @@ export function parseDeployConfig(texto, { esteira = null } = {}) {
   return config
 }
 
-export function lerDeployConfig(raiz = process.cwd()) {
+/**
+ * @param {string} [raiz]
+ * @param {{ esteira?: object | null }} [opcoes] com a esteira, valida também os campos dela.
+ */
+export function lerDeployConfig(raiz = process.cwd(), opcoes = {}) {
   const caminho = join(raiz, CONFIG_PATH)
-  return parseDeployConfig(existsSync(caminho) ? readFileSync(caminho, 'utf8') : null)
+  return parseDeployConfig(existsSync(caminho) ? readFileSync(caminho, 'utf8') : null, opcoes)
 }
