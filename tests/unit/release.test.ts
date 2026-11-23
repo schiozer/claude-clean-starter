@@ -289,7 +289,7 @@ describe('runReleasePromocao (CT-ESTEIRA-009)', () => {
     checkRuns: vi.fn(async () => []),
     releaseExists: vi.fn(async () => false),
     createTag: vi.fn(async () => undefined),
-    createRelease: vi.fn(async (_t: string, _n: string, _b: string) => undefined),
+    createRelease: vi.fn<(t: string, n: string, b: string) => Promise<void>>(async () => undefined),
   })
   const opts = { packageVersion: '0.1.0', esteira }
 
