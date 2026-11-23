@@ -490,4 +490,53 @@ describe('esteira: integração protegida e promoção só do humano', () => {
       expect(evaluate(cmd, ON_FEAT).allowed).toBe(true)
     })
   }
+
+  describe('contornos do bloqueio', () => {
+    const BLOQUEADOS = [
+      'gh workflow run 12345',
+      'gh workflow enable 12345',
+      'gh workflow disable 12345',
+      'gh run rerun 999',
+      'gh run rerun 999 --failed',
+      'gh api -X POST repos/o/r/actions/runs/999/rerun',
+      'gh api --method POST repos/o/r/actions/runs/999/rerun-failed-jobs',
+      'gh api -X POST repos/o/r/actions/jobs/77/rerun',
+      'gh api repos/o/r/actions/runs/999/rerun -f x=y',
+    ]
+    for (const cmd of BLOQUEADOS) {
+      it(`bloqueia: ${cmd}`, () => {
+        for (const opts of [ON_FEAT, onDevelop(ON_FEAT)]) {
+          const verdict = evaluate(cmd, opts)
+          expect(verdict.allowed).toBe(false)
+          if (!verdict.allowed) expect(verdict.reason).toContain(MOTIVO)
+        }
+      })
+    }
+
+    for (const cmd of [
+      'WF=promover.yml; gh workflow run $WF',
+      'gh workflow run "$(echo promover.yml)"',
+      'gh workflow run `echo promover.yml`',
+      'gh workflow enable "$WF"',
+    ]) {
+      it(`bloqueia alvo dinâmico: ${cmd}`, () => {
+        expect(evaluate(cmd, ON_FEAT).allowed).toBe(false)
+      })
+    }
+
+    for (const cmd of [
+      'gh workflow run ci.yml',
+      'gh workflow list',
+      'gh workflow view 12345',
+      'gh run list',
+      'gh run view 999',
+      'gh run watch 999',
+      'gh api repos/o/r/actions/runs/999/rerun',
+      'gh api repos/o/r/actions/runs/999',
+    ]) {
+      it(`permite: ${cmd}`, () => {
+        expect(evaluate(cmd, ON_FEAT).allowed).toBe(true)
+      })
+    }
+  })
 })
