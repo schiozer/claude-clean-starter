@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseEsteira } from '../../scripts/esteira/config.mjs'
 import { branchesProtegidas } from './git-guard.mjs'
 import { BLOCK_PREFIX, MENTIONS_GIT, evaluateCommand } from './evaluate.mjs'
 
@@ -58,6 +59,8 @@ function main(raw) {
   const verdict = evaluateCommand(command, {
     cwd: typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd(),
     protectedBranches: branchesProtegidas(config),
+    // Bloco `esteira` inválido lança (fail-closed); ausente → regras de hoje.
+    esteira: parseEsteira(config.esteira) !== null,
     branchOf,
     aliasOf,
     env: { HOME: process.env.HOME, CLAUDE_PROJECT_DIR: process.env.CLAUDE_PROJECT_DIR },

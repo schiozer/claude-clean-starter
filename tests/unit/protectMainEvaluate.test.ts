@@ -9,6 +9,7 @@ type Opts = {
   detached?: boolean
   protectedBranches?: string[]
   env?: Record<string, string>
+  esteira?: boolean
 }
 
 // Branch do worktree que contém `dir` (o prefixo mais longo), como `git symbolic-ref` faria.
@@ -26,6 +27,7 @@ const evaluate = (command: string, opts: Opts = {}) =>
     branchOf: (dir: string) => (opts.detached ? null : fakeBranchOf(dir)),
     aliasOf: (_dir: string, name: string) => ALIASES[name] ?? null,
     env: opts.env,
+    esteira: opts.esteira,
   })
 
 const ON_FEAT: Opts = { cwd: '/repo/wt' }
@@ -440,7 +442,7 @@ describe('evaluateCommand', () => {
 
 describe('esteira: integração protegida e promoção só do humano', () => {
   const MOTIVO = '`Promover para Prod` é disparado pelo humano (`[R3]`).'
-  const COM_ESTEIRA = { protectedBranches: ['main', 'develop'] }
+  const COM_ESTEIRA = { protectedBranches: ['main', 'develop'], esteira: true }
   const onDevelop = (opts: Opts = {}): Opts => ({ ...COM_ESTEIRA, ...opts })
   const evalDevelop = (command: string) =>
     evaluateCommand(command, {
@@ -448,6 +450,7 @@ describe('esteira: integração protegida e promoção só do humano', () => {
       protectedBranches: ['main', 'develop'],
       branchOf: () => 'develop',
       aliasOf: () => null,
+      esteira: true,
     })
 
   it('com esteira bloqueia git push para a develop e commit na develop', () => {
@@ -471,12 +474,13 @@ describe('esteira: integração protegida e promoção só do humano', () => {
     'gh api repos/o/r/dispatches --input payload.json',
   ]
   for (const cmd of PROMOCAO) {
-    it(`bloqueia (com e sem esteira): ${cmd}`, () => {
-      for (const opts of [ON_FEAT, onDevelop(ON_FEAT)]) {
-        const verdict = evaluate(cmd, opts)
-        expect(verdict.allowed).toBe(false)
-        if (!verdict.allowed) expect(verdict.reason).toContain(MOTIVO)
-      }
+    it(`bloqueia com esteira: ${cmd}`, () => {
+      const verdict = evaluate(cmd, onDevelop(ON_FEAT))
+      expect(verdict.allowed).toBe(false)
+      if (!verdict.allowed) expect(verdict.reason).toContain(MOTIVO)
+    })
+    it(`sem esteira continua como antes (permitido): ${cmd}`, () => {
+      expect(evaluate(cmd, ON_FEAT)).toEqual({ allowed: true })
     })
   }
 
@@ -504,12 +508,13 @@ describe('esteira: integração protegida e promoção só do humano', () => {
       'gh api repos/o/r/actions/runs/999/rerun -f x=y',
     ]
     for (const cmd of BLOQUEADOS) {
-      it(`bloqueia: ${cmd}`, () => {
-        for (const opts of [ON_FEAT, onDevelop(ON_FEAT)]) {
-          const verdict = evaluate(cmd, opts)
-          expect(verdict.allowed).toBe(false)
-          if (!verdict.allowed) expect(verdict.reason).toContain(MOTIVO)
-        }
+      it(`bloqueia com esteira: ${cmd}`, () => {
+        const verdict = evaluate(cmd, onDevelop(ON_FEAT))
+        expect(verdict.allowed).toBe(false)
+        if (!verdict.allowed) expect(verdict.reason).toContain(MOTIVO)
+      })
+      it(`sem esteira continua como antes (permitido): ${cmd}`, () => {
+        expect(evaluate(cmd, ON_FEAT)).toEqual({ allowed: true })
       })
     }
 
@@ -519,8 +524,8 @@ describe('esteira: integração protegida e promoção só do humano', () => {
       'gh workflow run `echo promover.yml`',
       'gh workflow enable "$WF"',
     ]) {
-      it(`bloqueia alvo dinâmico: ${cmd}`, () => {
-        expect(evaluate(cmd, ON_FEAT).allowed).toBe(false)
+      it(`bloqueia alvo dinâmico com esteira: ${cmd}`, () => {
+        expect(evaluate(cmd, onDevelop(ON_FEAT)).allowed).toBe(false)
       })
     }
 
@@ -534,8 +539,60 @@ describe('esteira: integração protegida e promoção só do humano', () => {
       'gh api repos/o/r/actions/runs/999/rerun',
       'gh api repos/o/r/actions/runs/999',
     ]) {
-      it(`permite: ${cmd}`, () => {
+      it(`permite (com e sem esteira): ${cmd}`, () => {
         expect(evaluate(cmd, ON_FEAT).allowed).toBe(true)
+        expect(evaluate(cmd, onDevelop(ON_FEAT)).allowed).toBe(true)
+      })
+    }
+  })
+
+  describe('gh alias set não contorna as regras', () => {
+    const COM_ESTEIRA_BLOQUEADOS = [
+      "gh alias set p 'workflow run promover'",
+      'gh alias set p "workflow run promover.yml --ref main"',
+      "gh alias set p 'workflow run 12345'",
+      "gh alias set rr 'run rerun'",
+      "gh alias set d 'api -X POST repos/o/r/actions/workflows/1/dispatches'",
+      "gh alias set --shell p 'gh workflow run promover.yml'",
+      "gh alias set p '!gh run rerun 999'",
+    ]
+    for (const cmd of COM_ESTEIRA_BLOQUEADOS) {
+      it(`bloqueia com esteira: ${cmd}`, () => {
+        const verdict = evaluate(cmd, onDevelop(ON_FEAT))
+        expect(verdict.allowed).toBe(false)
+        if (!verdict.allowed) expect(verdict.reason).toContain(MOTIVO)
+      })
+      it(`sem esteira permite: ${cmd}`, () => {
+        expect(evaluate(cmd, ON_FEAT)).toEqual({ allowed: true })
+      })
+    }
+
+    for (const cmd of [
+      "gh alias set m 'pr merge'",
+      "gh alias set m 'api -X PUT repos/o/r/pulls/1/merge'",
+      "gh alias set c 'api -X PUT repos/o/r/contents/README.md -f content=eA=='",
+      "gh alias set r 'api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc'",
+      'gh alias set u \'pr edit 1 --body "- [x] UAT ok"\'',
+      "gh alias set --shell p 'git push origin main'",
+      "gh alias set p '!git push origin main'",
+      'echo "workflow run promover" | gh alias set p -',
+      'gh alias set p "$X"',
+    ]) {
+      it(`bloqueia (com e sem esteira): ${cmd}`, () => {
+        expect(evaluate(cmd, ON_FEAT).allowed).toBe(false)
+        expect(evaluate(cmd, onDevelop(ON_FEAT)).allowed).toBe(false)
+      })
+    }
+
+    for (const cmd of [
+      "gh alias set co 'pr checkout'",
+      "gh alias set wf 'workflow run ci.yml'",
+      "gh alias set --shell l 'gh run list'",
+      'gh alias list',
+    ]) {
+      it(`permite (com e sem esteira): ${cmd}`, () => {
+        expect(evaluate(cmd, ON_FEAT)).toEqual({ allowed: true })
+        expect(evaluate(cmd, onDevelop(ON_FEAT))).toEqual({ allowed: true })
       })
     }
   })

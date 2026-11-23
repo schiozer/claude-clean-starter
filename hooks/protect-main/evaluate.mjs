@@ -12,6 +12,8 @@ import { parseCommand } from './parse.mjs'
  * @property {(dir: string, name: string) => string | null} aliasOf Expansão de `alias.<name>` em `dir`.
  * @property {Record<string, string | undefined>} [env] `HOME` e `CLAUDE_PROJECT_DIR`, para resolver
  *   `cd ~`, `cd "$HOME/x"` e `cd "$CLAUDE_PROJECT_DIR"`.
+ * @property {boolean} [esteira] Esteira ligada (bloco `esteira` válido no config): só então valem os
+ *   bloqueios de disparo/reexecução de workflow (a promoção é do humano). Ausente = desligada.
  */
 
 /** @typedef {import('./parse.mjs').Segment} Segment */
@@ -252,7 +254,7 @@ function optionValues(args, names) {
  * `gh api`: merge (B9), mutação GraphQL de merge/ref e escrita REST em ref ou conteúdo da
  * branch protegida.
  */
-function checkGhApi(args, endpoint, protectedBranches) {
+function checkGhApi(args, endpoint, protectedBranches, esteira) {
   if (/\/merges?\/?$/.test(endpoint)) return block('`gh api` de merge é feito pelo humano.')
   const fields = optionValues(args, GH_API_FIELDS)
   if (endpoint === 'graphql') {
@@ -262,7 +264,7 @@ function checkGhApi(args, endpoint, protectedBranches) {
   }
   const method = optionValues(args, ['-X', '--method']).pop() ?? (fields.length ? 'POST' : 'GET')
   if (method.toUpperCase() === 'GET') return null
-  if (/\/dispatches\/?$/.test(endpoint) || RERUN_ENDPOINT.test(endpoint)) {
+  if (esteira && (/\/dispatches\/?$/.test(endpoint) || RERUN_ENDPOINT.test(endpoint))) {
     return block(PROMOTION_MOTIVE)
   }
   if (/(?:^|\/)branches\/[^/]+\/protection(?:\/|$)|(?:^|\/)rulesets(?:\/|$)/.test(endpoint)) {
@@ -296,8 +298,44 @@ function decodeEndpoint(endpoint) {
 /** Marcação do checkbox de UAT (`- [x] UAT …`) numa descrição de PR. */
 const UAT_TICKED = /\[x\]\s*uat\b/i
 
-/** B8–B9: `gh pr merge`, `gh api` e `gh alias set` de merge. Em segmento ambíguo, falha fechado. */
-function checkGh(args, segment, protectedBranches) {
+/** Opções de `gh alias set` sem valor que marcam alias de shell. */
+const GH_ALIAS_SHELL = new Set(['-s', '--shell'])
+
+/**
+ * `gh alias set <nome> <expansão>`: a expansão é avaliada como se fosse digitada (`gh <expansão>`,
+ * ou o script, no alias de shell), para o alias não contornar as regras.
+ */
+function checkGhAlias(args, rest, ctx, depth) {
+  const expansion = rest[1]
+  if (expansion === undefined) return null
+  // `gh alias set <nome> -` lê a expansão da entrada: não dá para conferir.
+  if (expansion === '-' || isDynamic(expansion)) return block(AMBIGUOUS)
+  if (/merge/i.test(rest.slice(1).join(' '))) {
+    return block('`gh alias` de merge: o merge é feito pelo humano.')
+  }
+  if (depth >= MAX_ALIAS_DEPTH) return block(AMBIGUOUS)
+  const shell = args.some((a) => GH_ALIAS_SHELL.has(a)) || expansion.trim().startsWith('!')
+  if (shell) {
+    const verdict = evaluateCommand(expansion.trim().replace(/^!/, ''), ctx)
+    return verdict.allowed ? null : verdict.reason
+  }
+  for (const segment of parseCommand(expansion)) {
+    const reason = checkGh(segment.argv, segment, ctx, depth + 1)
+    if (reason !== null) return reason
+  }
+  return null
+}
+
+/**
+ * B8–B9: `gh pr merge`, `gh api` e `gh alias set` que levaria a uma regra barrada. Com esteira,
+ * também o disparo/reexecução de workflow (a promoção é do humano). Em segmento ambíguo, falha
+ * fechado.
+ * @param {string[]} args
+ * @param {Pick<Segment, 'opaqueArgs' | 'ambiguous'>} segment
+ * @param {EvalContext} ctx
+ */
+function checkGh(args, segment, ctx, depth = 0) {
+  const esteira = ctx.esteira === true
   if (segment.opaqueArgs) return block(AMBIGUOUS)
   const [group, action, ...rest] = positionals(args, [
     ...OPTIONS_WITH_ARG.gh,
@@ -307,23 +345,23 @@ function checkGh(args, segment, protectedBranches) {
     return block(AMBIGUOUS)
   }
   if (group === 'pr' && action === 'merge') return block('`gh pr merge` é feito pelo humano.')
-  if (group === 'alias' && action === 'set' && /merge/i.test(rest.slice(1).join(' '))) {
-    return block('`gh alias` de merge: o merge é feito pelo humano.')
-  }
-  if (group === 'workflow' && ['run', 'enable', 'disable'].includes(action ?? '')) {
+  if (group === 'alias' && action === 'set') return checkGhAlias(args, rest, ctx, depth)
+  if (esteira && group === 'workflow' && ['run', 'enable', 'disable'].includes(action ?? '')) {
     if (rest.some(isDynamic)) return block(AMBIGUOUS)
     // ID numérico (vem de `gh workflow list`): não dá para provar que não é o promover.
     if (rest.some((a) => PROMOTION_WORKFLOW.test(a) || /^\d+$/.test(a))) {
       return block(PROMOTION_MOTIVE)
     }
   }
-  // Reexecutar uma execução anterior repete a promoção.
-  if (group === 'run' && action === 'rerun') return block(PROMOTION_MOTIVE)
+  // Reexecutar uma execução anterior pode repetir a promoção (o id não diz qual workflow).
+  if (esteira && group === 'run' && action === 'rerun') return block(PROMOTION_MOTIVE)
   const editsPrBody = group === 'pr' && (action === 'create' || action === 'edit')
   if ((editsPrBody || group === 'api') && args.some((a) => UAT_TICKED.test(a))) {
     return block('Marcar o UAT no PR é do humano (`[R3]`), depois de testar.')
   }
-  if (group === 'api') return checkGhApi(args, decodeEndpoint(action ?? ''), protectedBranches)
+  if (group === 'api') {
+    return checkGhApi(args, decodeEndpoint(action ?? ''), ctx.protectedBranches, esteira)
+  }
   return null
 }
 
@@ -538,7 +576,7 @@ function recordSwitch(dir, branch, state, ctx) {
 function evaluateProgram(argv, segment, state, ctx) {
   const program = baseName(argv[0])
   if (program === 'git') return evaluateGit(argv, segment, state, ctx)
-  if (program === 'gh') return checkGh(argv.slice(1), segment, ctx.protectedBranches)
+  if (program === 'gh') return checkGh(argv.slice(1), segment, ctx)
   return null
 }
 
