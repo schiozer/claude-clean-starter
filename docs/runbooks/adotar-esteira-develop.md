@@ -22,8 +22,8 @@ O que muda **ao ligar o bloco** (por isso a ordem dos passos importa):
 - A `develop` entra nas três camadas de proteção (regra 0) sem editar `protectedBranches`.
 - O push na `main` só faz deploy de Prod se não vier do FF da App (hotfix); o push na `develop`
   faz o deploy de UAT e a `Regressão (UAT)` contra o UAT fixo.
-- O gatilho `develop` é **fixo** em `main-guard.yml`, `deploy.yml`, `ci.yml`, `pr-gate.yml` e
-  `e2e-regressao.yml` (workflows não leem o config). Se `esteira.integracao` ≠ `develop`, edite
+- O gatilho `develop` é **fixo** em `main-guard.yml`, `deploy.yml`, `ci.yml`, `pr-gate.yml`,
+  `e2e-regressao.yml` e `spec-gate.yml` (workflows não leem o config). Se `esteira.integracao` ≠ `develop`, edite
   esses gatilhos no mesmo PR (os YAMLs têm comentário no ponto a mudar).
 
 ## Pré-condições

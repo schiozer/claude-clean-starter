@@ -179,3 +179,19 @@ describe('promover.yml usa a CLI da esteira no job sem segredos', () => {
     expect(antes).toContain('node scripts/esteira/index.mjs ativa')
   })
 })
+
+describe('workflow spec-gate.yml', () => {
+  const yml = ler('.github/workflows/spec-gate.yml')
+
+  it('dispara nos PRs para a main e para a integração (develop), como os demais', () => {
+    expect(yml).toMatch(
+      /pull_request:\n {4}types: \[opened, synchronize, reopened, edited\]\n( {4}#[^\n]*\n)* {4}branches: \[main, develop\]/
+    )
+  })
+
+  it('o runbook de adoção da esteira lista o spec-gate.yml entre os gatilhos fixos', () => {
+    const runbook = ler('docs/runbooks/adotar-esteira-develop.md')
+    const trecho = runbook.slice(runbook.indexOf('O gatilho `develop` é **fixo**'))
+    expect(trecho.slice(0, 400)).toContain('`spec-gate.yml`')
+  })
+})
