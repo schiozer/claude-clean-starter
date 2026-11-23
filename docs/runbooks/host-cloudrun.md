@@ -146,6 +146,13 @@ A URL do UAT deste host é `https://uat---<preencher: serviço, ex. app>-<gerado
 
 ### Prod
 
+**Com a esteira** ([ADR-020](../adr/template/020-esteira-integracao-e-promocao.md)): Prod roda a
+**mesma imagem do UAT, pelo digest** (`promover.yml`, [promover-prod.md](./promover-prod.md)); a SA
+de deploy de Prod precisa de `roles/artifactregistry.reader` no repositório do UAT
+([adotar-esteira-develop.md](./adotar-esteira-develop.md)). O hotfix faz build e deploy no serviço de
+Prod ([hotfix.md](./hotfix.md)). No passo 14, acompanhar o run do `promover.yml` (ou do `deploy.yml`
+do hotfix) e conferir o digest em vez da tag `main-<sha7>`.
+
 13. [R0] Anotar a revisão de Prod atual (alvo do rollback): `gcloud run services describe <preencher: serviço, ex. app> --region <preencher: região, ex. us-east1> --project <preencher: projeto GCP Prod> --format='value(status.traffic[0].revisionName)'`.
     Verificar: a revisão anotada tem 100% do tráfego; anotar `<revisão-atual>`.
 14. [R0] Acompanhar o deploy de Produção: `gh run list --workflow deploy.yml --branch main --limit 1` e `gh run watch <run-id>`.
@@ -156,6 +163,11 @@ A URL do UAT deste host é `https://uat---<preencher: serviço, ex. app>-<gerado
 A URL de Prod deste host é `https://<preencher: domínio de Prod>`.
 
 ### Rollback
+
+**Com a esteira**: o smoke test falho da promoção já volta o tráfego para a revisão que servia
+100% antes do deploy (`payload.revisaoAnterior` do Deployment `production`); sem ela, para a revisão
+pronta mais nova anterior à atual (também a regra com tráfego dividido). Os passos abaixo são o
+rollback manual.
 
 16. [R0] Identificar a revisão atual e a anterior saudável: `gcloud run revisions list --service <preencher: serviço, ex. app> --region <preencher: região, ex. us-east1> --project <preencher: projeto GCP Prod> --limit 5` e diagnosticar com o `gcloud logging read` do passo 15.
     Verificar: `<revisão-atual>` e `<revisão-anterior>` anotadas; a feature/commit suspeito está identificado.

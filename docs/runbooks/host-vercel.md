@@ -63,6 +63,13 @@ A URL do UAT deste host é `https://<preencher: alias UAT>`.
 
 ### Prod
 
+**Com a esteira** ([ADR-020](../adr/template/020-esteira-integracao-e-promocao.md)): a `develop` é o
+UAT (Preview restrito à `develop` ou Custom Environment `uat`, alias `vercel.uatAlias`); Prod sai do
+**FF da `main`** feito pelo `promover.yml` ([promover-prod.md](./promover-prod.md)), e a Vercel
+builda Production desse SHA (V1: mesmo commit, não mesmo pacote). O hotfix é o build de Production
+do merge na `main` ([hotfix.md](./hotfix.md)). Os passos abaixo valem iguais com o SHA promovido no
+lugar do `mergeCommit`.
+
 7. [R0] Anotar o deploy de Prod atual (alvo do rollback): `vercel ls <preencher: projeto Vercel> --prod --scope <preencher: team Vercel>`.
    Verificar: o deploy servindo Prod está `Ready`; anotar `<deploy-atual>`.
 8. [R0] Acompanhar o deploy de Produção: `vercel ls <preencher: projeto Vercel> --prod --scope <preencher: team Vercel>`.
@@ -77,6 +84,10 @@ A URL do UAT deste host é `https://<preencher: alias UAT>`.
 A URL de Prod deste host é `https://<preencher: domínio de Prod>`.
 
 ### Rollback
+
+**Com a esteira**: o smoke test falho da promoção já faz o rollback (`--yes`, no CI) e abre a issue
+`esteira` "main à frente de Prod"; a correção segue por [hotfix.md](./hotfix.md) e o passo 14 vale
+para o deploy do hotfix. Os passos abaixo são o rollback manual.
 
 12. [R0] Identificar o deploy atual e o anterior saudável: `vercel ls <preencher: projeto Vercel> --prod --scope <preencher: team Vercel>` (UAT: `vercel alias ls`) e diagnosticar com `vercel logs <deploy-url> --scope <preencher: team Vercel>`.
     Verificar: `<deploy-atual>` e `<deploy-anterior>` anotados; a feature/commit suspeito está identificado.

@@ -8,14 +8,23 @@
 
 Levar uma feature branch ao UAT: abrir/atualizar o PR, que dispara o preview deployment
 ([ADR-002](../adr/template/002-estrategia-de-ambientes.md)), apontar o UAT fixo para ele e
-fazer o smoke test. Os passos de host chamam os blocos do runbook do host do `deploy.config.json`
+fazer o smoke test.
+
+**Com a esteira** (bloco `esteira` em `hooks/protect-main/config.json`,
+[ADR-020](../adr/template/020-esteira-integracao-e-promocao.md)): a feature branch sai da `develop` e
+o PR tem base **`develop`**; o preview do PR e a `Regressão (UAT)` contra ele seguem iguais, mas o
+**UAT fixo não é apontado à mão** (passos 6 e o Rollback 1 não se aplicam): depois do merge do
+humano na `develop`, o `deploy.yml` faz o deploy de UAT do SHA e roda a `Regressão (UAT)` contra o
+UAT fixo. Prod sai pelo [promover-prod.md](./promover-prod.md); hotfix pelo [hotfix.md](./hotfix.md).
+
+Os passos de host chamam os blocos do runbook do host do `deploy.config.json`
 ([host-vercel.md](./host-vercel.md), [host-heroku.md](./host-heroku.md),
 [host-cloudrun.md](./host-cloudrun.md)); `<URL do UAT>` é a que o bloco **UAT** dele indica. **Não faz merge** — Prod é o [deploy-prod.md](./deploy-prod.md).
 
 ## Pré-condições
 
 - `bootstrap-ambientes.md` já executado (antes disso não há UAT a operar: push + PR seguem só as regras 5 e 8 do `CLAUDE.md`).
-- Trabalho commitado numa feature branch curta (`tipo/descricao`, [ADR-005](../adr/template/005-trunk-based-development.md)), nunca na `main`.
+- Trabalho commitado numa feature branch curta (`tipo/descricao`, [ADR-005](../adr/template/005-trunk-based-development.md)), nunca na `main` (com a esteira, criada a partir da `develop` e nunca nela).
 - Migração aditiva, se houver, já aplicada no branch Neon de UAT ([migracao-banco.md](./migracao-banco.md)).
 - Envs/flags necessárias já existem no UAT do host ([segredos-e-env.md](./segredos-e-env.md), [feature-flags.md](./feature-flags.md)).
 
@@ -31,13 +40,13 @@ fazer o smoke test. Os passos de host chamam os blocos do runbook do host do `de
    Verificar: exit 0 (falhou → parar; não é caso de rollback, nada mudou).
 2. [R1] Publicar a branch: `git push -u origin <branch>` (nunca `--force` em branch compartilhada — R3).
    Verificar: `git status -sb` mostra a branch sincronizada com `origin/<branch>`.
-3. [R1] Abrir o PR contra a `main` (ou reaproveitar o existente): `gh pr create --base main --fill` / `gh pr view <branch>`.
+3. [R1] Abrir o PR contra a `main` — com a esteira, contra a `develop` (`--base develop`) — ou reaproveitar o existente: `gh pr create --base main --fill` / `gh pr view <branch>`.
    Verificar: `gh pr view <branch> --json url,state` → `state: OPEN`.
 4. [R0] Aguardar o CI: `gh pr checks <n> --watch`.
    Verificar: todos os checks `pass` (falhou → corrigir na branch e voltar ao passo 1).
 5. [R0] Localizar o preview do PR: bloco **UAT** do runbook do host (host-<host>.md), passo de localizar o preview.
    Verificar: o preview do SHA do PR está pronto; anotar a `<preview-url>` (ou revisão/slug, conforme o host).
-6. [R1] Apontar o UAT fixo para o preview: bloco **UAT** do runbook do host (host-<host>.md).
+6. [R1] Apontar o UAT fixo para o preview: bloco **UAT** do runbook do host (host-<host>.md). Com a esteira: não se aplica (o UAT fixo recebe o SHA da `develop` depois do merge); pular para o passo 8.
    Verificar: os `Verificar:` do bloco passam (o UAT fixo aponta para o preview do PR).
 7. [R0] Smoke test no UAT: `curl -s -o /dev/null -w '%{http_code}' https://<URL do UAT>/` e `curl -si -X POST https://<URL do UAT>/api/mcp | grep -i '^www-authenticate:.*resource_metadata'`.
    Verificar: `200` na home e o header `WWW-Authenticate` com `resource_metadata` (é o 401 **do app**, fail-closed). Na Vercel, um 401 sem esse header vem da _Deployment Protection_ → a exceção do alias UAT não está configurada (Bootstrap do host-vercel.md); parar.

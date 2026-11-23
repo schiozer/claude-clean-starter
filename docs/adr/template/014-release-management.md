@@ -1,7 +1,9 @@
 # 014. Gestão de releases: gates de PR, squash e SemVer por merge
 
 **Data**: 2026-10-25
-**Status**: Aceito
+**Status**: Aceito — parcialmente substituída pela [ADR-020](./020-esteira-integracao-e-promocao.md) (com o bloco `esteira`, a tag sai na promoção (maior bump dos PRs) e no hotfix, não a cada merge na `develop`; merge commit passa a ser aceito só na back-promotion)
+
+> **Nota (ADR-020).** Com a esteira ligada: merge na `develop` não gera tag; a promoção gera uma tag com o maior bump entre os títulos dos PRs desde a última tag alcançável; hotfix mantém a tag no merge; o repositório passa a `allow_merge_commit=true`, e o merge commit só é aceito no PR de back-promotion (head `main`, base `develop`).
 
 ## Contexto
 

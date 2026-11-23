@@ -94,6 +94,14 @@ de forma idempotente.
 
 ### Prod
 
+**Com a esteira** ([ADR-020](../adr/template/020-esteira-integracao-e-promocao.md)): o `-prod` fica
+**sem auto-deploy** da `main`; Prod recebe por _pipeline promotion_ o **slug** que está no `-uat`
+(`heroku.uatApp`/`heroku.prodApp` no `deploy.config.json`), pelo `promover.yml`
+([promover-prod.md](./promover-prod.md)), ou o build do tarball do hotfix ([hotfix.md](./hotfix.md)).
+A escrita usa `HEROKU_DEPLOY_API_KEY` (só nos jobs de push e no `promover.yml`); o `HEROKU_API_KEY`
+segue só leitura. Os passos 12 e 14 valem iguais; no 13, acompanhar o run do `promover.yml` (ou do
+`deploy.yml` do hotfix) em vez do auto-deploy.
+
 12. [R0] Anotar a release atual de Prod (alvo do rollback): `heroku releases -a <preencher: nome do app>-prod -n 3`.
     Verificar: a release de topo está `succeeded`; anotar `<versão-atual>` (ex.: `v41`).
 13. [R0] Acompanhar o deploy de Produção (auto-deploy do merge): `heroku releases -a <preencher: nome do app>-prod -n 1` e `heroku builds -a <preencher: nome do app>-prod -n 1`.
@@ -104,6 +112,11 @@ de forma idempotente.
 A URL de Prod deste host é `https://<preencher: domínio de Prod>`.
 
 ### Rollback
+
+**Com a esteira**: o smoke test falho da promoção já volta Prod para o `{slug}` da release
+anterior com o config **atual** (as config vars não voltam — escolha registrada no ADR-020). Os
+passos abaixo são o rollback manual; sem auto-deploy, o revert chega a Prod pela promoção ou por
+hotfix, não pelo merge.
 
 15. [R0] Identificar a release atual e a anterior saudável: `heroku releases -a <preencher: nome do app>-prod -n 5` e diagnosticar com `heroku logs -a <preencher: nome do app>-prod -n 500`.
     Verificar: `<versão-atual>` e `<versão-anterior>` anotadas; a feature/commit suspeito está identificado.

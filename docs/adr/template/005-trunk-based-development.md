@@ -1,7 +1,9 @@
 # 005. Trunk-Based Development (Branching Git)
 
 **Data**: 2026-08-27
-**Status**: Aceito
+**Status**: Aceito — parcialmente substituída pela [ADR-020](./020-esteira-integracao-e-promocao.md) (com o bloco `esteira`, a trunk da integração é a `develop` e a `main` vira espelho de Prod; sem ele, nada muda)
+
+> **Nota (ADR-020).** Com a esteira ligada, "sem `develop`" deixa de valer: a `develop` é a trunk da integração (PR com squash) e a `main` só avança por fast-forward da GitHub App `esteira-promover` ou por PR `hotfix/*`. As três camadas protegem as duas branches; a regra "só via PR" continua, salvo o FF da promoção feito pela App.
 
 ## Contexto
 
