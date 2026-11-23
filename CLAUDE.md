@@ -301,6 +301,7 @@ Antes de usar uma tecnologia pela primeira vez, leia o guia:
 - **Validação (Zod)** → [docs/guides/zod-guide.md](./docs/guides/zod-guide.md)
 - **Testes** → [docs/guides/testing-guide.md](./docs/guides/testing-guide.md)
 - **Error Handling** → [docs/guides/error-handling-guide.md](./docs/guides/error-handling-guide.md)
+- **Modelo, esforço, tokens e subagentes** → [docs/guides/model-effort-tokens-guide.md](./docs/guides/model-effort-tokens-guide.md)
 - **MCP (conectar ChatGPT/Claude)** → [docs/guides/mcp-guide.md](./docs/guides/mcp-guide.md)
 
 ---

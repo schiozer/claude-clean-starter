@@ -47,14 +47,14 @@ implementação e entram na regressão ([ADR-016](./docs/adr/template/016-testes
 
 ### Construção — Implementação
 
-| Skill                                     | Origem      | Papel                                                                                                                                                                                                           |
-| ----------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mvp-development`                         | Projeto     | Perfil `mvp-primeiro` (antes da promoção). Módulos com Service enxuto + REST + MCP; sem aggregates/repositórios. Teste Playwright de cada cenário da spec antes da tela/rota; `npm run docs:gerar` antes do PR. |
-| `ddd-service-development`                 | Projeto     | Perfil `completo-direto` ou promovido. Módulos com DDD tático + Service + REST + MCP. Teste Playwright de cada cenário da spec antes da tela/rota; `npm run docs:gerar` antes do PR.                            |
-| `superpowers:test-driven-development`     | Superpowers | Testes antes da implementação — vale para todo código.                                                                                                                                                          |
-| `superpowers:systematic-debugging`        | Superpowers | Diagnóstico estruturado antes de qualquer correção.                                                                                                                                                             |
-| `superpowers:executing-plans`             | Superpowers | Executa o plano tarefa a tarefa, com revisões.                                                                                                                                                                  |
-| `superpowers:subagent-driven-development` | Superpowers | Alternativa: despacha subagentes em paralelo por tarefa.                                                                                                                                                        |
+| Skill                                     | Origem      | Papel                                                                                                                                                                                                              |
+| ----------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mvp-development`                         | Projeto     | Perfil `mvp-primeiro` (antes da promoção). Módulos com Service enxuto + REST + MCP; sem aggregates/repositórios. Teste Playwright de cada cenário da spec antes da tela/rota; `npm run docs:gerar` antes do PR.    |
+| `ddd-service-development`                 | Projeto     | Perfil `completo-direto` ou promovido. Módulos com DDD tático + Service + REST + MCP. Teste Playwright de cada cenário da spec antes da tela/rota; `npm run docs:gerar` antes do PR.                               |
+| `superpowers:test-driven-development`     | Superpowers | Testes antes da implementação — vale para todo código.                                                                                                                                                             |
+| `superpowers:systematic-debugging`        | Superpowers | Diagnóstico estruturado antes de qualquer correção.                                                                                                                                                                |
+| `superpowers:executing-plans`             | Superpowers | Executa o plano tarefa a tarefa, com revisões.                                                                                                                                                                     |
+| `superpowers:subagent-driven-development` | Superpowers | Spec e plano ficam na sessão principal; a implementação vai para um subagente Sonnet por tarefa e a revisão para Opus; subagente nunca faz push/PR/merge — ver [guia](./docs/guides/model-effort-tokens-guide.md). |
 
 ### Revisão — Verificação
 
