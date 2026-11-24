@@ -228,7 +228,7 @@ branch e abertura de PR seguem só as regras 5 e 8 — nenhum outro passo de ope
 │   ├── commands/                  # Slash-commands do projeto (templates)
 │   └── skills/                    # mvp-development, ddd-service-development, runbook-execution, template-sync
 ├── .githooks/                     # git hooks versionados (reference-transaction, pre-push) — trava da main
-├── hooks/                         # hooks do Claude Code: check-dependencies, git-freshness, protect-main
+├── hooks/                         # hooks do Claude Code: check-dependencies, git-freshness, protect-main, read-guard
 ├── docs/
 │   ├── adr/                       # Architecture Decision Records
 │   ├── guides/                    # Guias técnicos (Zod, Testing, Errors, Deploy/CI, MCP)

@@ -1,7 +1,7 @@
 # Spec: Política de modelo, esforço e disciplina de tokens + read-guard
 
 **Data**: 2026-11-23
-**Status**: Rascunho (aguardando aprovação)
+**Status**: Aprovada
 **Autor(es)**: Fabio Schiozer, Claudinho
 
 > Produzida pela skill `superpowers:brainstorming`. Origem: PR #295 de
@@ -67,10 +67,10 @@ Hook < 5 s (timeout 5), sem dependências novas, fail-open. Sem segredos. Guia e
 
 ## 7. Critérios de Aceitação
 
-- [ ] ADR 022 e guia criados e linkados no `CLAUDE.md` (seção Guias) e no `SKILLS.md` se couber.
-- [ ] `SKILLS.md` troca "alternativa" por a regra de subagentes por fase (aponta para o guia).
-- [ ] Hook registrado, testes verdes, `npm run lint`, `type-check`, `test` ok.
-- [ ] `template-sync.manifest.json` cobre os novos arquivos (já cobre `hooks/**`; conferir `docs/**`).
+- [x] ADR 022 e guia criados e linkados no `CLAUDE.md` (seção Guias) e no `SKILLS.md` se couber.
+- [x] `SKILLS.md` troca "alternativa" por a regra de subagentes por fase (aponta para o guia).
+- [x] Hook registrado, testes verdes, `npm run lint`, `type-check`, `test` ok (rodados de novo antes do PR).
+- [x] `template-sync.manifest.json` cobre os novos arquivos (já cobre `hooks/**`; conferir `docs/**`).
 - [ ] PR aberto (base `main`, sem esteira), template preenchido, UAT desmarcado.
 
 ## 8. Itens Futuros
