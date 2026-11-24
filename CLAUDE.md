@@ -228,7 +228,7 @@ branch e abertura de PR seguem só as regras 5 e 8 — nenhum outro passo de ope
 │   ├── commands/                  # Slash-commands do projeto (templates)
 │   └── skills/                    # mvp-development, ddd-service-development, runbook-execution, template-sync
 ├── .githooks/                     # git hooks versionados (reference-transaction, pre-push) — trava da main
-├── hooks/                         # hooks do Claude Code: check-dependencies, git-freshness, protect-main
+├── hooks/                         # hooks do Claude Code: check-dependencies, git-freshness, protect-main, read-guard
 ├── docs/
 │   ├── adr/                       # Architecture Decision Records
 │   ├── guides/                    # Guias técnicos (Zod, Testing, Errors, Deploy/CI, MCP)
@@ -301,6 +301,7 @@ Antes de usar uma tecnologia pela primeira vez, leia o guia:
 - **Validação (Zod)** → [docs/guides/zod-guide.md](./docs/guides/zod-guide.md)
 - **Testes** → [docs/guides/testing-guide.md](./docs/guides/testing-guide.md)
 - **Error Handling** → [docs/guides/error-handling-guide.md](./docs/guides/error-handling-guide.md)
+- **Modelo, esforço, tokens e subagentes** → [docs/guides/model-effort-tokens-guide.md](./docs/guides/model-effort-tokens-guide.md)
 - **MCP (conectar ChatGPT/Claude)** → [docs/guides/mcp-guide.md](./docs/guides/mcp-guide.md)
 
 ---
