@@ -1,14 +1,15 @@
 // CLI do AI-BOM: `npm run ai-bom` gera ai-bom.cdx.json; `-- --check` confere (CI).
-// Subcomandos --env, --env-ci e --grafana entram nas próximas tarefas.
+// `-- --env` imprime os exports de telemetria da sessão local. --env-ci e --grafana entram depois.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { CONFIG_PATH, parseAiObsConfig } from './ai-observabilidade/config.mjs'
+import { CONFIG_PATH, papel, parseAiObsConfig } from './ai-observabilidade/config.mjs'
+import { envTelemetria } from './ai-observabilidade/metricas.mjs'
 import { coletar, gerarBom, serializar } from './ai-bom/inventario.mjs'
 
 const ARQUIVO = 'ai-bom.cdx.json'
-const USO = 'uso: ai-bom.mjs [--check]\n'
+const USO = 'uso: ai-bom.mjs [--check | --env]\n'
 
 // Config ausente = desligado; presente e inválida = erro (CT-AIBOM-005).
 function lerConfig(deps) {
@@ -41,6 +42,24 @@ function conferir(deps) {
   return 0
 }
 
+// Endpoint e headers saem como referências literais: o segredo nunca é resolvido nem impresso.
+function imprimirEnv(deps) {
+  const cfg = lerConfig(deps)
+  if (papel(cfg) === 'desligado') {
+    deps.stderr(
+      'ai-bom: observabilidade desligada (ativo:false ou config ausente); nada a exportar.\n'
+    )
+    return 0
+  }
+  const linhas = Object.entries(envTelemetria(cfg.projeto, 'local')).map(
+    ([nome, valor]) => `export ${nome}=${valor}`
+  )
+  linhas.push('export OTEL_EXPORTER_OTLP_ENDPOINT=${GRAFANA_OTLP_ENDPOINT}')
+  linhas.push('export OTEL_EXPORTER_OTLP_HEADERS=${GRAFANA_OTLP_HEADERS}')
+  deps.stdout(`${linhas.join('\n')}\n`)
+  return 0
+}
+
 /**
  * @param {string[]} argv
  * @param {{ cwd: string, readFile(p: string): string | null, writeFile(p: string, c: string): void,
@@ -64,6 +83,7 @@ async function executar(argv, deps) {
     return 0
   }
   if (argv.length === 1 && argv[0] === '--check') return conferir(deps)
+  if (argv.length === 1 && argv[0] === '--env') return imprimirEnv(deps)
   deps.stderr(`ai-bom: argumento desconhecido (${argv.join(' ')}).\n${USO}`)
   return 2
 }

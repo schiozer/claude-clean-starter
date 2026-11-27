@@ -84,4 +84,44 @@ describe('CLI ai-bom', () => {
     expect(await main(['--check'], d.deps)).toBe(1)
     expect(d.err.join('')).toContain('JSON inválido')
   })
+
+  it('CT-AIBOM-010 --env imprime exports do projeto sem segredo nem prompts', async () => {
+    process.env.GRAFANA_OTLP_TOKEN = 'segredo-xyz'
+    try {
+      const d = deps({
+        ...files,
+        'ai-observabilidade.config.json': '{"ativo":true,"projeto":"ContasMes.ai"}',
+      })
+      expect(await main(['--env'], d.deps)).toBe(0)
+      const saida = d.out.join('')
+      expect(saida).toContain('export CLAUDE_CODE_ENABLE_TELEMETRY=1')
+      expect(saida).toContain('OTEL_RESOURCE_ATTRIBUTES=projeto=ContasMes.ai,origem=local')
+      expect(saida).not.toContain('OTEL_LOG_USER_PROMPTS=1')
+      expect(saida).not.toContain('segredo-xyz')
+      expect(saida).toContain('${GRAFANA_OTLP_ENDPOINT}')
+      expect(saida).toContain('${GRAFANA_OTLP_HEADERS}')
+    } finally {
+      delete process.env.GRAFANA_OTLP_TOKEN
+    }
+  })
+
+  it('CT-AIBOM-006 --env com config desligada → exit 0, stdout vazio, aviso no stderr', async () => {
+    const d = deps({ ...files, 'ai-observabilidade.config.json': '{"ativo":false}' })
+    expect(await main(['--env'], d.deps)).toBe(0)
+    expect(d.out).toEqual([])
+    expect(d.err.join('')).toContain('desligada')
+  })
+
+  it('CT-AIBOM-006 --env com config ausente → exit 0, stdout vazio, aviso no stderr', async () => {
+    const d = deps(files)
+    expect(await main(['--env'], d.deps)).toBe(0)
+    expect(d.out).toEqual([])
+    expect(d.err.join('')).toContain('desligada')
+  })
+
+  it('CT-AIBOM-010 --env com emissor (central ausente) ainda imprime os exports', async () => {
+    const d = deps({ ...files, 'ai-observabilidade.config.json': '{"ativo":true,"projeto":"p"}' })
+    expect(await main(['--env'], d.deps)).toBe(0)
+    expect(d.out.join('')).toContain('export OTEL_RESOURCE_ATTRIBUTES=projeto=p,origem=local')
+  })
 })
