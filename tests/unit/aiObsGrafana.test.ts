@@ -4,9 +4,11 @@ import { main } from '../../scripts/ai-bom.mjs'
 import { parseAiObsConfig } from '../../scripts/ai-observabilidade/config.mjs'
 import { escaparLabel, regrasAlerta } from '../../scripts/ai-observabilidade/grafana.mjs'
 import {
-  EVENTO_SESSAO,
   METRICA_CUSTO,
+  METRICA_SESSOES,
   METRICA_TOKENS,
+  ATRIBUTO_ORIGEM,
+  ATRIBUTO_PROJETO,
 } from '../../scripts/ai-observabilidade/metricas.mjs'
 
 type Regra = {
@@ -18,7 +20,7 @@ type Regra = {
 function regras(raw: unknown): Regra[] {
   return regrasAlerta(parseAiObsConfig(raw)).groups[0].rules
 }
-const limite = (r: Regra) => r.data[1].model.conditions?.[0].evaluator.params[0]
+const limite = (r: Regra) => r.data[2].model.conditions?.[0].evaluator.params[0]
 const achar = (rs: Regra[], uid: string) => rs.find((r) => r.uid === uid)
 
 describe('regras de alerta do Grafana', () => {
@@ -54,13 +56,34 @@ describe('regras de alerta do Grafana', () => {
 
 describe('painel.json', () => {
   const texto = readFileSync('observabilidade/grafana/painel.json', 'utf8')
+  const painel = JSON.parse(texto)
+  const exprs: string[] = painel.panels.flatMap((p: { targets: { expr: string }[] }) =>
+    p.targets.map((t) => t.expr)
+  )
+
   it('CT-AIBOM-007 usa exatamente os nomes de metricas.mjs', () => {
-    expect(texto).toContain(METRICA_CUSTO)
-    expect(texto).toContain(METRICA_TOKENS)
-    expect(texto).toContain(EVENTO_SESSAO)
+    for (const nome of [METRICA_CUSTO, METRICA_TOKENS, METRICA_SESSOES]) {
+      expect(texto).toContain(nome)
+    }
     const usadas = texto.match(/claude_code_[a-zA-Z_]+/g) ?? []
-    for (const nome of usadas) expect([METRICA_CUSTO, METRICA_TOKENS]).toContain(nome)
-    expect(() => JSON.parse(texto)).not.toThrow()
+    for (const nome of usadas) {
+      expect([METRICA_CUSTO, METRICA_TOKENS, METRICA_SESSOES]).toContain(nome)
+    }
+  })
+
+  it('CT-AIBOM-007 agrupa pelos rótulos ATRIBUTO_PROJETO e ATRIBUTO_ORIGEM', () => {
+    expect(exprs.some((e) => e.includes(`by (${ATRIBUTO_PROJETO})`))).toBe(true)
+    expect(exprs.some((e) => e.includes(`by (${ATRIBUTO_ORIGEM})`))).toBe(true)
+    const rotulos = [...texto.matchAll(/by \(([^)]*)\)/g)].flatMap((m) => m[1].split(/,\s*/))
+    for (const r of rotulos) {
+      expect([ATRIBUTO_PROJETO, ATRIBUTO_ORIGEM, 'model', 'type']).toContain(r)
+    }
+  })
+
+  it('CT-AIBOM-007 não fixa o teto: nenhum threshold numérico no painel', () => {
+    const cfg = parseAiObsConfig({ ativo: true, projeto: 'P', central: true })
+    expect(texto).not.toContain('thresholds')
+    expect(texto).not.toMatch(new RegExp(`\\b${cfg.teto.mensalUsd}\\b`))
   })
 })
 

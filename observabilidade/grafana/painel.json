@@ -3,31 +3,36 @@
   "uid": "ai-consumo",
   "schemaVersion": 39,
   "tags": ["ai-observabilidade"],
-  "time": { "from": "now-30d", "to": "now" },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
   "templating": {
     "list": [
-      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus" },
-      { "name": "DS_LOKI", "type": "datasource", "query": "loki" }
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus"
+      }
     ]
   },
   "panels": [
     {
       "id": 1,
       "type": "stat",
-      "title": "Custo (janela móvel de 30 dias) x teto - total",
-      "datasource": { "uid": "${DS_PROMETHEUS}" },
-      "targets": [{ "refId": "A", "expr": "sum(increase(claude_code_cost_usage_USD_total[30d]))" }],
+      "title": "Custo (janela móvel de 30 dias) - total",
+      "datasource": {
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(claude_code_cost_usage_USD_total[30d]))"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyUSD",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "orange", "value": 320 },
-              { "color": "red", "value": 400 }
-            ]
-          }
+          "unit": "currencyUSD"
         }
       }
     },
@@ -35,7 +40,9 @@
       "id": 2,
       "type": "bargauge",
       "title": "Custo (30 dias) por projeto",
-      "datasource": { "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "uid": "${DS_PROMETHEUS}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -43,13 +50,19 @@
           "legendFormat": "{{projeto}}"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        }
+      }
     },
     {
       "id": 3,
       "type": "timeseries",
       "title": "Tokens por modelo e tipo",
-      "datasource": { "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "uid": "${DS_PROMETHEUS}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -62,7 +75,9 @@
       "id": 4,
       "type": "timeseries",
       "title": "Custo por origem e por dia",
-      "datasource": { "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "uid": "${DS_PROMETHEUS}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -75,12 +90,14 @@
     {
       "id": 5,
       "type": "stat",
-      "title": "Sessões (Loki)",
-      "datasource": { "uid": "${DS_LOKI}" },
+      "title": "Sessões (30 dias)",
+      "datasource": {
+        "uid": "${DS_PROMETHEUS}"
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "count(sum by (session_id) (count_over_time({service_name=\"claude-code\"} | event_name=\"user_prompt\" [30d])))"
+          "expr": "sum(increase(claude_code_session_count_total[30d]))"
         }
       ]
     }

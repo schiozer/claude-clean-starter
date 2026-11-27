@@ -6,6 +6,9 @@
 
 export const METRICA_CUSTO = 'claude_code_cost_usage_USD_total'
 export const METRICA_TOKENS = 'claude_code_token_usage_tokens_total'
+// claude_code.session.count (emitida no início de cada sessão): ponto vira "_" e counter ganha
+// "_total" (derivado; o sufixo de unidade, se houver, não foi visto no Grafana).
+export const METRICA_SESSOES = 'claude_code_session_count_total'
 
 export const ATRIBUTO_PROJETO = 'projeto'
 export const ATRIBUTO_ORIGEM = 'origem'
@@ -39,9 +42,3 @@ export function referenciasOtlp() {
     OTEL_EXPORTER_OTLP_HEADERS: '${GRAFANA_OTLP_HEADERS}',
   }
 }
-
-// Evento que conta sessões no Loki (doc oficial conferida em 2026-11-27): claude_code.user_prompt,
-// emitido a cada prompt mesmo sem OTEL_LOG_USER_PROMPTS (o texto fica redigido). Atributo event.name
-// = "user_prompt"; o atributo session.id acompanha todo evento.
-export const EVENTO_SESSAO = 'user_prompt'
-export const ATRIBUTO_SESSAO = 'session_id'

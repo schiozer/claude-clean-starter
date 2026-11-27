@@ -32,13 +32,20 @@ function regra({ uid, titulo, expr, limite, severidade, escopo }) {
         model: { refId: 'A', expr, instant: true },
       },
       {
+        refId: 'B',
+        relativeTimeRange: { from: 600, to: 0 },
+        datasourceUid: '__expr__',
+        model: { refId: 'B', type: 'reduce', expression: 'A', reducer: 'last' },
+      },
+      {
         refId: 'C',
         relativeTimeRange: { from: 600, to: 0 },
         datasourceUid: '__expr__',
+        // Grafana não tem gte: usa gt (equivalente na prática para valores em moeda).
         model: {
           refId: 'C',
           type: 'threshold',
-          expression: 'A',
+          expression: 'B',
           conditions: [{ evaluator: { type: 'gt', params: [limite] } }],
         },
       },
