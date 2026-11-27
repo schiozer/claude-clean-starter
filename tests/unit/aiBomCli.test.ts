@@ -68,4 +68,20 @@ describe('CLI ai-bom', () => {
     const d = deps({ ...files, 'ai-observabilidade.config.json': '{"ativo":false}' })
     expect(await main([], d.deps)).toBe(0)
   })
+
+  it('CT-AIBOM-005 teto negativo → exit 1 com a mensagem de validação', async () => {
+    const d = deps({
+      ...files,
+      'ai-observabilidade.config.json': '{"ativo":true,"projeto":"x","teto":{"mensalUsd":-10}}',
+    })
+    expect(await main([], d.deps)).toBe(1)
+    expect(d.err.join('')).toContain('teto.mensalUsd deve ser um número positivo')
+    expect(d.escritos['ai-bom.cdx.json']).toBeUndefined()
+  })
+
+  it('CT-AIBOM-005 JSON inválido na config → exit 1 também em --check', async () => {
+    const d = deps({ ...files, 'ai-observabilidade.config.json': '{ quebrado' })
+    expect(await main(['--check'], d.deps)).toBe(1)
+    expect(d.err.join('')).toContain('JSON inválido')
+  })
 })

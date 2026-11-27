@@ -43,7 +43,7 @@ function coletarPlugins(settings) {
 function coletarHooks(settings) {
   const hooks = settings.hooks
   if (typeof hooks !== 'object' || hooks === null) return []
-  const lista = []
+  const porNome = new Map()
   for (const [evento, blocos] of Object.entries(hooks)) {
     if (!Array.isArray(blocos)) continue
     for (const bloco of blocos) {
@@ -51,9 +51,13 @@ function coletarHooks(settings) {
       const comandos = (Array.isArray(bloco?.hooks) ? bloco.hooks : [])
         .map((h) => h?.command)
         .filter((c) => typeof c === 'string')
-      lista.push({ nome: `${evento}:${matcher}`, comandos })
+      const nome = `${evento}:${matcher}`
+      const existente = porNome.get(nome)
+      if (existente) existente.comandos.push(...comandos)
+      else porNome.set(nome, { nome, comandos })
     }
   }
+  const lista = [...porNome.values()]
   return lista
 }
 
@@ -69,13 +73,26 @@ function coletarSkills(fs) {
     .filter(Boolean)
 }
 
+function dedupeActions(actions) {
+  const unicas = new Map()
+  for (const a of actions) unicas.set(`${a.nome}|${a.sha ?? a.versao}`, a)
+  const lista = [...unicas.values()]
+  const contagem = new Map()
+  for (const a of lista) contagem.set(a.nome, (contagem.get(a.nome) ?? 0) + 1)
+  return lista.map((a) => ({
+    ...a,
+    ref: contagem.get(a.nome) > 1 ? `${a.nome}@${a.sha ? a.sha.slice(0, 7) : a.versao}` : a.nome,
+  }))
+}
+
 function coletarWorkflows(fs) {
   const actions = []
   const modelos = []
   const arquivos = fs.list(WORKFLOWS_DIR).filter((n) => /\.ya?ml$/.test(n))
   for (const arquivo of arquivos) {
     const texto = fs.readFile(`${WORKFLOWS_DIR}/${arquivo}`) ?? ''
-    for (const m of texto.matchAll(/uses:\s*([\w.-]+\/[\w./-]+)@(\S+)(?:[ \t]+#[ \t]*(\S+))?/g)) {
+    const usos = /^[ \t]*-?[ \t]*uses:[ \t]*([\w.-]+\/[\w./-]+)@(\S+)(?:[ \t]+#[ \t]*(v\d\S*))?/gm
+    for (const m of texto.matchAll(usos)) {
       if (!/claude|anthropic/i.test(m[1])) continue
       const ehSha = /^[0-9a-f]{40}$/.test(m[2])
       actions.push({ nome: m[1], versao: ehSha ? (m[3] ?? m[2]) : m[2], sha: ehSha ? m[2] : null })
@@ -84,7 +101,7 @@ function coletarWorkflows(fs) {
       modelos.push(m[1])
     }
   }
-  return { actions, modelos: [...new Set(modelos)] }
+  return { actions: dedupeActions(actions), modelos: [...new Set(modelos)] }
 }
 
 /**
@@ -110,7 +127,8 @@ function uuidDe(texto) {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${variante}${h.slice(17, 20)}-${h.slice(20, 32)}`
 }
 
-const porTipoNome = (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
+const comparar = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
+const porTipoNome = (a, b) => comparar(a.type, b.type) || comparar(a.name, b.name)
 
 function montarComponentes(c) {
   const lista = []
@@ -141,7 +159,7 @@ function montarComponentes(c) {
   for (const a of c.actions) {
     lista.push({
       type: 'application',
-      'bom-ref': `action:${a.nome}`,
+      'bom-ref': `action:${a.ref}`,
       name: a.nome,
       version: a.versao,
       ...(a.sha ? { hashes: [{ alg: 'SHA-1', content: a.sha }] } : {}),

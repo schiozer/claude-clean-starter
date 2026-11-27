@@ -10,15 +10,17 @@ import { coletar, gerarBom, serializar } from './ai-bom/inventario.mjs'
 const ARQUIVO = 'ai-bom.cdx.json'
 const USO = 'uso: ai-bom.mjs [--check]\n'
 
+// Config ausente = desligado; presente e inválida = erro (CT-AIBOM-005).
 function lerConfig(deps) {
   const texto = deps.readFile(CONFIG_PATH)
   if (texto === null) return parseAiObsConfig(null)
+  let json
   try {
-    return parseAiObsConfig(JSON.parse(texto))
-  } catch {
-    // O inventário nunca depende de config válida: segue como desligado.
-    return parseAiObsConfig(null)
+    json = JSON.parse(texto)
+  } catch (e) {
+    throw new Error(`${CONFIG_PATH}: JSON inválido (${e.message})`)
   }
+  return parseAiObsConfig(json)
 }
 
 function gerarTexto(deps) {
@@ -46,6 +48,16 @@ function conferir(deps) {
  * @returns {Promise<number>}
  */
 export async function main(argv, deps) {
+  try {
+    return await executar(argv, deps)
+  } catch (e) {
+    deps.stderr(`ai-bom: ${e instanceof Error ? e.message : String(e)}\n`)
+    return 1
+  }
+}
+
+async function executar(argv, deps) {
+  lerConfig(deps) // qualquer comando falha com config inválida
   if (argv.length === 0) {
     deps.writeFile(ARQUIVO, gerarTexto(deps))
     deps.stdout(`ai-bom: ${ARQUIVO} gerado.\n`)

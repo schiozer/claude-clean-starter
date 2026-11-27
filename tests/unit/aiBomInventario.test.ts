@@ -121,7 +121,9 @@ describe('inventário CycloneDX', () => {
       c.type,
       c.name,
     ])
-    const ordenada = [...lista].sort((x, y) => x[0].localeCompare(y[0]) || x[1].localeCompare(y[1]))
+    const ordenada = [...lista].sort((x, y) =>
+      x[0] !== y[0] ? (x[0] < y[0] ? -1 : 1) : x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0
+    )
     expect(lista).toEqual(ordenada)
   })
 
@@ -139,5 +141,58 @@ describe('inventário CycloneDX', () => {
       'Anthropic API',
     ])
     expect(gerar({}).services).toBeUndefined()
+  })
+
+  it('mesma action em dois workflows vira um só componente', () => {
+    const uses = `    - uses: anthropics/claude-code-action@${SHA} # v1.0.262\n`
+    const bom = gerar({ '.github/workflows/a.yml': uses, '.github/workflows/b.yml': uses })
+    const refs = bom.components.map((c: { 'bom-ref': string }) => c['bom-ref'])
+    expect(refs).toEqual(['action:anthropics/claude-code-action'])
+  })
+
+  it('mesma action com SHAs diferentes mantém ambas com refs distintos', () => {
+    const outro = 'a'.repeat(40)
+    const bom = gerar({
+      '.github/workflows/a.yml': `    - uses: anthropics/claude-code-action@${SHA} # v1\n`,
+      '.github/workflows/b.yml': `    - uses: anthropics/claude-code-action@${outro} # v2\n`,
+    })
+    const refs = bom.components.map((c: { 'bom-ref': string }) => c['bom-ref']).sort()
+    expect(refs).toEqual([
+      `action:anthropics/claude-code-action@${SHA.slice(0, 7)}`,
+      `action:anthropics/claude-code-action@${outro.slice(0, 7)}`,
+    ])
+  })
+
+  it('hooks com mesmo evento e matcher viram um componente com todos os comandos', () => {
+    const s = JSON.stringify({
+      hooks: {
+        PreToolUse: [
+          { matcher: 'Bash', hooks: [{ type: 'command', command: 'um' }] },
+          { matcher: 'Bash', hooks: [{ type: 'command', command: 'dois' }] },
+        ],
+      },
+    })
+    const bom = gerar({ '.claude/settings.json': s })
+    expect(bom.components).toHaveLength(1)
+    expect(bom.components[0].properties.map((p: { value: string }) => p.value)).toEqual([
+      'um',
+      'dois',
+    ])
+  })
+
+  it('ordem da listagem do fs não altera o BOM serializado', () => {
+    const fsA = memFs(baseFiles)
+    const fsB = { ...fsA, list: (d: string) => [...fsA.list(d)].reverse() }
+    expect(serializar(gerarBom(coletar(fsB), { ativo: false }))).toBe(
+      serializar(gerarBom(coletar(fsA), { ativo: false }))
+    )
+  })
+
+  it('ignora uses: comentado e só aceita versão em comentário v<digito>', () => {
+    const bom = gerar({
+      '.github/workflows/a.yml': `    # - uses: anthropics/claude-code-action@v0\n    - uses: anthropics/claude-code-action@${SHA} # pinado\n`,
+    })
+    expect(bom.components).toHaveLength(1)
+    expect(bom.components[0].version).toBe(SHA)
   })
 })
