@@ -21,9 +21,21 @@ export function envTelemetria(projeto, origem) {
   return {
     CLAUDE_CODE_ENABLE_TELEMETRY: '1',
     OTEL_METRICS_EXPORTER: 'otlp',
-    OTEL_LOGS_EXPORTER: 'none',
+    OTEL_LOGS_EXPORTER: 'otlp',
     OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
     OTEL_METRICS_INCLUDE_SESSION_ID: 'false',
     OTEL_RESOURCE_ATTRIBUTES: `${ATRIBUTO_PROJETO}=${projeto},${ATRIBUTO_ORIGEM}=${origem}`,
+  }
+}
+
+/**
+ * Referências literais (nunca valores resolvidos) para endpoint e headers do coletor.
+ * O shell resolve `${GRAFANA_OTLP_*}`; o segredo não passa por aqui.
+ * @returns {Record<string, string>}
+ */
+export function referenciasOtlp() {
+  return {
+    OTEL_EXPORTER_OTLP_ENDPOINT: '${GRAFANA_OTLP_ENDPOINT}',
+    OTEL_EXPORTER_OTLP_HEADERS: '${GRAFANA_OTLP_HEADERS}',
   }
 }

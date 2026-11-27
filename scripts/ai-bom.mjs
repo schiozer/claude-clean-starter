@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONFIG_PATH, papel, parseAiObsConfig } from './ai-observabilidade/config.mjs'
-import { envTelemetria } from './ai-observabilidade/metricas.mjs'
+import { envTelemetria, referenciasOtlp } from './ai-observabilidade/metricas.mjs'
 import { coletar, gerarBom, serializar } from './ai-bom/inventario.mjs'
 
 const ARQUIVO = 'ai-bom.cdx.json'
@@ -51,11 +51,8 @@ function imprimirEnv(deps) {
     )
     return 0
   }
-  const linhas = Object.entries(envTelemetria(cfg.projeto, 'local')).map(
-    ([nome, valor]) => `export ${nome}=${valor}`
-  )
-  linhas.push('export OTEL_EXPORTER_OTLP_ENDPOINT=${GRAFANA_OTLP_ENDPOINT}')
-  linhas.push('export OTEL_EXPORTER_OTLP_HEADERS=${GRAFANA_OTLP_HEADERS}')
+  const variaveis = { ...envTelemetria(cfg.projeto, 'local'), ...referenciasOtlp() }
+  const linhas = Object.entries(variaveis).map(([nome, valor]) => `export ${nome}=${valor}`)
   deps.stdout(`${linhas.join('\n')}\n`)
   return 0
 }

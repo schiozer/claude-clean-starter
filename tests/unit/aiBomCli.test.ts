@@ -96,6 +96,8 @@ describe('CLI ai-bom', () => {
       const saida = d.out.join('')
       expect(saida).toContain('export CLAUDE_CODE_ENABLE_TELEMETRY=1')
       expect(saida).toContain('OTEL_RESOURCE_ATTRIBUTES=projeto=ContasMes.ai,origem=local')
+      expect(saida).toContain('export OTEL_LOGS_EXPORTER=otlp')
+      expect(saida).toContain('export OTEL_METRICS_INCLUDE_SESSION_ID=false')
       expect(saida).not.toContain('OTEL_LOG_USER_PROMPTS=1')
       expect(saida).not.toContain('segredo-xyz')
       expect(saida).toContain('${GRAFANA_OTLP_ENDPOINT}')
