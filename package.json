@@ -15,6 +15,7 @@
     "docs:gerar": "E2E_DOCS=1 playwright test --grep @doc --project=desktop",
     "prepare": "node scripts/install-git-hooks.mjs",
     "check:runbooks": "node scripts/check-runbooks.mjs",
+    "ai-bom": "node scripts/ai-bom.mjs",
     "check:cenarios": "node scripts/check-cenarios.mjs",
     "format": "prettier --write ."
   },

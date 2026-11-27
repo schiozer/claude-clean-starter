@@ -36,6 +36,9 @@ jobs:
         # Projeto adotado: troque por `npm run check:runbooks -- --strict`.
         run: npm run check:runbooks
 
+      - name: Check AI-BOM
+        run: npm run ai-bom -- --check
+
   example:
     name: Walking Skeleton (example)
     runs-on: ubuntu-latest
