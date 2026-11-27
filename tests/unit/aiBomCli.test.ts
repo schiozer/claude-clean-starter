@@ -127,3 +127,42 @@ describe('CLI ai-bom', () => {
     expect(d.out.join('')).toContain('export OTEL_RESOURCE_ATTRIBUTES=projeto=p,origem=local')
   })
 })
+
+describe('CLI ai-bom --env-ci', () => {
+  const cfg = { 'ai-observabilidade.config.json': '{"ativo":true,"projeto":"ContasMes.ai"}' }
+  const comEnv = (files: Record<string, string>, env: Record<string, string>) => {
+    const d = deps(files)
+    return { ...d, deps: { ...d.deps, env } }
+  }
+
+  it('CT-AIBOM-009 imprime NAME=VALUE resolvido, origem ci, sem export nem prompts', async () => {
+    const d = comEnv(
+      { ...files, ...cfg },
+      {
+        GRAFANA_OTLP_ENDPOINT: 'https://otlp.exemplo',
+        GRAFANA_OTLP_HEADERS: 'Authorization=Basic abc',
+      }
+    )
+    expect(await main(['--env-ci'], d.deps)).toBe(0)
+    const saida = d.out.join('')
+    expect(saida).toContain('OTEL_RESOURCE_ATTRIBUTES=projeto=ContasMes.ai,origem=ci')
+    expect(saida).toContain('OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.exemplo')
+    expect(saida).toContain('OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic abc')
+    expect(saida).not.toContain('export ')
+    expect(saida).not.toContain('OTEL_LOG_USER_PROMPTS')
+  })
+
+  it('CT-AIBOM-009 config desligada → exit 0, stdout vazio', async () => {
+    const d = comEnv({ ...files, 'ai-observabilidade.config.json': '{"ativo":false}' }, {})
+    expect(await main(['--env-ci'], d.deps)).toBe(0)
+    expect(d.out).toEqual([])
+    expect(d.err.join('')).toContain('desligada')
+  })
+
+  it('CT-AIBOM-009 sem endpoint ou headers no env → exit 0, stdout vazio, aviso', async () => {
+    const d = comEnv({ ...files, ...cfg }, { GRAFANA_OTLP_ENDPOINT: 'https://x' })
+    expect(await main(['--env-ci'], d.deps)).toBe(0)
+    expect(d.out).toEqual([])
+    expect(d.err.join('')).toContain('ausente')
+  })
+})

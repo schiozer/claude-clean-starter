@@ -44,6 +44,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
 
+      # Opcional: sem o secret, o job roda como antes. Falha aqui nunca derruba o gate.
+      - name: Ligar a telemetria do Claude (opcional)
+        if: steps.prepare.outputs.mode == 'analyze'
+        continue-on-error: true
+        run: |
+          if [ "$HAS_OTLP" = "true" ]; then
+            node scripts/ai-bom.mjs --env-ci >> "$GITHUB_ENV" || true
+          fi
+        env:
+          HAS_OTLP: ${{ secrets.GRAFANA_OTLP_HEADERS != '' }}
+          GRAFANA_OTLP_ENDPOINT: ${{ secrets.GRAFANA_OTLP_ENDPOINT }}
+          GRAFANA_OTLP_HEADERS: ${{ secrets.GRAFANA_OTLP_HEADERS }}
+
       - name: Conferir a spec com o Claude
         id: claude
         if: steps.prepare.outputs.mode == 'analyze'
@@ -64,5 +77,6 @@ jobs:
         env:
           MODE: ${{ steps.prepare.outputs.mode }}
           STRUCTURED_OUTPUT: ${{ steps.claude.outputs.structured_output }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}

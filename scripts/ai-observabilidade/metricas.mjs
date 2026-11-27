@@ -42,3 +42,22 @@ export function referenciasOtlp() {
     OTEL_EXPORTER_OTLP_HEADERS: '${GRAFANA_OTLP_HEADERS}',
   }
 }
+
+/**
+ * Endpoint e headers já resolvidos a partir do env do CI (secrets mapeados em GRAFANA_OTLP_*),
+ * no formato do $GITHUB_ENV. Devolve `null` e os nomes faltantes se algum valor não existir.
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ valores: Record<string, string> | null, faltando: string[] }}
+ */
+export function otlpResolvido(env) {
+  const origem = {
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'GRAFANA_OTLP_ENDPOINT',
+    OTEL_EXPORTER_OTLP_HEADERS: 'GRAFANA_OTLP_HEADERS',
+  }
+  const faltando = Object.values(origem).filter((nome) => !env[nome])
+  if (faltando.length > 0) return { valores: null, faltando }
+  return {
+    valores: Object.fromEntries(Object.entries(origem).map(([otel, graf]) => [otel, env[graf]])),
+    faltando,
+  }
+}

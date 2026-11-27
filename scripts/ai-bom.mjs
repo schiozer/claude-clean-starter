@@ -1,16 +1,16 @@
 // CLI do AI-BOM: `npm run ai-bom` gera ai-bom.cdx.json; `-- --check` confere (CI).
-// `-- --env` imprime os exports de telemetria da sessão local. `-- --grafana` imprime as regras de alerta do teto (só o hub).
+// `-- --env` imprime os exports de telemetria da sessão local; `--env-ci` imprime NAME=VALUE para $GITHUB_ENV. `-- --grafana` imprime as regras de alerta do teto (só o hub).
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONFIG_PATH, papel, parseAiObsConfig } from './ai-observabilidade/config.mjs'
 import { regrasAlerta } from './ai-observabilidade/grafana.mjs'
-import { envTelemetria, referenciasOtlp } from './ai-observabilidade/metricas.mjs'
+import { envTelemetria, otlpResolvido, referenciasOtlp } from './ai-observabilidade/metricas.mjs'
 import { coletar, gerarBom, serializar } from './ai-bom/inventario.mjs'
 
 const ARQUIVO = 'ai-bom.cdx.json'
-const USO = 'uso: ai-bom.mjs [--check | --env | --grafana]\n'
+const USO = 'uso: ai-bom.mjs [--check | --env | --env-ci | --grafana]\n'
 
 // Config ausente = desligado; presente e inválida = erro (CT-AIBOM-005).
 function lerConfig(deps) {
@@ -58,6 +58,32 @@ function imprimirEnv(deps) {
   return 0
 }
 
+// CI: NAME=VALUE sem export (formato do $GITHUB_ENV, que não expande ${}); endpoint e headers vêm
+// já resolvidos do env do passo. Faltando algum, nada é impresso (fail-open).
+function imprimirEnvCi(deps) {
+  const cfg = lerConfig(deps)
+  if (papel(cfg) === 'desligado') {
+    deps.stderr(
+      'ai-bom: observabilidade desligada (ativo:false ou config ausente); nada a exportar.\n'
+    )
+    return 0
+  }
+  const { valores, faltando } = otlpResolvido(deps.env ?? {})
+  if (!valores) {
+    deps.stderr(
+      `ai-bom: segredo do coletor ausente (${faltando.join(', ')}); telemetria do CI não ligada.\n`
+    )
+    return 0
+  }
+  const variaveis = { ...envTelemetria(cfg.projeto, 'ci'), ...valores }
+  deps.stdout(
+    `${Object.entries(variaveis)
+      .map(([n, v]) => `${n}=${v}`)
+      .join('\n')}\n`
+  )
+  return 0
+}
+
 // Só o hub (central: true) gera alertas; emissor e desligado saem 0 sem stdout (CT-AIBOM-006).
 function imprimirGrafana(deps) {
   const cfg = lerConfig(deps)
@@ -93,6 +119,7 @@ async function executar(argv, deps) {
   }
   if (argv.length === 1 && argv[0] === '--check') return conferir(deps)
   if (argv.length === 1 && argv[0] === '--env') return imprimirEnv(deps)
+  if (argv.length === 1 && argv[0] === '--env-ci') return imprimirEnvCi(deps)
   if (argv.length === 1 && argv[0] === '--grafana') return imprimirGrafana(deps)
   deps.stderr(`ai-bom: argumento desconhecido (${argv.join(' ')}).\n${USO}`)
   return 2
@@ -103,6 +130,7 @@ if (isMain) {
   const cwd = process.cwd()
   const real = {
     cwd,
+    env: process.env,
     readFile: (p) => (existsSync(join(cwd, p)) ? readFileSync(join(cwd, p), 'utf8') : null),
     writeFile: (p, c) => writeFileSync(join(cwd, p), c),
     list: (dir) => (existsSync(join(cwd, dir)) ? readdirSync(join(cwd, dir)) : []),
