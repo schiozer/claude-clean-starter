@@ -39,3 +39,9 @@ export function referenciasOtlp() {
     OTEL_EXPORTER_OTLP_HEADERS: '${GRAFANA_OTLP_HEADERS}',
   }
 }
+
+// Evento que conta sessões no Loki (doc oficial conferida em 2026-11-27): claude_code.user_prompt,
+// emitido a cada prompt mesmo sem OTEL_LOG_USER_PROMPTS (o texto fica redigido). Atributo event.name
+// = "user_prompt"; o atributo session.id acompanha todo evento.
+export const EVENTO_SESSAO = 'user_prompt'
+export const ATRIBUTO_SESSAO = 'session_id'

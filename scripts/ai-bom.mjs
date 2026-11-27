@@ -1,15 +1,16 @@
 // CLI do AI-BOM: `npm run ai-bom` gera ai-bom.cdx.json; `-- --check` confere (CI).
-// `-- --env` imprime os exports de telemetria da sessão local. --env-ci e --grafana entram depois.
+// `-- --env` imprime os exports de telemetria da sessão local. `-- --grafana` imprime as regras de alerta do teto (só o hub).
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONFIG_PATH, papel, parseAiObsConfig } from './ai-observabilidade/config.mjs'
+import { regrasAlerta } from './ai-observabilidade/grafana.mjs'
 import { envTelemetria, referenciasOtlp } from './ai-observabilidade/metricas.mjs'
 import { coletar, gerarBom, serializar } from './ai-bom/inventario.mjs'
 
 const ARQUIVO = 'ai-bom.cdx.json'
-const USO = 'uso: ai-bom.mjs [--check | --env]\n'
+const USO = 'uso: ai-bom.mjs [--check | --env | --grafana]\n'
 
 // Config ausente = desligado; presente e inválida = erro (CT-AIBOM-005).
 function lerConfig(deps) {
@@ -57,6 +58,17 @@ function imprimirEnv(deps) {
   return 0
 }
 
+// Só o hub (central: true) gera alertas; emissor e desligado saem 0 sem stdout (CT-AIBOM-006).
+function imprimirGrafana(deps) {
+  const cfg = lerConfig(deps)
+  if (papel(cfg) !== 'hub') {
+    deps.stderr('ai-bom: só o hub (central: true) gera alertas; nada a gerar aqui.\n')
+    return 0
+  }
+  deps.stdout(`${JSON.stringify(regrasAlerta(cfg), null, 2)}\n`)
+  return 0
+}
+
 /**
  * @param {string[]} argv
  * @param {{ cwd: string, readFile(p: string): string | null, writeFile(p: string, c: string): void,
@@ -81,6 +93,7 @@ async function executar(argv, deps) {
   }
   if (argv.length === 1 && argv[0] === '--check') return conferir(deps)
   if (argv.length === 1 && argv[0] === '--env') return imprimirEnv(deps)
+  if (argv.length === 1 && argv[0] === '--grafana') return imprimirGrafana(deps)
   deps.stderr(`ai-bom: argumento desconhecido (${argv.join(' ')}).\n${USO}`)
   return 2
 }
