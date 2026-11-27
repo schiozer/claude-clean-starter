@@ -356,7 +356,7 @@ const dolar = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 3, maximum
  */
 export function resumoUso(executionJson) {
   if (!executionJson) return ''
-  const indisponivel = '_Uso do Claude indisponível: uso indisponível._\n'
+  const indisponivel = '_Uso do Claude no gate: uso indisponível._\n'
   try {
     const mensagens = JSON.parse(executionJson)
     const resultado = Array.isArray(mensagens)

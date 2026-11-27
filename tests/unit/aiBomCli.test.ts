@@ -165,4 +165,26 @@ describe('CLI ai-bom --env-ci', () => {
     expect(d.out).toEqual([])
     expect(d.err.join('')).toContain('ausente')
   })
+
+  const envOk = {
+    GRAFANA_OTLP_ENDPOINT: 'https://otlp.exemplo',
+    GRAFANA_OTLP_HEADERS: 'Authorization=Basic abc',
+  }
+  const cfgCom = (projeto: string) => ({
+    ...files,
+    'ai-observabilidade.config.json': JSON.stringify({ ativo: true, projeto }),
+  })
+
+  it.each([
+    ['newline no projeto', cfgCom('x\nNODE_OPTIONS=--require ./evil.js'), envOk],
+    ['vírgula no projeto', cfgCom('a,origem=local'), envOk],
+    ['igual no projeto', cfgCom('a=b'), envOk],
+    ['newline nos headers', cfgCom('ok'), { ...envOk, GRAFANA_OTLP_HEADERS: 'a\nNODE_OPTIONS=x' }],
+    ['CR no endpoint', cfgCom('ok'), { ...envOk, GRAFANA_OTLP_ENDPOINT: 'https://x\rY=1' }],
+  ])('CT-AIBOM-009 %s → stdout vazio, exit 0, aviso', async (_nome, arquivos, env) => {
+    const d = comEnv(arquivos, env)
+    expect(await main(['--env-ci'], d.deps)).toBe(0)
+    expect(d.out).toEqual([])
+    expect(d.err.join('')).toContain('inválido')
+  })
 })

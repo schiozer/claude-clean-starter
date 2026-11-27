@@ -582,6 +582,7 @@ describe('workflow spec-gate.yml telemetria', () => {
     expect(yml).toContain('EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}')
     expect(yml).toContain('--env-ci >> "$GITHUB_ENV"')
     expect(yml).toContain("HAS_OTLP: ${{ secrets.GRAFANA_OTLP_HEADERS != '' }}")
+    expect(yml).toContain('OTEL_METRICS_INCLUDE_SESSION_ID":"false')
     expect(yml.indexOf('--env-ci')).toBeLessThan(yml.indexOf('claude-code-action@'))
   })
 })

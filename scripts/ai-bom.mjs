@@ -58,6 +58,8 @@ function imprimirEnv(deps) {
   return 0
 }
 
+const PROJETO_CI = /^[\w.\- ]+$/
+
 // CI: NAME=VALUE sem export (formato do $GITHUB_ENV, que não expande ${}); endpoint e headers vêm
 // já resolvidos do env do passo. Faltando algum, nada é impresso (fail-open).
 function imprimirEnvCi(deps) {
@@ -76,6 +78,14 @@ function imprimirEnvCi(deps) {
     return 0
   }
   const variaveis = { ...envTelemetria(cfg.projeto, 'ci'), ...valores }
+  // $GITHUB_ENV é uma linha por variável: quebra de linha em qualquer valor injetaria variáveis
+  // nos passos seguintes (a config vem do head do PR). Vírgula/igual quebrariam o resource attribute.
+  if (!PROJETO_CI.test(cfg.projeto) || Object.values(variaveis).some((v) => /[\r\n]/.test(v))) {
+    deps.stderr(
+      'ai-bom: valor inválido para o CI (projeto com caracteres fora de [\\w.- ] ou quebra de linha); telemetria do CI não ligada.\n'
+    )
+    return 0
+  }
   deps.stdout(
     `${Object.entries(variaveis)
       .map(([n, v]) => `${n}=${v}`)
