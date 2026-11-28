@@ -13,7 +13,7 @@ BEST_PRACTICES pede saída pequena e paginada, mas nada media se isso é cumprid
 
 Nenhum projeto derivado chama um modelo com chave própria, então um gateway de saída para LLM (limite
 de gasto por tenant) não tem consumidor hoje. A medição de consumo do Claude Code no desenvolvimento é
-outra frente (ADR-023, PR #26, quando mergeada).
+outra frente ([ADR-023](./023-ai-bom-e-observabilidade-de-consumo.md)).
 
 ## Decisão
 

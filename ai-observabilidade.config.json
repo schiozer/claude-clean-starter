@@ -1,0 +1,5 @@
+{
+  "ativo": false,
+  "projeto": "claude-clean-starter",
+  "teto": { "mensalUsd": 400, "avisoPct": 80, "porProjetoUsd": {} }
+}

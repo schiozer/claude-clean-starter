@@ -13,28 +13,29 @@ passo a passo, com classe de risco e verificação em cada passo. Regras em
 
 ## Catálogo
 
-| Runbook                                                      | Quando usar                                                                                                                    |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| [bootstrap-ambientes.md](./bootstrap-ambientes.md)           | Uma vez por projeto: host (bloco **Bootstrap** do `host-<host>.md`), Neon, Auth0, envs, UAT fixo, proteção da `main`           |
-| [deploy-uat.md](./deploy-uat.md)                             | Levar uma branch ao UAT (push + PR → preview) e fazer o smoke test                                                             |
-| [deploy-prod.md](./deploy-prod.md)                           | Promover um PR aprovado no UAT para Prod (o **merge é do humano**)                                                             |
-| [rollback.md](./rollback.md)                                 | Incidente: desligar flag, promover deploy anterior, revert por PR                                                              |
-| [promover-prod.md](./promover-prod.md)                       | **Esteira** (ADR-020): levar o pacote do UAT para Prod e avançar a `main` por FF (o **disparo é do humano**)                   |
-| [hotfix.md](./hotfix.md)                                     | **Esteira** (ADR-021): `hotfix/*` direto na `main`, deploy de Prod e back-promotion para a `develop`                           |
-| [esteira-github-app.md](./esteira-github-app.md)             | **Esteira**: criar/instalar a GitHub App `esteira-promover`, segredos, bypass da `main`, rotacionar a chave                    |
-| [adotar-esteira-develop.md](./adotar-esteira-develop.md)     | **Opcional** (esteira, ADR-020): criar a `develop`, preparar host/App/repo e ligar o bloco `esteira` por PR                    |
-| [migracao-banco.md](./migracao-banco.md)                     | Aplicar migração SQL (ADR-008) em preview/UAT/Prod                                                                             |
-| [segredos-e-env.md](./segredos-e-env.md)                     | Criar/alterar env não-secreta; criar/rotacionar segredo                                                                        |
-| [feature-flags.md](./feature-flags.md)                       | Ligar/desligar flags por ambiente (incl. kill switch e escrita MCP)                                                            |
-| [mcp-habilitar-e-conectar.md](./mcp-habilitar-e-conectar.md) | Configurar Auth0 para o MCP e conectar o ChatGPT                                                                               |
-| [uso-mcp-habilitar.md](./uso-mcp-habilitar.md)               | **Opcional** (`USO_MCP_OBSERVABILIDADE`, ADR-024): tabela `mcp_uso_diario`, OTLP e flag para medir o uso das tools MCP         |
-| [spec-gate.md](./spec-gate.md)                               | Ligar/desligar o gate opcional `Spec × código` com Claude (`SPEC_GATE`, `ANTHROPIC_API_KEY`)                                   |
-| [e2e-uat-configurar.md](./e2e-uat-configurar.md)             | **Opcional** (só com `E2E_TARGET=preview`): usuários de teste, PATs e segredos para a `Regressão (UAT)` rodar contra o Preview |
-| [bunny-habilitar.md](./bunny-habilitar.md)                   | **Opcional** (`DEMOS_BUNNY`): library, storage zone, segredos `BUNNY_*` e envs para os vídeos de demo/treinamento na `/ajuda`  |
-| [host-vercel.md](./host-vercel.md)                           | Blocos do host **Vercel** (padrão): Bootstrap, UAT (alias), Prod, Rollback, Segredos e envs, Cron, Encerrar                    |
-| [host-heroku.md](./host-heroku.md)                           | Blocos do host **Heroku** (pipeline, review apps, UAT fixo por slug, Auth0 por Management API)                                 |
-| [host-cloudrun.md](./host-cloudrun.md)                       | Blocos do host **Cloud Run** (projetos GCP, WIF, revisões com tag `pr-<n>`/`uat`, tráfego em Prod)                             |
-| [migrar-host.md](./migrar-host.md)                           | Trocar o host do projeto (Vercel ↔ Heroku ↔ Cloud Run) em paralelo, com corte de DNS                                           |
+| Runbook                                                              | Quando usar                                                                                                                                         |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [bootstrap-ambientes.md](./bootstrap-ambientes.md)                   | Uma vez por projeto: host (bloco **Bootstrap** do `host-<host>.md`), Neon, Auth0, envs, UAT fixo, proteção da `main`                                |
+| [deploy-uat.md](./deploy-uat.md)                                     | Levar uma branch ao UAT (push + PR → preview) e fazer o smoke test                                                                                  |
+| [deploy-prod.md](./deploy-prod.md)                                   | Promover um PR aprovado no UAT para Prod (o **merge é do humano**)                                                                                  |
+| [rollback.md](./rollback.md)                                         | Incidente: desligar flag, promover deploy anterior, revert por PR                                                                                   |
+| [promover-prod.md](./promover-prod.md)                               | **Esteira** (ADR-020): levar o pacote do UAT para Prod e avançar a `main` por FF (o **disparo é do humano**)                                        |
+| [hotfix.md](./hotfix.md)                                             | **Esteira** (ADR-021): `hotfix/*` direto na `main`, deploy de Prod e back-promotion para a `develop`                                                |
+| [esteira-github-app.md](./esteira-github-app.md)                     | **Esteira**: criar/instalar a GitHub App `esteira-promover`, segredos, bypass da `main`, rotacionar a chave                                         |
+| [adotar-esteira-develop.md](./adotar-esteira-develop.md)             | **Opcional** (esteira, ADR-020): criar a `develop`, preparar host/App/repo e ligar o bloco `esteira` por PR                                         |
+| [migracao-banco.md](./migracao-banco.md)                             | Aplicar migração SQL (ADR-008) em preview/UAT/Prod                                                                                                  |
+| [segredos-e-env.md](./segredos-e-env.md)                             | Criar/alterar env não-secreta; criar/rotacionar segredo                                                                                             |
+| [feature-flags.md](./feature-flags.md)                               | Ligar/desligar flags por ambiente (incl. kill switch e escrita MCP)                                                                                 |
+| [mcp-habilitar-e-conectar.md](./mcp-habilitar-e-conectar.md)         | Configurar Auth0 para o MCP e conectar o ChatGPT                                                                                                    |
+| [spec-gate.md](./spec-gate.md)                                       | Ligar/desligar o gate opcional `Spec × código` com Claude (`SPEC_GATE`, `ANTHROPIC_API_KEY`)                                                        |
+| [e2e-uat-configurar.md](./e2e-uat-configurar.md)                     | **Opcional** (só com `E2E_TARGET=preview`): usuários de teste, PATs e segredos para a `Regressão (UAT)` rodar contra o Preview                      |
+| [bunny-habilitar.md](./bunny-habilitar.md)                           | **Opcional** (`DEMOS_BUNNY`): library, storage zone, segredos `BUNNY_*` e envs para os vídeos de demo/treinamento na `/ajuda`                       |
+| [ai-observabilidade-habilitar.md](./ai-observabilidade-habilitar.md) | **Opcional** (ADR-023): Grafana Cloud, variáveis da sessão, segredos do CI e, no hub, Neon `ai-observabilidade` para a telemetria de tokens e custo |
+| [host-vercel.md](./host-vercel.md)                                   | Blocos do host **Vercel** (padrão): Bootstrap, UAT (alias), Prod, Rollback, Segredos e envs, Cron, Encerrar                                         |
+| [host-heroku.md](./host-heroku.md)                                   | Blocos do host **Heroku** (pipeline, review apps, UAT fixo por slug, Auth0 por Management API)                                                      |
+| [host-cloudrun.md](./host-cloudrun.md)                               | Blocos do host **Cloud Run** (projetos GCP, WIF, revisões com tag `pr-<n>`/`uat`, tráfego em Prod)                                                  |
+| [migrar-host.md](./migrar-host.md)                                   | Trocar o host do projeto (Vercel ↔ Heroku ↔ Cloud Run) em paralelo, com corte de DNS                                                                |
+| [uso-mcp-habilitar.md](./uso-mcp-habilitar.md)                       | **Opcional** (`USO_MCP_OBSERVABILIDADE`, ADR-024): tabela `mcp_uso_diario`, OTLP e flag para medir o uso das tools MCP                              |
 
 ## Classes de risco (resumo)
 
