@@ -13,6 +13,7 @@ const FLAGS = {
   resources: { envVar: 'RESOURCES_ENABLED', defaultOn: false },
   'mcp.resources.read': { envVar: 'MCP_RESOURCES_READ', defaultOn: true, requires: 'resources' },
   'mcp.resources.write': { envVar: 'MCP_RESOURCES_WRITE', defaultOn: false, requires: 'resources' },
+  'observabilidade.uso-mcp': { envVar: 'USO_MCP_OBSERVABILIDADE', defaultOn: false },
 } as const satisfies Record<string, FlagDef>
 
 export type FlagName = keyof typeof FLAGS

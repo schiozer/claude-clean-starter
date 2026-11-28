@@ -51,3 +51,15 @@ describe('dependência entre flags', () => {
     expect(isEnabled('mcp.resources.write', { RESOURCES_ENABLED: 'on', MCP_RESOURCES_WRITE: 'on' })).toBe(true)
   })
 })
+
+describe('isEnabled("observabilidade.uso-mcp")', () => {
+  it('nasce desligada', () => {
+    expect(isEnabled('observabilidade.uso-mcp', {})).toBe(false)
+  })
+  it('liga com USO_MCP_OBSERVABILIDADE=on, independente de RESOURCES_ENABLED', () => {
+    expect(isEnabled('observabilidade.uso-mcp', { USO_MCP_OBSERVABILIDADE: 'on' })).toBe(true)
+  })
+  it('desliga com off', () => {
+    expect(isEnabled('observabilidade.uso-mcp', { USO_MCP_OBSERVABILIDADE: 'off' })).toBe(false)
+  })
+})

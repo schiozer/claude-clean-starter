@@ -55,6 +55,10 @@
 > **Adoção — demos** ([ADR-017](./docs/adr/template/017-bunny-videos-demos-treinamento.md)): `DEMOS_BUNNY`
 > nasce desligado; para ligar, runbook [`bunny-habilitar.md`](./docs/runbooks/bunny-habilitar.md).
 >
+> **Adoção — uso das tools MCP** ([ADR-024](./docs/adr/template/024-medicao-de-uso-das-tools-mcp.md)): a medição
+> (`IUsageMeter` no `callTool`) nasce **desligada** (`USO_MCP_OBSERVABILIDADE`); para ligar, runbook
+> [`uso-mcp-habilitar.md`](./docs/runbooks/uso-mcp-habilitar.md).
+>
 > **Adoção — E2E** ([ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md)): o
 > `/template-sync` semeia só `tests/e2e/auth.setup.ts` e `docs/rnf.md` (nunca sobrescreve); crie
 > `playwright.config.ts` (com o `webServer` do app) e `tests/e2e/cenarios.config.json` pelo

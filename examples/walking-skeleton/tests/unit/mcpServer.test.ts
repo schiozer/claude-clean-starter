@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
-import { createMcpHandler, defineTool, InMemoryAuditLog, InMemoryRateLimiter } from '@/shared/mcp'
+import { createMcpHandler, defineTool, InMemoryAuditLog, InMemoryRateLimiter, NullUsageMeter } from '@/shared/mcp'
 import { UnauthorizedError } from '@/shared/errors'
 import type { IAccessTokenVerifier } from '@/shared/auth'
 import { makeActor } from '../helpers/makeActor'
@@ -35,6 +35,7 @@ const handler = (env: Record<string, string> = ENV) =>
     verifierFor: () => verifier,
     rateLimiter: new InMemoryRateLimiter({ limit: 100, windowMs: 60_000 }),
     audit: new InMemoryAuditLog(),
+    usage: new NullUsageMeter(),
     env,
   })
 
@@ -93,6 +94,7 @@ describe('createMcpHandler — tools', () => {
         verifierFor: () => verifier,
         rateLimiter: new InMemoryRateLimiter({ limit: 1, windowMs: 1 }),
         audit: new InMemoryAuditLog(),
+        usage: new NullUsageMeter(),
       })
     ).toThrow('list_things')
   })

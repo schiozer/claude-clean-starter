@@ -35,6 +35,7 @@ passo a passo, com classe de risco e verificação em cada passo. Regras em
 | [host-heroku.md](./host-heroku.md)                                   | Blocos do host **Heroku** (pipeline, review apps, UAT fixo por slug, Auth0 por Management API)                                                      |
 | [host-cloudrun.md](./host-cloudrun.md)                               | Blocos do host **Cloud Run** (projetos GCP, WIF, revisões com tag `pr-<n>`/`uat`, tráfego em Prod)                                                  |
 | [migrar-host.md](./migrar-host.md)                                   | Trocar o host do projeto (Vercel ↔ Heroku ↔ Cloud Run) em paralelo, com corte de DNS                                                                |
+| [uso-mcp-habilitar.md](./uso-mcp-habilitar.md)                       | **Opcional** (`USO_MCP_OBSERVABILIDADE`, ADR-024): tabela `mcp_uso_diario`, OTLP e flag para medir o uso das tools MCP                              |
 
 ## Classes de risco (resumo)
 
