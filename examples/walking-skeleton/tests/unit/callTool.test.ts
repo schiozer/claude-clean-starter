@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { z } from 'zod'
-import { callTool, defineTool, InMemoryAuditLog, InMemoryRateLimiter } from '@/shared/mcp'
+import { callTool, defineTool, InMemoryAuditLog, InMemoryRateLimiter, NullUsageMeter } from '@/shared/mcp'
 import { makeActor } from '../helpers/makeActor'
 import { fixedClock } from '../helpers/fixedClock'
 
@@ -33,7 +33,7 @@ const WRITE_ON = { RESOURCES_ENABLED: 'on', MCP_RESOURCES_WRITE: 'on' }
 
 let audit: InMemoryAuditLog
 let rateLimiter: InMemoryRateLimiter
-const deps = (env: Record<string, string> = WRITE_ON) => ({ audit, rateLimiter, clock: fixedClock, env })
+const deps = (env: Record<string, string> = WRITE_ON) => ({ audit, rateLimiter, usage: new NullUsageMeter(), clock: fixedClock, env })
 
 beforeEach(() => {
   audit = new InMemoryAuditLog()

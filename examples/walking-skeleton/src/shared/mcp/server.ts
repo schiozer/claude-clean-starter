@@ -7,6 +7,7 @@ import { readBearerToken, type AuthUser, type IAccessTokenVerifier } from '@/sha
 import { UnauthorizedError } from '@/shared/errors'
 import { logError } from '@/shared/logError'
 import type { IAuditLog } from './audit'
+import type { IUsageMeter } from './usage'
 import { callTool } from './callTool'
 import { loadMcpConfig, type McpConfig } from './config'
 import type { AnyTool } from './defineTool'
@@ -20,6 +21,7 @@ export interface McpHandlerDeps {
   verifierFor: (config: McpConfig) => IAccessTokenVerifier
   rateLimiter: IRateLimiter
   audit: IAuditLog
+  usage: IUsageMeter
   env?: Env
   info?: { name: string; version: string }
 }
@@ -63,6 +65,7 @@ function buildServer(deps: McpHandlerDeps, actor: AuthUser, env: Env): Server {
     callTool(deps.tools, actor, request.params.name, request.params.arguments, {
       rateLimiter: deps.rateLimiter,
       audit: deps.audit,
+      usage: deps.usage,
       env,
     })
   )

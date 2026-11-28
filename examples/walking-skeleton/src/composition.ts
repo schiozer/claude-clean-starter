@@ -23,6 +23,7 @@ import { systemClock } from '@/shared/kernel'
 import { logError } from '@/shared/logError'
 import {
   InMemoryAuditLog,
+  NullUsageMeter,
   InMemoryRateLimiter,
   createMcpHandler,
   makeProtectedResourceMetadataHandler,
@@ -134,6 +135,7 @@ export const mcpHandler = createMcpHandler({
   verifierFor,
   rateLimiter: mcpRateLimiter,
   audit: mcpAuditLog,
+  usage: new NullUsageMeter(),
 })
 
 export const protectedResourceMetadata = makeProtectedResourceMetadataHandler(mcpTools)
