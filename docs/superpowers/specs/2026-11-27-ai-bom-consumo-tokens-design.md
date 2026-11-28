@@ -92,14 +92,14 @@ workflows pulam). Sem segredos.
 
 Script `scripts/ai-bom/` gera um BOM **CycloneDX 1.6 JSON** a partir do repositório:
 
-| Componente | Fonte | Tipo CycloneDX |
-| --- | --- | --- |
-| Plugins habilitados | `.claude/settings.json` → `enabledPlugins` | `application` (nome@marketplace) |
-| Skills do projeto | `.claude/skills/*/SKILL.md` (frontmatter `name`, `description`) | `application` |
-| Hooks do Claude Code | `.claude/settings.json` → `hooks` (evento, matcher, comando) | `application` |
-| Actions com IA | `.github/workflows/*.yml` com `anthropics/*` (nome, SHA fixado, versão do comentário) | `application` + `pedigree`/hash |
-| Modelos declarados | defaults de modelo nos workflows (ex.: `SPEC_GATE_MODEL` → `claude-sonnet-5-5`) | `machine-learning-model` |
-| Serviços externos | Anthropic API, Grafana Cloud, Neon (quando `ativo`) | `services` |
+| Componente           | Fonte                                                                                 | Tipo CycloneDX                   |
+| -------------------- | ------------------------------------------------------------------------------------- | -------------------------------- |
+| Plugins habilitados  | `.claude/settings.json` → `enabledPlugins`                                            | `application` (nome@marketplace) |
+| Skills do projeto    | `.claude/skills/*/SKILL.md` (frontmatter `name`, `description`)                       | `application`                    |
+| Hooks do Claude Code | `.claude/settings.json` → `hooks` (evento, matcher, comando)                          | `application`                    |
+| Actions com IA       | `.github/workflows/*.yml` com `anthropics/*` (nome, SHA fixado, versão do comentário) | `application` + `pedigree`/hash  |
+| Modelos declarados   | defaults de modelo nos workflows (ex.: `SPEC_GATE_MODEL` → `claude-sonnet-5-5`)       | `machine-learning-model`         |
+| Serviços externos    | Anthropic API, Grafana Cloud, Neon (quando `ativo`)                                   | `services`                       |
 
 - Saída **determinística** (ordenada, sem timestamp no corpo; `serialNumber` derivado do conteúdo)
   para o `--check` funcionar.

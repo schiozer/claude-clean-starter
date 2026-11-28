@@ -9,6 +9,9 @@ export const CONFIG_PATH = 'ai-observabilidade.config.json'
 const MENSAL_USD_PADRAO = 400
 const AVISO_PCT_PADRAO = 80
 
+// Única regra de `projeto`: vira valor de OTEL_RESOURCE_ATTRIBUTES (sem espaço, vírgula nem igual).
+const PROJETO_VALIDO = /^[A-Za-z0-9_.-]+$/
+
 const erro = (mensagem) => new Error(`${CONFIG_PATH}: ${mensagem}`)
 
 const ehObjeto = (valor) => typeof valor === 'object' && valor !== null && !Array.isArray(valor)
@@ -51,6 +54,10 @@ export function parseAiObsConfig(raw) {
   if (ativo || raw.projeto !== undefined) {
     if (typeof raw.projeto !== 'string' || raw.projeto.trim() === '') {
       if (ativo) throw erro('projeto deve ser um texto não vazio')
+    } else if (!PROJETO_VALIDO.test(raw.projeto)) {
+      throw erro(
+        'projeto deve usar só letras ASCII, números, ponto, hífen e sublinhado (sem espaços)'
+      )
     } else {
       projeto = raw.projeto
     }

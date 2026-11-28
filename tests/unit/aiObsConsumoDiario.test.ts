@@ -3,6 +3,7 @@ import { coletarDia, gravar, main } from '../../scripts/ai-observabilidade/consu
 import { parseAiObsConfig } from '../../scripts/ai-observabilidade/config.mjs'
 import {
   METRICA_CUSTO,
+  FILTRO_SESSOES,
   METRICA_SESSOES,
   METRICA_TOKENS,
 } from '../../scripts/ai-observabilidade/metricas.mjs'
@@ -100,7 +101,9 @@ describe('coletarDia', () => {
     expect(qs).toHaveLength(3)
     expect(qs[0]).toBe(`sum by (projeto, origem, model) (increase(${METRICA_CUSTO}[1d]))`)
     expect(qs[1]).toBe(`sum by (projeto, origem, model, type) (increase(${METRICA_TOKENS}[1d]))`)
-    expect(qs[2]).toBe(`sum by (projeto, origem) (increase(${METRICA_SESSOES}[1d]))`)
+    expect(qs[2]).toBe(
+      `sum by (projeto, origem) (increase(${METRICA_SESSOES}${FILTRO_SESSOES}[1d]))`
+    )
   })
 
   it('CT-AIBOM-008 grava a linha "*" mesmo sem custo nem tokens se há sessões', async () => {

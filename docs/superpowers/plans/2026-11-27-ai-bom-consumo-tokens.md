@@ -39,10 +39,12 @@ Loki, alerting), Neon via `@neondatabase/serverless` (driver HTTP, ADR-008), Cyc
 ### Task 1: Config `ai-observabilidade.config.json`
 
 **Files:**
+
 - Create: `scripts/ai-observabilidade/config.mjs`, `ai-observabilidade.config.json`
 - Test: `tests/unit/aiObsConfig.test.ts`
 
 **Interfaces:**
+
 - Produces: `CONFIG_PATH = 'ai-observabilidade.config.json'`; `parseAiObsConfig(raw: unknown | null): AiObsConfig`; `readAiObsConfig(dir: string): AiObsConfig` onde `AiObsConfig = { ativo: boolean, projeto: string | null, central: boolean, teto: { mensalUsd: number, avisoPct: number, porProjetoUsd: Record<string, number> } }`; `papel(cfg): 'desligado' | 'emissor' | 'hub'`.
 
 - [ ] **Step 1: testes** — `null` → `{ ativo:false, central:false, projeto:null, teto:{mensalUsd:400, avisoPct:80, porProjetoUsd:{}} }` e `papel` `'desligado'`; `{ativo:true, projeto:'ContasMes.ai'}` → `'emissor'`; `+central:true` → `'hub'`; `CT-AIBOM-005`: `mensalUsd: -10` lança `/teto.mensalUsd deve ser um número positivo/`; `avisoPct: 120` lança `/avisoPct deve estar entre 1 e 99/`; `ativo:true` sem `projeto` lança `/projeto deve ser um texto não vazio/`; `porProjetoUsd: { X: 0 }` lança.
@@ -54,11 +56,13 @@ Loki, alerting), Neon via `@neondatabase/serverless` (driver HTTP, ADR-008), Cyc
 ### Task 2: Inventário CycloneDX e `--check`
 
 **Files:**
+
 - Create: `scripts/ai-bom/inventario.mjs`, `scripts/ai-bom.mjs` (CLI), `ai-bom.cdx.json` (gerado)
 - Modify: `package.json` (`"ai-bom": "node scripts/ai-bom.mjs"`), `.github/workflows/ci.yml` (passo `Check AI-BOM` → `npm run ai-bom -- --check`, após `Check runbooks`)
 - Test: `tests/unit/aiBomInventario.test.ts`, `tests/unit/aiBomCli.test.ts`
 
 **Interfaces:**
+
 - Consumes: `readAiObsConfig` (Task 1) — para `services` quando `ativo`.
 - Produces: `coletar(fs: { readFile(p): string|null, list(dir): string[] }): Componentes`; `gerarBom(componentes, cfg): object` (CycloneDX); `serializar(bom): string` (JSON 2 espaços + `\n`); CLI `main(argv: string[], deps): Promise<number>` (exit code) com subcomandos `(nenhum)`, `--check`, `--env`, `--grafana` (os dois últimos nas Tasks 3 e 4).
 
@@ -72,11 +76,13 @@ Loki, alerting), Neon via `@neondatabase/serverless` (driver HTTP, ADR-008), Cyc
 ### Task 3: `--env` para a sessão local
 
 **Files:**
+
 - Modify: `scripts/ai-bom.mjs`
 - Create: `scripts/ai-observabilidade/metricas.mjs`
 - Test: `tests/unit/aiBomCli.test.ts`
 
 **Interfaces:**
+
 - Produces (`metricas.mjs`): `envTelemetria(projeto: string, origem: 'local'|'ci'): Record<string,string>` (sem endpoint/token); `METRICA_CUSTO`, `METRICA_TOKENS` (nomes Prometheus); `ATRIBUTO_PROJETO = 'projeto'`, `ATRIBUTO_ORIGEM = 'origem'`.
 
 - [ ] **Step 1: testes** — `CT-AIBOM-010`: config `{ativo:true, projeto:'ContasMes.ai'}` → stdout tem `export CLAUDE_CODE_ENABLE_TELEMETRY=1`, `OTEL_RESOURCE_ATTRIBUTES=projeto=ContasMes.ai,origem=local`, nenhuma linha com `OTEL_LOG_USER_PROMPTS=1`, e nenhum valor de `process.env.GRAFANA_OTLP_TOKEN` (setado no teste como `segredo-xyz`) aparece; endpoint e headers saem como `${GRAFANA_OTLP_ENDPOINT}`/`${GRAFANA_OTLP_HEADERS}` literais; `CT-AIBOM-006` parte: config desligado → exit 0, stdout vazio, stderr avisa.
@@ -86,11 +92,13 @@ Loki, alerting), Neon via `@neondatabase/serverless` (driver HTTP, ADR-008), Cyc
 ### Task 4: Painel e alertas do Grafana (`--grafana`)
 
 **Files:**
+
 - Create: `scripts/ai-observabilidade/grafana.mjs`, `observabilidade/grafana/painel.json`
 - Modify: `scripts/ai-bom.mjs`
 - Test: `tests/unit/aiObsGrafana.test.ts`
 
 **Interfaces:**
+
 - Consumes: `AiObsConfig`, `papel` (Task 1); `METRICA_CUSTO`, `ATRIBUTO_PROJETO` (Task 3).
 - Produces: `regrasAlerta(cfg): object` (formato de provisioning de alert rules do Grafana, `apiVersion: 1`, um grupo `ai-teto`); CLI `--grafana` escreve em stdout.
 
@@ -102,10 +110,12 @@ Loki, alerting), Neon via `@neondatabase/serverless` (driver HTTP, ADR-008), Cyc
 ### Task 5: Uso do gate no resumo do job e OTEL no CI
 
 **Files:**
+
 - Modify: `scripts/spec-gate.mjs` (nova `resumoUso(executionJson: string|null): string`, chamada no `report` e escrita em `GITHUB_STEP_SUMMARY` se existir), `.github/workflows/spec-gate.yml`
 - Test: `tests/unit/specGate.test.ts`
 
 **Interfaces:**
+
 - Consumes: `envTelemetria(projeto, 'ci')` (Task 3), `readAiObsConfig` (Task 1).
 
 - [ ] **Step 1: testes** — `CT-AIBOM-009`: `execution_file` de exemplo (array de mensagens; a última `type: 'result'` com `usage.input_tokens: 12000`, `usage.output_tokens: 800`, `total_cost_usd: 0.051`) → resumo contém `12.000`, `800` e `US$ 0,051`; `null`/arquivo ausente → string vazia e `runReport` inalterado; Review Focus 4: JSON inválido → `uso indisponível`, veredito inalterado. Conferir o formato real do `execution_file` na versão fixada da action antes de fixar a fixture.
@@ -115,11 +125,13 @@ Loki, alerting), Neon via `@neondatabase/serverless` (driver HTTP, ADR-008), Cyc
 ### Task 6: Resumo diário no Neon
 
 **Files:**
+
 - Create: `scripts/ai-observabilidade/consumoDiario.mjs`, `observabilidade/neon/001-consumo-diario.sql`, `.github/workflows/ai-consumo-diario.yml`
 - Modify: `package.json` (devDependency `@neondatabase/serverless`, mesma major do `examples/walking-skeleton` se houver; script `"ai-obs:consumo-diario"`)
 - Test: `tests/unit/aiObsConsumoDiario.test.ts`
 
 **Interfaces:**
+
 - Consumes: `readAiObsConfig`, `papel` (Task 1); `METRICA_CUSTO`, `METRICA_TOKENS`, atributos (Task 3).
 - Produces: `coletarDia({ dia: string, consultar: (promql: string) => Promise<Serie[]>, contarSessoes: (logql: string) => Promise<Record<string, number>> }): Promise<Linha[]>`; `gravar(sql: TaggedSql, linhas: Linha[]): Promise<void>` (`insert … on conflict (dia, projeto, origem, modelo) do update`); `main({ env, cfg, fetch, sql, hoje }): Promise<number>`.
 
@@ -130,6 +142,7 @@ Loki, alerting), Neon via `@neondatabase/serverless` (driver HTTP, ADR-008), Cyc
 ### Task 7: ADR-023, runbook, sync e ponteiros
 
 **Files:**
+
 - Create: `docs/adr/template/023-ai-bom-e-observabilidade-de-consumo.md`, `docs/runbooks/ai-observabilidade-habilitar.md`
 - Modify: `docs/runbooks/README.md` (linha no catálogo), `template-sync.manifest.json` (`ai-bom.cdx.json` em `ignore`; novos testes `tests/unit/aiBom*.test.ts`/`aiObs*.test.ts` em `managed`), `.claude/skills/template-sync/SKILL.md` (semear `ai-observabilidade.config.json` junto de `docs/rnf.md`/`auth.setup.ts`, sem sobrescrever, e passo "rode `npm run ai-bom` e commite"), `tests/unit/templateSyncSkill.test.ts` (`SEMEADOS` + o novo arquivo), `CLAUDE.md` (bloco **Adoção — consumo de IA** com 2 linhas, ADR-023), `SKILLS.md` (uma linha sob Transversais apontando o runbook)
 - Test: `npm run check:runbooks`, `tests/unit/templateSyncSkill.test.ts`, `tests/unit/docsLinks.test.ts`

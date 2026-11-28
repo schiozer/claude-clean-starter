@@ -19,6 +19,15 @@ describe('parseAiObsConfig', () => {
   it('ativo com projeto → emissor', () =>
     expect(papel(parseAiObsConfig({ ativo: true, projeto: 'ContasMes.ai' }))).toBe('emissor'))
 
+  it.each(['meu projeto', 'Projeção', 'a,b', 'a=b'])(
+    'CT-AIBOM-005: projeto inválido (%s) → erro',
+    (projeto) =>
+      expect(() => parseAiObsConfig({ ativo: true, projeto })).toThrow(/projeto deve usar/)
+  )
+
+  it('CT-AIBOM-005: projeto AssistBru.ai é válido', () =>
+    expect(parseAiObsConfig({ ativo: true, projeto: 'AssistBru.ai' }).projeto).toBe('AssistBru.ai'))
+
   it('ativo + central → hub', () =>
     expect(papel(parseAiObsConfig({ ativo: true, projeto: 'hub', central: true }))).toBe('hub'))
 

@@ -97,11 +97,12 @@ describe('CLI ai-bom', () => {
       expect(saida).toContain('export CLAUDE_CODE_ENABLE_TELEMETRY=1')
       expect(saida).toContain('OTEL_RESOURCE_ATTRIBUTES=projeto=ContasMes.ai,origem=local')
       expect(saida).toContain('export OTEL_LOGS_EXPORTER=otlp')
-      expect(saida).toContain('export OTEL_METRICS_INCLUDE_SESSION_ID=false')
+      expect(saida).toContain('export OTEL_METRICS_INCLUDE_SESSION_ID=true')
+      expect(saida).toContain('export OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=cumulative')
       expect(saida).not.toContain('OTEL_LOG_USER_PROMPTS=1')
       expect(saida).not.toContain('segredo-xyz')
-      expect(saida).toContain('${GRAFANA_OTLP_ENDPOINT}')
-      expect(saida).toContain('${GRAFANA_OTLP_HEADERS}')
+      expect(saida).toContain('export OTEL_EXPORTER_OTLP_ENDPOINT="${GRAFANA_OTLP_ENDPOINT}"')
+      expect(saida).toContain('export OTEL_EXPORTER_OTLP_HEADERS="${GRAFANA_OTLP_HEADERS}"')
     } finally {
       delete process.env.GRAFANA_OTLP_TOKEN
     }
@@ -175,16 +176,24 @@ describe('CLI ai-bom --env-ci', () => {
     'ai-observabilidade.config.json': JSON.stringify({ ativo: true, projeto }),
   })
 
+  it('CT-AIBOM-009 projeto válido com ponto (AssistBru.ai) é aceito', async () => {
+    const d = comEnv(cfgCom('AssistBru.ai'), envOk)
+    expect(await main(['--env-ci'], d.deps)).toBe(0)
+    expect(d.out.join('')).toContain('projeto=AssistBru.ai,origem=ci')
+  })
+
   it.each([
     ['newline no projeto', cfgCom('x\nNODE_OPTIONS=--require ./evil.js'), envOk],
     ['vírgula no projeto', cfgCom('a,origem=local'), envOk],
     ['igual no projeto', cfgCom('a=b'), envOk],
+    ['espaço no projeto', cfgCom('meu projeto'), envOk],
+    ['acento no projeto', cfgCom('Projeção'), envOk],
     ['newline nos headers', cfgCom('ok'), { ...envOk, GRAFANA_OTLP_HEADERS: 'a\nNODE_OPTIONS=x' }],
     ['CR no endpoint', cfgCom('ok'), { ...envOk, GRAFANA_OTLP_ENDPOINT: 'https://x\rY=1' }],
   ])('CT-AIBOM-009 %s → stdout vazio, exit 0, aviso', async (_nome, arquivos, env) => {
     const d = comEnv(arquivos, env)
     expect(await main(['--env-ci'], d.deps)).toBe(0)
     expect(d.out).toEqual([])
-    expect(d.err.join('')).toContain('inválido')
+    expect(d.err.join('')).toMatch(/inválid/)
   })
 })

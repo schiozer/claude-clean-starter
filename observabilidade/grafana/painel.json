@@ -97,7 +97,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(claude_code_session_count_total[30d]))"
+          "expr": "sum(increase(claude_code_session_count_total{start_type!=\"agents_view\"}[30d]))"
         }
       ]
     }

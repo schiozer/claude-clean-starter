@@ -23,7 +23,7 @@ Spec: [`2026-11-27-ai-bom-consumo-tokens-design.md`](../../superpowers/specs/202
    (`observabilidade/grafana/`); um job diário grava o consumo do dia anterior em `consumo_diario`
    no Neon (`observabilidade/neon/`, migração pelo padrão do
    [ADR-008](./008-migracoes-sql-versionadas-driver-http.md)), que guarda o histórico além da
-   retenção curta do free tier.
+   retenção curta do free tier. `observabilidade/**` é gerido pelo template (vai pelo sync).
 2. **AI-BOM**: `npm run ai-bom` gera `ai-bom.cdx.json` (CycloneDX), determinístico; `--check`
    barra no CI o inventário desatualizado. `ai-bom.cdx.json` é do projeto (`ignore` do manifesto).
 3. **Hub único e emissores.** `ai-observabilidade.config.json` é por projeto (semeado pelo sync sem
@@ -35,23 +35,31 @@ Spec: [`2026-11-27-ai-bom-consumo-tokens-design.md`](../../superpowers/specs/202
    então ela aproxima o mês; o mês civil exato fica na tabela de auditoria do Neon. Os limiares
    (`mensalUsd`, `avisoPct`, `porProjetoUsd`) vêm do config, fonte única do teto.
 5. **Sessões pela métrica**, não pelo Loki: `claude_code.session.count` (Prometheus
-   `claude_code_session_count_total`). Definimos `OTEL_METRICS_INCLUDE_SESSION_ID=false` para não
-   explodir a cardinalidade do free tier, e isso também remove `session.id` dos eventos, o que
-   inviabiliza contar sessões por eventos no Loki (desvio da §4.5 da spec, com a mesma intenção).
-   Logs e eventos continuam saindo por OTLP. No Neon, as sessões do dia ficam numa linha com
+   `claude_code_session_count_total`). Contar sessões por eventos no Loki é um desvio da §4.5 da
+   spec: a métrica é a fonte certa. A query exclui `start_type="agents_view"`, que marca o
+   processo da UI `claude agents`, não uma conversa. Logs e eventos continuam saindo por OTLP. No Neon, as sessões do dia ficam numa linha com
    `modelo='*'`, tokens e custo zerados.
-6. **Segredos do CI**: `GRAFANA_OTLP_ENDPOINT` e `GRAFANA_OTLP_HEADERS` (o valor completo do
-   header, `Authorization=Basic <base64>`), no lugar de um `GRAFANA_OTLP_TOKEN`, porque o
+6. **Temporalidade e `session.id`** (desvio da §4.3 da spec, "sem session.id"): o Claude Code
+   exporta métricas em `delta` por padrão, mas o Grafana Cloud (Prometheus) exige **cumulativo**;
+   definimos `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=cumulative`. Com
+   `OTEL_METRICS_INCLUDE_SESSION_ID=false`, sessões simultâneas e sequenciais cairiam numa só série
+   e `increase()` veria resets falsos; por isso `session.id` **fica como rótulo**
+   (`OTEL_METRICS_INCLUDE_SESSION_ID=true`) e as queries agregam com `sum(increase(...))`. A
+   cardinalidade é aceitável nesta escala (dezenas de sessões por dia). Limite da plataforma:
+   `user.email` é sempre anexado pelo Claude Code e não pode ser desligado.
+7. **Segredos do CI**: `GRAFANA_OTLP_ENDPOINT` e `GRAFANA_OTLP_HEADERS` (o valor completo do
+   header, `Authorization=Basic%20<base64>`, com o espaço codificado como `%20`, como no snippet
+   OTLP do Grafana Cloud e no formato W3C baggage), no lugar de um `GRAFANA_OTLP_TOKEN`, porque o
    `$GITHUB_ENV` não expande `${}`. No `spec-gate.yml` a action recebe
-   `settings: {"env":{"OTEL_METRICS_INCLUDE_SESSION_ID":"false"}}`. O job diário usa
+   `settings: {"env":{"OTEL_METRICS_INCLUDE_SESSION_ID":"true","OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE":"cumulative"}}`. O job diário usa
    `GRAFANA_API_URL`, `GRAFANA_READ_TOKEN` e `AI_OBS_DATABASE_URL`. A credencial OTLP do CI é
    **só de ingestão** (escrita de métricas e logs): os scripts do gate rodam do head do PR; a de
    leitura é outra credencial, só para o job diário.
-7. **Fail-open em tudo**: falha de telemetria ou do Grafana nunca bloqueia a sessão nem o gate de
+8. **Fail-open em tudo**: falha de telemetria ou do Grafana nunca bloqueia a sessão nem o gate de
    CI. O job diário sai 1 em falha, sem gravação parcial (um único `INSERT … ON CONFLICT`, idempotente).
-8. **Sem Zod**: o tooling da raiz valida o config à mão, pelo [ADR-007](./007-tooling-da-raiz-isolado-de-exemplos.md).
-9. **Privacidade**: prompts e respostas nunca são exportados (`OTEL_LOG_USER_PROMPTS` ausente);
-   segredos nunca entram no repositório nem na sessão do agente (runbook, ADR-013 §4).
+9. **Sem Zod**: o tooling da raiz valida o config à mão, pelo [ADR-007](./007-tooling-da-raiz-isolado-de-exemplos.md).
+10. **Privacidade**: prompts e respostas nunca são exportados (`OTEL_LOG_USER_PROMPTS` ausente);
+    segredos nunca entram no repositório nem na sessão do agente (runbook, ADR-013 §4).
 
 O passo a passo está no runbook [`ai-observabilidade-habilitar.md`](../../runbooks/ai-observabilidade-habilitar.md).
 
@@ -73,4 +81,4 @@ O passo a passo está no runbook [`ai-observabilidade-habilitar.md`](../../runbo
 - **Stack local `otel-lgtm` + cópia no Neon**: dois armazenamentos e o CI fica de fora.
 - **Hook de fim de sessão gravando no git**: dado pessoal no repositório, ruído de commit e
   conflito com o ADR-022.
-- **Sessões por Loki (spec §4.5)**: exigiria `session.id` nos eventos, que desligamos por cardinalidade.
+- **Sessões por Loki (spec §4.5)**: exigiria `session.id` nos eventos; a métrica de sessões é mais simples.

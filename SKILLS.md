@@ -66,19 +66,18 @@ implementação e entram na regressão ([ADR-016](./docs/adr/template/016-testes
 
 ### Operação — Deploy e Configuração
 
-| Skill               | Origem  | Papel                                                                                                                                                                                                                                                                                                                                   |
-| ------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `runbook-execution` | Projeto | Executa um runbook de `docs/runbooks/` (deploy, envs, segredos, flags, migração, MCP, rollback) com as classes de risco R0–R3 e aprovação humana por operação — ver [ADR-013](./docs/adr/template/013-governanca-operacional-e-runbooks.md). Sem runbook → não executa. Inclui `spec-gate` (ligar/desligar o gate opcional com Claude). |
+| Skill               | Origem  | Papel                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runbook-execution` | Projeto | Executa um runbook de `docs/runbooks/` (deploy, envs, segredos, flags, migração, MCP, rollback) com as classes de risco R0–R3 e aprovação humana por operação — ver [ADR-013](./docs/adr/template/013-governanca-operacional-e-runbooks.md). Sem runbook → não executa. Inclui `spec-gate` (ligar/desligar o gate opcional com Claude) e `ai-observabilidade-habilitar` (AI-BOM e consumo de IA, [ADR-023](./docs/adr/template/023-ai-bom-e-observabilidade-de-consumo.md)). |
 
 ### Transversais
 
-| Skill                                     | Origem      | Papel                                                                                                                                                                   |
-| ----------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `superpowers:brainstorming`               | Superpowers | Também usável para trabalho exploratório, ADRs ou discussões de arquitetura.                                                                                            |
-| `superpowers:using-git-worktrees`         | Superpowers | Isola o trabalho de feature quando necessário.                                                                                                                          |
-| `superpowers:dispatching-parallel-agents` | Superpowers | Para 2+ tarefas independentes sem estado compartilhado.                                                                                                                 |
-| `template-sync`                           | Projeto     | Sync do projeto com a Release do template, adoção, contribuir e status — ver [ADR-015](./docs/adr/template/015-template-sync.md).                                       |
-| `ai-observabilidade-habilitar` (runbook)  | Runbook     | Liga o AI-BOM e a telemetria de tokens e custo (Grafana, Neon) via `runbook-execution` — ver [ADR-023](./docs/adr/template/023-ai-bom-e-observabilidade-de-consumo.md). |
+| Skill                                     | Origem      | Papel                                                                                                                             |
+| ----------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `superpowers:brainstorming`               | Superpowers | Também usável para trabalho exploratório, ADRs ou discussões de arquitetura.                                                      |
+| `superpowers:using-git-worktrees`         | Superpowers | Isola o trabalho de feature quando necessário.                                                                                    |
+| `superpowers:dispatching-parallel-agents` | Superpowers | Para 2+ tarefas independentes sem estado compartilhado.                                                                           |
+| `template-sync`                           | Projeto     | Sync do projeto com a Release do template, adoção, contribuir e status — ver [ADR-015](./docs/adr/template/015-template-sync.md). |
 
 > Adicione aqui skills específicas do seu projeto (ex.: uma skill de migração de
 > infraestrutura) à medida que forem criadas em `.claude/skills/`.

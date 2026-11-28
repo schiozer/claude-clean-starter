@@ -9,6 +9,7 @@ import {
   ATRIBUTO_ORIGEM,
   ATRIBUTO_PROJETO,
   METRICA_CUSTO,
+  FILTRO_SESSOES,
   METRICA_SESSOES,
   METRICA_TOKENS,
 } from './metricas.mjs'
@@ -57,8 +58,7 @@ function linhaVazia(dia, projeto, origem, modelo) {
 /**
  * Monta as linhas de `consumo_diario` do dia. `consultar(promql)` devolve `[{ metric, value }]`.
  *
- * Desvio da spec §4.6 (LogQL para sessões): com OTEL_METRICS_INCLUDE_SESSION_ID=false o session.id
- * também some dos eventos, então as sessões vêm da métrica claude_code.session.count (PromQL).
+ * Desvio da spec §4.6 (LogQL para sessões): as sessões vêm da métrica claude_code.session.count (PromQL).
  * Essa métrica não tem rótulo de modelo: as sessões ficam por (projeto, origem), numa linha com
  * `modelo = '*'` e custo/tokens zero (a soma de `custo_usd` segue correta). A linha `'*'` é
  * gravada mesmo sem custo/tokens quando há sessões.
@@ -70,7 +70,7 @@ export async function coletarDia({ dia, consultar }) {
     consultar(
       `sum by (${chaves}, ${ATRIBUTO_MODELO}, ${ATRIBUTO_TIPO}) (increase(${METRICA_TOKENS}[1d]))`
     ),
-    consultar(`sum by (${chaves}) (increase(${METRICA_SESSOES}[1d]))`),
+    consultar(`sum by (${chaves}) (increase(${METRICA_SESSOES}${FILTRO_SESSOES}[1d]))`),
   ])
 
   const mapa = new Map()
@@ -208,7 +208,9 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
     }
     code = await main({ env: process.env, cfg, fetch: globalThis.fetch, sql, hoje: new Date() })
   } catch (e) {
-    console.error(`ai-consumo-diario: ${e instanceof Error ? e.message.split('\n')[0] : 'erro'}`)
+    console.error(
+      `ai-consumo-diario: falha inesperada (detalhes omitidos para não expor segredos) [${e instanceof Error ? e.name : 'erro'}]`
+    )
   }
   process.exit(code)
 }

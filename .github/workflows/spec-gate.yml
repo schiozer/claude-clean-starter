@@ -65,8 +65,9 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           # `settings` (action.yml, input "settings") é mesclado em ~/.claude/settings.json; a action
-          # não repassa OTEL_METRICS_INCLUDE_SESSION_ID, e session.id explodiria a cardinalidade.
-          settings: '{"env":{"OTEL_METRICS_INCLUDE_SESSION_ID":"false"}}'
+          # não repassa estas variáveis pelo $GITHUB_ENV. Cumulativo é exigido pelo Grafana/Prometheus
+          # e session.id evita resets falsos no counter (ADR-023).
+          settings: '{"env":{"OTEL_METRICS_INCLUDE_SESSION_ID":"true","OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE":"cumulative"}}'
           prompt: ${{ steps.prepare.outputs.prompt }}
           claude_args: >-
             --model ${{ vars.SPEC_GATE_MODEL || 'claude-sonnet-5-5' }}

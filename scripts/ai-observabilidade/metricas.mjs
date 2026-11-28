@@ -9,6 +9,8 @@ export const METRICA_TOKENS = 'claude_code_token_usage_tokens_total'
 // claude_code.session.count (emitida no início de cada sessão): ponto vira "_" e counter ganha
 // "_total" (derivado; o sufixo de unidade, se houver, não foi visto no Grafana).
 export const METRICA_SESSOES = 'claude_code_session_count_total'
+// start_type=agents_view marca o processo da UI `claude agents`, não uma conversa.
+export const FILTRO_SESSOES = '{start_type!="agents_view"}'
 
 export const ATRIBUTO_PROJETO = 'projeto'
 export const ATRIBUTO_ORIGEM = 'origem'
@@ -26,7 +28,10 @@ export function envTelemetria(projeto, origem) {
     OTEL_METRICS_EXPORTER: 'otlp',
     OTEL_LOGS_EXPORTER: 'otlp',
     OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
-    OTEL_METRICS_INCLUDE_SESSION_ID: 'false',
+    // Grafana/Prometheus exige cumulativo (o padrão do Claude Code é delta). session.id fica como
+    // rótulo para o counter não ver resets falsos entre sessões (ADR-023).
+    OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: 'cumulative',
+    OTEL_METRICS_INCLUDE_SESSION_ID: 'true',
     OTEL_RESOURCE_ATTRIBUTES: `${ATRIBUTO_PROJETO}=${projeto},${ATRIBUTO_ORIGEM}=${origem}`,
   }
 }

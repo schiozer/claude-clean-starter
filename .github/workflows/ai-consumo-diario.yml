@@ -16,11 +16,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v5
+      - name: Descobrir o papel (hub ou não)
+        id: papel
+        run: |
+          node -e "let h=false;try{const c=JSON.parse(require('fs').readFileSync('ai-observabilidade.config.json','utf8'));h=c.ativo===true&&c.central===true}catch{}console.log('hub='+h)" >> "$GITHUB_OUTPUT"
+
+      - if: steps.papel.outputs.hub == 'true'
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
 
       - name: Gravar consumo do dia anterior
+        if: steps.papel.outputs.hub == 'true'
         env:
           GRAFANA_API_URL: ${{ secrets.GRAFANA_API_URL }}
           GRAFANA_READ_TOKEN: ${{ secrets.GRAFANA_READ_TOKEN }}

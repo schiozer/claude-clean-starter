@@ -35,6 +35,7 @@
     "tests/unit/aiObsConfig.test.ts",
     "tests/unit/aiObsConsumoDiario.test.ts",
     "tests/unit/aiObsGrafana.test.ts",
+    "tests/unit/aiObsWorkflows.test.ts",
     "tests/unit/checkCenarios.test.ts",
     "tests/unit/checkRunbooks.test.ts",
     "tests/unit/demosCatalogo.test.ts",

@@ -60,6 +60,8 @@ Checklist (crie uma tarefa por item):
    manifesto (são do projeto) e não ligam nada sozinhos. Para cada um,
    `test -e <projeto>/<arquivo> || cp <clone>/<arquivo> <projeto>/<arquivo>` (crie a pasta antes,
    se faltar). **Nunca sobrescreva** um que já existe: depois de semeado, o arquivo é do projeto.
+   Depois de semear `ai-observabilidade.config.json`, ajuste `projeto` para o nome do próprio
+   projeto (o semeado traz o do template); sem espaços, só `[A-Za-z0-9_.-]`.
    `playwright.config.ts` e `tests/e2e/cenarios.config.json` **não** são semeados: eles ligam o
    check `Regressão (UAT)`, e os do template apontam para o skeleton (`examples/**`, que o sync
    ignora), o que deixaria o PR vermelho. Se algum dos dois faltar no projeto, o gate fica verde

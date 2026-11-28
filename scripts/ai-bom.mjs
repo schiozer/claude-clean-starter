@@ -43,6 +43,9 @@ function conferir(deps) {
   return 0
 }
 
+// Valores com ${...} saem entre aspas: o shell expande a referência sem separar palavras.
+const aspas = (valor) => (valor.startsWith('${') ? `"${valor}"` : valor)
+
 // Endpoint e headers saem como referências literais: o segredo nunca é resolvido nem impresso.
 function imprimirEnv(deps) {
   const cfg = lerConfig(deps)
@@ -53,17 +56,21 @@ function imprimirEnv(deps) {
     return 0
   }
   const variaveis = { ...envTelemetria(cfg.projeto, 'local'), ...referenciasOtlp() }
-  const linhas = Object.entries(variaveis).map(([nome, valor]) => `export ${nome}=${valor}`)
+  const linhas = Object.entries(variaveis).map(([nome, valor]) => `export ${nome}=${aspas(valor)}`)
   deps.stdout(`${linhas.join('\n')}\n`)
   return 0
 }
 
-const PROJETO_CI = /^[\w.\- ]+$/
-
 // CI: NAME=VALUE sem export (formato do $GITHUB_ENV, que não expande ${}); endpoint e headers vêm
 // já resolvidos do env do passo. Faltando algum, nada é impresso (fail-open).
 function imprimirEnvCi(deps) {
-  const cfg = lerConfig(deps)
+  let cfg
+  try {
+    cfg = lerConfig(deps)
+  } catch (e) {
+    deps.stderr(`ai-bom: config inválida (${e.message}); telemetria do CI não ligada.\n`)
+    return 0
+  }
   if (papel(cfg) === 'desligado') {
     deps.stderr(
       'ai-bom: observabilidade desligada (ativo:false ou config ausente); nada a exportar.\n'
@@ -80,9 +87,9 @@ function imprimirEnvCi(deps) {
   const variaveis = { ...envTelemetria(cfg.projeto, 'ci'), ...valores }
   // $GITHUB_ENV é uma linha por variável: quebra de linha em qualquer valor injetaria variáveis
   // nos passos seguintes (a config vem do head do PR). Vírgula/igual quebrariam o resource attribute.
-  if (!PROJETO_CI.test(cfg.projeto) || Object.values(variaveis).some((v) => /[\r\n]/.test(v))) {
+  if (Object.values(variaveis).some((v) => /[\r\n]/.test(v))) {
     deps.stderr(
-      'ai-bom: valor inválido para o CI (projeto com caracteres fora de [\\w.- ] ou quebra de linha); telemetria do CI não ligada.\n'
+      'ai-bom: valor inválido para o CI (quebra de linha); telemetria do CI não ligada.\n'
     )
     return 0
   }
@@ -121,7 +128,8 @@ export async function main(argv, deps) {
 }
 
 async function executar(argv, deps) {
-  lerConfig(deps) // qualquer comando falha com config inválida
+  // Qualquer comando falha com config inválida, menos --env-ci (fail-open: não derruba o gate).
+  if (argv[0] !== '--env-ci') lerConfig(deps)
   if (argv.length === 0) {
     deps.writeFile(ARQUIVO, gerarTexto(deps))
     deps.stdout(`ai-bom: ${ARQUIVO} gerado.\n`)

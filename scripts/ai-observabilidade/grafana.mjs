@@ -97,7 +97,7 @@ export function regrasAlerta(cfg) {
   for (const [projeto, tetoUsd] of Object.entries(porProjetoUsd)) {
     rules.push(
       ...regrasDe({
-        uid: `teto-${projeto}`,
+        uid: `teto-${projeto.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 28)}`,
         nome: projeto,
         projeto,
         tetoUsd,
