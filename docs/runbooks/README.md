@@ -27,6 +27,7 @@ passo a passo, com classe de risco e verificação em cada passo. Regras em
 | [segredos-e-env.md](./segredos-e-env.md)                     | Criar/alterar env não-secreta; criar/rotacionar segredo                                                                        |
 | [feature-flags.md](./feature-flags.md)                       | Ligar/desligar flags por ambiente (incl. kill switch e escrita MCP)                                                            |
 | [mcp-habilitar-e-conectar.md](./mcp-habilitar-e-conectar.md) | Configurar Auth0 para o MCP e conectar o ChatGPT                                                                               |
+| [uso-mcp-habilitar.md](./uso-mcp-habilitar.md)               | **Opcional** (`USO_MCP_OBSERVABILIDADE`, ADR-024): tabela `mcp_uso_diario`, OTLP e flag para medir o uso das tools MCP         |
 | [spec-gate.md](./spec-gate.md)                               | Ligar/desligar o gate opcional `Spec × código` com Claude (`SPEC_GATE`, `ANTHROPIC_API_KEY`)                                   |
 | [e2e-uat-configurar.md](./e2e-uat-configurar.md)             | **Opcional** (só com `E2E_TARGET=preview`): usuários de teste, PATs e segredos para a `Regressão (UAT)` rodar contra o Preview |
 | [bunny-habilitar.md](./bunny-habilitar.md)                   | **Opcional** (`DEMOS_BUNNY`): library, storage zone, segredos `BUNNY_*` e envs para os vídeos de demo/treinamento na `/ajuda`  |

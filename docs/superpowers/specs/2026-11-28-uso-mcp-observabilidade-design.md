@@ -1,7 +1,7 @@
 # Spec: Medição de uso das tools MCP (consumo de tokens pelo produto em uso)
 
 **Data**: 2026-11-28
-**Status**: Rascunho
+**Status**: Aprovada
 **Autor(es)**: Fabio Schiozer + Claudinho
 
 > Parte B da frente "AI-BOM e consumo de tokens". A Parte A (PR #26, ADR-023) mede o consumo
@@ -91,9 +91,9 @@ serverless ele se perderia.
 
 ## 7. Requisitos não funcionais
 
-RNF-TMO-020: o registro do medidor adiciona no máximo 500 ms à chamada, com timeout (baseline
-do `docs/rnf.md` para respostas segue valendo). Segurança: sem payload nem dado pessoal; tenant
-só no Neon. Demais itens: segue o baseline.
+Segue o baseline. Restrição interna (não é desvio de RNF): o registro do medidor adiciona no
+máximo 500 ms à chamada, com timeout (CT-MCPU-005). Segurança: sem payload nem dado pessoal;
+tenant só no Neon.
 
 ## 8. Cenários de teste
 
@@ -137,12 +137,12 @@ E o erro do medidor é logado
 
 ### CT-MCPU-005 — Medidor lento não atrasa a resposta
 
-Tipo: @rnf Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-4 Perfil: time interno
 
 Dado que o medidor demora mais que o timeout para registrar
 Quando um ator chama uma tool válida
-Então a resposta volta sem esperar além do timeout (RNF-TMO-020)
+Então a resposta volta sem esperar além do timeout
 
 ### CT-MCPU-006 — Flag desligada não mede
 
