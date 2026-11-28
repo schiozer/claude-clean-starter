@@ -1,0 +1,28 @@
+name: Consumo diário de IA
+
+# Só faz algo no hub (ai-observabilidade.config.json com `central: true`); nos demais sai 0.
+on:
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  consumo-diario:
+    name: Resumo diário no Neon
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Gravar consumo do dia anterior
+        env:
+          GRAFANA_API_URL: ${{ secrets.GRAFANA_API_URL }}
+          GRAFANA_READ_TOKEN: ${{ secrets.GRAFANA_READ_TOKEN }}
+          AI_OBS_DATABASE_URL: ${{ secrets.AI_OBS_DATABASE_URL }}
+        run: npm ci && npm run ai-obs:consumo-diario
