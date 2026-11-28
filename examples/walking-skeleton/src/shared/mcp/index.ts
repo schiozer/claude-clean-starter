@@ -21,3 +21,4 @@ export {
   type IUsageMeter,
   type UsageEntry,
 } from './usage'
+export { OtelUsageMeter } from './otelUsageMeter'

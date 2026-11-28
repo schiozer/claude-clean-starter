@@ -23,7 +23,9 @@ import { systemClock } from '@/shared/kernel'
 import { logError } from '@/shared/logError'
 import {
   InMemoryAuditLog,
-  NullUsageMeter,
+  CompositeUsageMeter,
+  InMemoryUsageMeter,
+  OtelUsageMeter,
   InMemoryRateLimiter,
   createMcpHandler,
   makeProtectedResourceMetadataHandler,
@@ -129,13 +131,16 @@ const mcpTools = [...makeResourceTools(resourceService)]
 
 export const mcpRateLimiter = new InMemoryRateLimiter({ limit: 60, windowMs: 60_000 }, systemClock)
 export const mcpAuditLog = new InMemoryAuditLog()
+/** Skeleton: OTel + memória. Projeto real: some o `PostgresUsageMeter` (`mcp_uso_diario`) ao composto. */
+export const mcpUsageMeterMemory = new InMemoryUsageMeter()
+export const mcpUsageMeter = new CompositeUsageMeter([new OtelUsageMeter(), mcpUsageMeterMemory])
 
 export const mcpHandler = createMcpHandler({
   tools: mcpTools,
   verifierFor,
   rateLimiter: mcpRateLimiter,
   audit: mcpAuditLog,
-  usage: new NullUsageMeter(),
+  usage: mcpUsageMeter,
 })
 
 export const protectedResourceMetadata = makeProtectedResourceMetadataHandler(mcpTools)

@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { POST } from '@/app/api/mcp/route'
 import { GET as wellKnown } from '@/app/.well-known/oauth-protected-resource/route'
-import { mcpAuditLog, mcpRateLimiter, personalTokens, resourceRepository } from '@/composition'
+import {
+  mcpAuditLog,
+  mcpRateLimiter,
+  mcpUsageMeterMemory,
+  personalTokens,
+  resourceRepository,
+} from '@/composition'
 import { rpc } from '../helpers/mcpRequest'
 
 const names = async (res: Response) =>
@@ -19,6 +25,7 @@ describe('/api/mcp', () => {
     personalTokens.clear()
     mcpRateLimiter.clear()
     mcpAuditLog.clear()
+    mcpUsageMeterMemory.clear()
     readToken = await personalTokens.issue({ userId: 'ana', tenantId: 't1', scopes: ['resources:read'] })
     writeToken = await personalTokens.issue({
       userId: 'ana',
@@ -27,7 +34,7 @@ describe('/api/mcp', () => {
     })
   })
   afterEach(() => {
-    for (const k of ['APP_ENV', 'RESOURCES_ENABLED', 'MCP_RESOURCE_URL', 'MCP_RESOURCES_READ', 'MCP_RESOURCES_WRITE']) delete process.env[k]
+    for (const k of ['APP_ENV', 'RESOURCES_ENABLED', 'MCP_RESOURCE_URL', 'MCP_RESOURCES_READ', 'MCP_RESOURCES_WRITE', 'USO_MCP_OBSERVABILIDADE']) delete process.env[k]
     vi.restoreAllMocks()
   })
 
@@ -127,6 +134,19 @@ describe('/api/mcp', () => {
     const { result } = await res.json()
     expect(result).toMatchObject({ isError: true, _meta: { code: 'INTERNAL_ERROR' } })
     expect(JSON.stringify(result)).not.toContain('pool')
+  })
+
+  it('flag observabilidade.uso-mcp ligada → a chamada de tool é medida (sem payload)', async () => {
+    process.env.USO_MCP_OBSERVABILIDADE = 'on'
+    await POST(rpc('tools/call', { name: 'list_resources', arguments: {} }, readToken))
+    expect(mcpUsageMeterMemory.entries).toEqual([
+      expect.objectContaining({ tenantId: 't1', tool: 'list_resources', outcome: 'ok' }),
+    ])
+  })
+
+  it('flag desligada (padrão) → nada é medido', async () => {
+    await POST(rpc('tools/call', { name: 'list_resources', arguments: {} }, readToken))
+    expect(mcpUsageMeterMemory.entries).toHaveLength(0)
   })
 })
 
