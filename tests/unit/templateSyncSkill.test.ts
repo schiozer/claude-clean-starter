@@ -40,7 +40,7 @@ describe('skill template-sync', () => {
   )
 
   // R26: só arquivos inertes são semeados; os que ligam o gate viram passo de adoção explícito.
-  const SEMEADOS = ['tests/e2e/auth.setup.ts', 'docs/rnf.md']
+  const SEMEADOS = ['tests/e2e/auth.setup.ts', 'docs/rnf.md', 'ai-observabilidade.config.json']
   const ATIVAM_O_GATE = ['playwright.config.ts', 'tests/e2e/cenarios.config.json']
   const AVISO_ADOCAO =
     'E2E não configurado — criar playwright.config.ts (webServer do app do projeto) e cenarios.config.json conforme docs/guides/e2e-guide.md, Adoção'

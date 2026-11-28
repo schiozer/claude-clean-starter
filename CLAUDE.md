@@ -49,6 +49,9 @@
 >
 > **Adoção — esteira** ([ADR-020](./docs/adr/template/020-esteira-integracao-e-promocao.md)): **opt-in**; sem o bloco `esteira` em `hooks/protect-main/config.json`, tudo segue como hoje. Para ligar (`develop` + promoção do mesmo pacote), runbook [`adotar-esteira-develop.md`](./docs/runbooks/adotar-esteira-develop.md).
 >
+> **Adoção — consumo de IA** ([ADR-023](./docs/adr/template/023-ai-bom-e-observabilidade-de-consumo.md)): **opt-in**
+> (o `/template-sync` semeia `ai-observabilidade.config.json` com `ativo: false`); para medir tokens e custo, runbook [`ai-observabilidade-habilitar.md`](./docs/runbooks/ai-observabilidade-habilitar.md).
+>
 > **Adoção — demos** ([ADR-017](./docs/adr/template/017-bunny-videos-demos-treinamento.md)): `DEMOS_BUNNY`
 > nasce desligado; para ligar, runbook [`bunny-habilitar.md`](./docs/runbooks/bunny-habilitar.md).
 >

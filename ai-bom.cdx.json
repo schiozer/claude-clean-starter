@@ -1,0 +1,132 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:402c7ac2-6371-521c-8240-144f804dc6a4",
+  "version": 1,
+  "metadata": {
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "scripts/ai-bom.mjs"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "application",
+      "bom-ref": "hook:PreToolUse:Bash",
+      "name": "PreToolUse:Bash",
+      "properties": [
+        {
+          "name": "command",
+          "value": "node \"$CLAUDE_PROJECT_DIR/hooks/protect-main/run.mjs\""
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "bom-ref": "hook:PreToolUse:Read",
+      "name": "PreToolUse:Read",
+      "properties": [
+        {
+          "name": "command",
+          "value": "node \"$CLAUDE_PROJECT_DIR/hooks/read-guard/run.mjs\""
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "bom-ref": "hook:SessionStart:*",
+      "name": "SessionStart:*",
+      "properties": [
+        {
+          "name": "command",
+          "value": "$CLAUDE_PROJECT_DIR/hooks/check-dependencies/run.sh"
+        },
+        {
+          "name": "command",
+          "value": "$CLAUDE_PROJECT_DIR/hooks/git-freshness/run.sh"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "bom-ref": "action:anthropics/claude-code-action",
+      "name": "anthropics/claude-code-action",
+      "version": "v1.0.262",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "925afb53776cf1a2b738c6bdbed37b4d4000ef13"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "bom-ref": "skill:architecture-review",
+      "name": "architecture-review",
+      "description": "Use para saber qual é a stack de um projeto (perfil, formato, host, banco, auth, MCP, vídeo, gate, E2E) — acha o ADR de stack vigente e confere com o estado real, ou levanta a stack com evidências e gera o ADR por PR. Chamada também pela init-project, ver ADR-019."
+    },
+    {
+      "type": "application",
+      "bom-ref": "plugin:commit-commands@claude-plugins-official",
+      "name": "commit-commands@claude-plugins-official",
+      "group": "claude-plugins-official"
+    },
+    {
+      "type": "application",
+      "bom-ref": "skill:ddd-service-development",
+      "name": "ddd-service-development",
+      "description": "Skill para desenvolvimento com arquitetura completa — módulos por contexto, Service Layer como porta única, DDD tático (aggregates, value objects, repositórios) e bordas REST + MCP finas. Use em projetos com perfil `completo-direto` ou `mvp-primeiro` já promovido."
+    },
+    {
+      "type": "application",
+      "bom-ref": "skill:init-project",
+      "name": "init-project",
+      "description": "Use ao iniciar um projeto a partir do template ou ao revisitar a tecnologia de um projeto existente — mostra as opções do catálogo de stack com prós, contras e recomendação, registra a meta num ADR por PR e roda os runbooks de setup (projeto novo) ou de migração (projeto existente), ver ADR-019."
+    },
+    {
+      "type": "application",
+      "bom-ref": "skill:mvp-development",
+      "name": "mvp-development",
+      "description": "Skill para a fase MVP de projetos com perfil `mvp-primeiro` — módulos com Service enxuto (sem aggregates/repositórios), bordas REST + MCP finas desde o dia 1. Não use em projetos `completo-direto`."
+    },
+    {
+      "type": "application",
+      "bom-ref": "plugin:remember@claude-plugins-official",
+      "name": "remember@claude-plugins-official",
+      "group": "claude-plugins-official"
+    },
+    {
+      "type": "application",
+      "bom-ref": "skill:runbook-execution",
+      "name": "runbook-execution",
+      "description": "Use ao executar qualquer operação de deploy/configuração (host — Vercel, Heroku ou Cloud Run —, Neon, Auth0, envs, segredos, flags, migração, MCP, rollback) — executa um runbook de docs/runbooks/ passo a passo, respeitando as classes de risco R0–R3 do ADR-013."
+    },
+    {
+      "type": "application",
+      "bom-ref": "plugin:superpowers@claude-plugins-official",
+      "name": "superpowers@claude-plugins-official",
+      "group": "claude-plugins-official"
+    },
+    {
+      "type": "application",
+      "bom-ref": "skill:template-sync",
+      "name": "template-sync",
+      "description": "Use para manter um projeto derivado em dia com o template (sync a cada Release, adoção do primeiro sync), levar melhorias de um projeto de volta ao template (contribuir) ou ver como cada projeto está em relação ao template (status) — tudo termina em PR, ver ADR-015."
+    },
+    {
+      "type": "machine-learning-model",
+      "bom-ref": "model:claude-sonnet-5-5",
+      "name": "claude-sonnet-5-5"
+    }
+  ],
+  "services": [
+    {
+      "bom-ref": "service:Anthropic API",
+      "name": "Anthropic API"
+    }
+  ]
+}

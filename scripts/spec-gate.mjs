@@ -346,6 +346,48 @@ export async function runReport({ mode, structuredOutput, event, client }) {
   return result
 }
 
+const numero = new Intl.NumberFormat('pt-BR')
+const dolar = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+
+/**
+ * Resumo de uso (tokens e custo) a partir do `execution_file` da action: array de mensagens do
+ * SDK, a última `type: 'result'`. Nunca lança; o veredito do gate não depende disto.
+ * @param {string | null | undefined} executionJson
+ */
+export function resumoUso(executionJson) {
+  if (!executionJson) return ''
+  const indisponivel = '_Uso do Claude no gate: uso indisponível._\n'
+  try {
+    const mensagens = JSON.parse(executionJson)
+    const resultado = Array.isArray(mensagens)
+      ? mensagens.findLast((m) => m?.type === 'result')
+      : undefined
+    const entrada = resultado?.usage?.input_tokens
+    const saida = resultado?.usage?.output_tokens
+    if (typeof entrada !== 'number' || typeof saida !== 'number') return indisponivel
+    const custo = resultado.total_cost_usd
+    const partes = [
+      `${numero.format(entrada)} tokens de entrada`,
+      `${numero.format(saida)} de saída`,
+    ]
+    if (typeof custo === 'number') partes.push(`custo US$ ${dolar.format(custo)}`)
+    return `### Uso do Claude no gate\n\n${partes.join(', ')}.\n`
+  } catch {
+    return indisponivel
+  }
+}
+
+/** Anexa o resumo de uso ao GITHUB_STEP_SUMMARY (se houver); falha de leitura/escrita é ignorada. */
+export function publicarUso({ executionFile, summaryFile }, fs) {
+  if (!executionFile || !summaryFile) return
+  try {
+    const texto = resumoUso(fs.readFile(executionFile))
+    if (texto) fs.appendFile(summaryFile, `${texto}\n`)
+  } catch {
+    // fail-open: telemetria nunca derruba o gate
+  }
+}
+
 function setOutput(name, value) {
   const delimiter = `ghadelim_${randomBytes(16).toString('hex')}`
   appendFileSync(process.env.GITHUB_OUTPUT, `${name}<<${delimiter}\n${value}\n${delimiter}\n`)
@@ -388,6 +430,13 @@ if (isMain) {
         event,
         client,
       })
+      publicarUso(
+        {
+          executionFile: process.env.EXECUTION_FILE,
+          summaryFile: process.env.GITHUB_STEP_SUMMARY,
+        },
+        { readFile: (path) => readFileSync(path, 'utf8'), appendFile: appendFileSync }
+      )
       for (const reason of reasons) process.stdout.write(`spec-gate: ${reason}\n`)
       if (!ok) process.exit(1)
     } else throw new Error('uso: spec-gate.mjs prepare|report')

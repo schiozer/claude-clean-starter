@@ -12,7 +12,9 @@ import {
   previousResult,
   previousRun,
   botComments,
+  publicarUso,
   readSpec,
+  resumoUso,
   runPrepare,
   runReport,
   shouldAnalyze,
@@ -495,5 +497,93 @@ describe('workflow spec-gate.yml', () => {
     expect(yml).toContain('github_token: ${{ secrets.GITHUB_TOKEN }}')
     expect(yml).toContain("${{ vars.SPEC_GATE_MODEL || 'claude-sonnet-5-5' }}")
     expect(yml).not.toContain('track_progress')
+  })
+})
+
+describe('resumoUso', () => {
+  // formato real da action v1.0.262: array de mensagens do SDK, a última type 'result'
+  const execucao = JSON.stringify([
+    { type: 'system', subtype: 'init' },
+    { type: 'assistant', message: { content: [] } },
+    {
+      type: 'result',
+      subtype: 'success',
+      total_cost_usd: 0.051,
+      usage: { input_tokens: 12000, output_tokens: 800 },
+    },
+  ])
+
+  it('CT-AIBOM-009 resume tokens e custo em pt-BR', () => {
+    const resumo = resumoUso(execucao)
+    expect(resumo).toContain('12.000')
+    expect(resumo).toContain('800')
+    expect(resumo).toContain('US$ 0,051')
+  })
+
+  it('CT-AIBOM-009 sem custo publica só os tokens', () => {
+    const json = JSON.stringify([
+      { type: 'result', usage: { input_tokens: 12000, output_tokens: 800 } },
+    ])
+    const resumo = resumoUso(json)
+    expect(resumo).toContain('12.000')
+    expect(resumo).not.toContain('US$')
+  })
+
+  it('CT-AIBOM-009 null ou vazio → string vazia', () => {
+    expect(resumoUso(null)).toBe('')
+    expect(resumoUso('')).toBe('')
+  })
+
+  it('CT-AIBOM-009 JSON inválido → uso indisponível, sem lançar', () => {
+    expect(resumoUso('{quebrado')).toContain('uso indisponível')
+  })
+
+  it('CT-AIBOM-009 sem mensagem result → uso indisponível', () => {
+    expect(resumoUso('[{"type":"system"}]')).toContain('uso indisponível')
+  })
+
+  it('CT-AIBOM-009 publicarUso grava no resumo só se houver destino, sem alterar o veredito', () => {
+    const escritos: string[] = []
+    publicarUso(
+      { executionFile: '/x', summaryFile: '/s' },
+      {
+        readFile: () => execucao,
+        appendFile: (_: string, t: string) => escritos.push(t),
+      }
+    )
+    expect(escritos.join('')).toContain('US$ 0,051')
+    escritos.length = 0
+    publicarUso(
+      { executionFile: '/x', summaryFile: undefined },
+      {
+        readFile: () => execucao,
+        appendFile: (_: string, t: string) => escritos.push(t),
+      }
+    )
+    expect(escritos).toEqual([])
+    expect(() =>
+      publicarUso(
+        { executionFile: '/x', summaryFile: '/s' },
+        {
+          readFile: () => {
+            throw new Error('sem arquivo')
+          },
+          appendFile: () => undefined,
+        }
+      )
+    ).not.toThrow()
+  })
+})
+
+describe('workflow spec-gate.yml telemetria', () => {
+  const yml = readFileSync(resolve(ROOT, '.github/workflows/spec-gate.yml'), 'utf8')
+
+  it('CT-AIBOM-009 passa EXECUTION_FILE ao report e liga o otel só com o secret', () => {
+    expect(yml).toContain('EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}')
+    expect(yml).toContain('--env-ci >> "$GITHUB_ENV"')
+    expect(yml).toContain("HAS_OTLP: ${{ secrets.GRAFANA_OTLP_HEADERS != '' }}")
+    expect(yml).toContain('OTEL_METRICS_INCLUDE_SESSION_ID":"true')
+    expect(yml).toContain('OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE":"cumulative')
+    expect(yml.indexOf('--env-ci')).toBeLessThan(yml.indexOf('claude-code-action@'))
   })
 })
