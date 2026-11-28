@@ -13,3 +13,11 @@ export { loadMcpConfig, type McpConfig } from './config'
 export { makeProtectedResourceMetadataHandler } from './protectedResource'
 export { callTool, type CallToolDeps } from './callTool'
 export { createMcpHandler, type McpHandlerDeps } from './server'
+export {
+  CompositeUsageMeter,
+  InMemoryUsageMeter,
+  NullUsageMeter,
+  estimateTokens,
+  type IUsageMeter,
+  type UsageEntry,
+} from './usage'
