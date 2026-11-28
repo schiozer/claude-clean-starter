@@ -72,12 +72,13 @@ implementação e entram na regressão ([ADR-016](./docs/adr/template/016-testes
 
 ### Transversais
 
-| Skill                                     | Origem      | Papel                                                                                                                             |
-| ----------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `superpowers:brainstorming`               | Superpowers | Também usável para trabalho exploratório, ADRs ou discussões de arquitetura.                                                      |
-| `superpowers:using-git-worktrees`         | Superpowers | Isola o trabalho de feature quando necessário.                                                                                    |
-| `superpowers:dispatching-parallel-agents` | Superpowers | Para 2+ tarefas independentes sem estado compartilhado.                                                                           |
-| `template-sync`                           | Projeto     | Sync do projeto com a Release do template, adoção, contribuir e status — ver [ADR-015](./docs/adr/template/015-template-sync.md). |
+| Skill                                     | Origem      | Papel                                                                                                                                                                   |
+| ----------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `superpowers:brainstorming`               | Superpowers | Também usável para trabalho exploratório, ADRs ou discussões de arquitetura.                                                                                            |
+| `superpowers:using-git-worktrees`         | Superpowers | Isola o trabalho de feature quando necessário.                                                                                                                          |
+| `superpowers:dispatching-parallel-agents` | Superpowers | Para 2+ tarefas independentes sem estado compartilhado.                                                                                                                 |
+| `template-sync`                           | Projeto     | Sync do projeto com a Release do template, adoção, contribuir e status — ver [ADR-015](./docs/adr/template/015-template-sync.md).                                       |
+| `ai-observabilidade-habilitar` (runbook)  | Runbook     | Liga o AI-BOM e a telemetria de tokens e custo (Grafana, Neon) via `runbook-execution` — ver [ADR-023](./docs/adr/template/023-ai-bom-e-observabilidade-de-consumo.md). |
 
 > Adicione aqui skills específicas do seu projeto (ex.: uma skill de migração de
 > infraestrutura) à medida que forem criadas em `.claude/skills/`.

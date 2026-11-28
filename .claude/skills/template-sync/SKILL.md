@@ -55,14 +55,17 @@ Checklist (crie uma tarefa por item):
 8. **Resumo ao humano**: quantos `write`/`delete`/`move`/`merge`/`ask`, e os `owned`.
 9. **Aplicar**: `node <clone>/scripts/template-sync.mjs apply --template <clone> --project <projeto> --plan <tmp>/plan.json > <tmp>/report.json`.
    O relatório traz `applied`, `merged`, `conflicts`, `asked`, `notes`, `linkRewrites`.
-   Depois, **semeie os arquivos inertes do projeto ausentes**: `tests/e2e/auth.setup.ts` e
-   `docs/rnf.md` ficam fora do manifesto (são do projeto) e não ligam nada sozinhos. Para cada um,
+   Depois, **semeie os arquivos inertes do projeto ausentes**: `tests/e2e/auth.setup.ts`,
+   `docs/rnf.md` e `ai-observabilidade.config.json` (nasce com `ativo: false`) ficam fora do
+   manifesto (são do projeto) e não ligam nada sozinhos. Para cada um,
    `test -e <projeto>/<arquivo> || cp <clone>/<arquivo> <projeto>/<arquivo>` (crie a pasta antes,
    se faltar). **Nunca sobrescreva** um que já existe: depois de semeado, o arquivo é do projeto.
    `playwright.config.ts` e `tests/e2e/cenarios.config.json` **não** são semeados: eles ligam o
    check `Regressão (UAT)`, e os do template apontam para o skeleton (`examples/**`, que o sync
    ignora), o que deixaria o PR vermelho. Se algum dos dois faltar no projeto, o gate fica verde
    com aviso e o PR lista em **Adoção pendente**: "E2E não configurado — criar playwright.config.ts (webServer do app do projeto) e cenarios.config.json conforme docs/guides/e2e-guide.md, Adoção".
+   Por fim, rode `npm run ai-bom` e commite o `ai-bom.cdx.json` atualizado (o inventário depende
+   dos arquivos do projeto; o CI barra se estiver desatualizado).
 10. **Resolver `conflicts`** arquivo a arquivo (marcadores `<<<<<<< projeto` / `>>>>>>> template`):
     - `binary` (imagem etc. mudada nos dois lados): o motor não toca o arquivo; mostre as duas
       versões ao humano junto com os `asked` e aplique a escolhida;
@@ -115,7 +118,7 @@ sessão do template:
 6. **Plano** com a base escolhida:
    `node <clone>/scripts/template-sync.mjs plan --template <clone> --project <projeto> --target <tag> --base <sha|none> > <tmp>/plan.json`;
    depois siga o `sync` dos passos 8 a 14 (o passo 9 semeia os arquivos inertes ausentes,
-   `docs/rnf.md` e `tests/e2e/auth.setup.ts`, sem sobrescrever, e o PR lista a adoção do E2E).
+   `docs/rnf.md`, `tests/e2e/auth.setup.ts` e `ai-observabilidade.config.json`, sem sobrescrever, e o PR lista a adoção do E2E).
 7. **ADRs copiados**: um ADR do projeto em `docs/adr/NNN-*.md` que seja cópia de um ADR do
    template (mesmo título, conteúdo quase igual) → **proponha** a remoção em favor de
    `docs/adr/template/`. Aprovado: apague a cópia e reescreva os links,
