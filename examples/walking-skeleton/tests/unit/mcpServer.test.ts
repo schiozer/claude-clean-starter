@@ -95,7 +95,6 @@ describe('createMcpHandler — tools', () => {
         rateLimiter: new InMemoryRateLimiter({ limit: 1, windowMs: 1 }),
         audit: new InMemoryAuditLog(),
         usage: new NullUsageMeter(),
-    usage: new NullUsageMeter(),
       })
     ).toThrow('list_things')
   })
