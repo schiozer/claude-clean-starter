@@ -221,7 +221,7 @@ Feature só de tooling (scripts e workflows): sem `@e2e` nem `@usabilidade`. Tes
 
 ### CT-AIBOM-001 — Gerar o inventário
 
-Tipo: @sistemico Destino: @regressao
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-1 Perfil: time interno
 
 Dado um repositório com 3 plugins habilitados, 2 skills, 2 hooks e o `spec-gate.yml` com a action fixada por SHA
@@ -231,7 +231,7 @@ E lista os 3 plugins, as 2 skills, os 2 hooks, a action com o SHA e o modelo "cl
 
 ### CT-AIBOM-002 — Inventário desatualizado barra o CI
 
-Tipo: @sistemico Destino: @regressao
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-1 Perfil: time interno
 
 Dado que habilitei um plugin novo e não regenerei o inventário
@@ -240,7 +240,7 @@ Então o comando sai com erro e diz para rodar `npm run ai-bom`
 
 ### CT-AIBOM-003 — Saída determinística
 
-Tipo: @sistemico Destino: @regressao
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-1 Perfil: time interno
 
 Dado o mesmo repositório
@@ -249,7 +249,7 @@ Então os dois arquivos são idênticos
 
 ### CT-AIBOM-004 — Configuração pessoal fica fora
 
-Tipo: @sistemico Destino: @regressao
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-1 Perfil: time interno
 
 Dado um `.claude/settings.local.json` com `model` e um plugin pessoal
@@ -258,7 +258,7 @@ Então nada do `settings.local.json` aparece no inventário
 
 ### CT-AIBOM-005 — Configuração inválida
 
-Tipo: @sistemico Destino: @regressao
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-2 Perfil: time interno
 
 Dado um `ai-observabilidade.config.json` com `"mensalUsd": -10`
@@ -267,7 +267,7 @@ Então ele sai com erro dizendo que o teto deve ser positivo
 
 ### CT-AIBOM-006 — Feature desligada não faz nada
 
-Tipo: @sistemico Destino: @regressao
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-2 Perfil: time interno
 
 Dado que o `ai-observabilidade.config.json` não existe, ou existe com `"ativo": true` sem `"central": true`
@@ -277,7 +277,7 @@ Mas o `npm run ai-bom` continua gerando o inventário
 
 ### CT-AIBOM-011 — Derivado sem inventário não quebra o CI
 
-Tipo: @sistemico Destino: @regressao
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-1 Perfil: time interno
 
 Dado um projeto derivado que acabou de receber o sync e ainda não tem `ai-bom.cdx.json`
@@ -286,7 +286,7 @@ Então o comando avisa para rodar `npm run ai-bom` e sai sem erro
 
 ### CT-AIBOM-007 — Limiares do alarme vêm do teto
 
-Tipo: @sistemico Destino: @regressao
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-4 Perfil: time interno
 
 Dado o teto mensal "400" com aviso em "80"%
@@ -295,7 +295,7 @@ Então as regras geradas disparam aviso em 320 USD e alarme em 400 USD no mês c
 
 ### CT-AIBOM-008 — Resumo diário idempotente
 
-Tipo: @sistemico Destino: @regressao
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-5 Perfil: time interno
 
 Dado uma resposta do Grafana com custo de "AssistBru.ai" em "claude-opus-5-5" no dia anterior
@@ -304,7 +304,7 @@ Então há uma única linha desse dia, projeto, origem e modelo em `consumo_diar
 
 ### CT-AIBOM-009 — Uso do gate no resumo do PR
 
-Tipo: @sistemico Destino: @regressao
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-3 Perfil: time interno
 
 Dado um `execution_file` da action com tokens e custo
@@ -314,7 +314,7 @@ E sem `execution_file` o relatório sai como hoje, sem erro
 
 ### CT-AIBOM-010 — Variáveis do projeto para a sessão local
 
-Tipo: @sistemico Destino: @regressao
+Tipo: @sistemico Fora da regressão: tooling coberto por Vitest em tests/unit (sem Playwright)
 Critério: CA-3 Perfil: time interno
 
 Dado o projeto "ContasMes.ai" ativo
