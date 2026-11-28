@@ -56,7 +56,7 @@
 > nasce desligado; para ligar, runbook [`bunny-habilitar.md`](./docs/runbooks/bunny-habilitar.md).
 >
 > **Adoção — E2E** ([ADR-016](./docs/adr/template/016-testes-e2e-nascidos-da-spec.md)): o
-> `/template-sync` semeia só `tests/e2e/auth.setup.ts` e `docs/rnf.md` (nunca sobrescreve); crie
+> `/template-sync` semeia só `tests/e2e/auth.setup.ts`, `docs/rnf.md` e `ai-observabilidade.config.json` (nunca sobrescreve); crie
 > `playwright.config.ts` (com o `webServer` do app) e `tests/e2e/cenarios.config.json` pelo
 > [guia de E2E](./docs/guides/e2e-guide.md#adoção). Até lá o `Regressão (UAT)` só avisa.
 
