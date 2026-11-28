@@ -47,7 +47,7 @@ Tudo em `shared/mcp/` do skeleton (`examples/walking-skeleton/src/shared/mcp/`):
 - `otelUsageMeter.ts`: emite métricas OTel via `@opentelemetry/api` (no-op sem SDK registrado).
 - `callTool.ts`: recebe `usage: IUsageMeter` em `CallToolDeps` e mede cada chamada.
 - `featureFlags.ts`: nova flag `observabilidade.uso-mcp`.
-- `composition.ts`: escolhe `NullUsageMeter` (flag desligada) ou o composto (ligada).
+- `composition.ts`: sempre injeta o medidor composto; a flag é avaliada a cada chamada no `callTool` (kill switch em tempo de execução).
 - Runbook, ADR-024 e SQL de referência da tabela `mcp_uso_diario` (projeto real implementa o
   `PostgresUsageMeter`, como o skeleton faz com `IAuditLog`/`IRateLimiter`).
 
@@ -65,7 +65,7 @@ Tudo em `shared/mcp/` do skeleton (`examples/walking-skeleton/src/shared/mcp/`):
   resultado da tool. O registro tem timeout curto (500 ms) para não atrasar a resposta.
 - **Cardinalidade:** no OTel os rótulos são só `tool` e `resultado` (`ok` | código do erro).
   **Tenant nunca vira rótulo de métrica**; só existe na tabela do Neon.
-- **Flag desligada:** `NullUsageMeter`; o `callTool` se comporta exatamente como hoje.
+- **Flag desligada:** o `callTool` não mede (o `NullUsageMeter` serve de dublê em testes) e se comporta exatamente como hoje.
 - Não substitui nem altera o `IAuditLog`: escrita continua auditada como hoje.
 
 ## 6. Dados / Queries

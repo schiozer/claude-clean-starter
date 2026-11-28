@@ -40,7 +40,7 @@ export async function callTool(
   const result = await execute(tool, actor, args, deps)
 
   if (isEnabled('observabilidade.uso-mcp', deps.env ?? process.env)) {
-    await recordUsage(tool, actor, result, clock.now().getTime() - startedAt.getTime(), deps)
+    await recordUsage(tool, actor, result, Math.max(0, clock.now().getTime() - startedAt.getTime()), deps)
   }
   if (!tool.annotations.readOnlyHint) await audit(tool, actor, result, deps)
   return result

@@ -34,7 +34,7 @@ const entry = (over: Partial<UsageEntry> = {}): UsageEntry => ({
 describe('OtelUsageMeter', () => {
   it('CT-MCPU-008 métricas de tenants diferentes têm só os rótulos tool e resultado, iguais entre si', async () => {
     const { meter, points } = fakeMeter()
-    const otel = new OtelUsageMeter(meter)
+    const otel = new OtelUsageMeter(() => meter)
 
     await otel.record(entry({ tenantId: 't1' }))
     await otel.record(entry({ tenantId: 't2' }))
@@ -49,7 +49,7 @@ describe('OtelUsageMeter', () => {
 
   it('histogramas recebem tokens estimados e latência', async () => {
     const { meter, points } = fakeMeter()
-    await new OtelUsageMeter(meter).record(entry())
+    await new OtelUsageMeter(() => meter).record(entry())
     expect(points['mcp_tool_output_tokens_est']?.[0]?.value).toBe(300)
     expect(points['mcp_tool_duration_ms']?.[0]?.value).toBe(12)
     expect(points['mcp_tool_calls_total']?.[0]?.value).toBe(1)
@@ -57,17 +57,31 @@ describe('OtelUsageMeter', () => {
 
   it('erro conhecido vira o próprio código no rótulo', async () => {
     const { meter, points } = fakeMeter()
-    await new OtelUsageMeter(meter).record(entry({ outcome: 'error', code: 'FORBIDDEN' }))
+    await new OtelUsageMeter(() => meter).record(entry({ outcome: 'error', code: 'FORBIDDEN' }))
     expect(points['mcp_tool_calls_total']?.[0]?.attributes).toEqual({ tool: 'list_resources', resultado: 'FORBIDDEN' })
   })
 
   it('código desconhecido vira INTERNAL_ERROR (cardinalidade fechada)', async () => {
     const { meter, points } = fakeMeter()
-    await new OtelUsageMeter(meter).record(entry({ outcome: 'error', code: 'CODIGO_INVENTADO_123' }))
+    await new OtelUsageMeter(() => meter).record(entry({ outcome: 'error', code: 'CODIGO_INVENTADO_123' }))
     expect(points['mcp_tool_calls_total']?.[0]?.attributes).toEqual({
       tool: 'list_resources',
       resultado: 'INTERNAL_ERROR',
     })
+  })
+
+  it('só obtém o meter no primeiro record (SDK pode ser registrado depois do import)', async () => {
+    const { meter, points } = fakeMeter()
+    let obtained = 0
+    const otel = new OtelUsageMeter(() => {
+      obtained += 1
+      return meter
+    })
+    expect(obtained).toBe(0)
+    await otel.record(entry())
+    await otel.record(entry())
+    expect(obtained).toBe(1)
+    expect(points['mcp_tool_calls_total']).toHaveLength(2)
   })
 
   it('funciona sem SDK registrado (meter padrão é no-op)', async () => {

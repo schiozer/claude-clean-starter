@@ -14,7 +14,7 @@ métricas por tool no Grafana (OTel) e a tabela diária por tenant no Neon. A fl
 
 - Ambientes criados ([bootstrap-ambientes.md](./bootstrap-ambientes.md)) e MCP habilitado ([mcp-habilitar-e-conectar.md](./mcp-habilitar-e-conectar.md)).
 - Endpoint OTLP do Grafana Cloud do projeto: `<preencher: endpoint OTLP>`.
-- O projeto implementou o `PostgresUsageMeter` (upsert abaixo) e o somou ao `CompositeUsageMeter` em `composition.ts`; o SDK OTel está registrado no app (`@opentelemetry/sdk-node` ou o do host).
+- O projeto implementou o `PostgresUsageMeter` (upsert abaixo) e o somou ao `CompositeUsageMeter` em `composition.ts`; o SDK OTel está registrado no app (`@opentelemetry/sdk-node` ou o do host) **antes da primeira chamada de tool** (ex.: `instrumentation.ts`); sem MeterProvider nesse momento as métricas ficam no-op e nada aparece no Grafana.
 
 ## Pre-flight
 

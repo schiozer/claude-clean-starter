@@ -20,23 +20,32 @@ const resultLabel = (entry: UsageEntry): string => {
 /**
  * Métricas por tool. O tenant NUNCA vira rótulo (cardinalidade e privacidade): ele só existe na
  * tabela diária do Neon. Sem SDK registrado, o meter padrão do `@opentelemetry/api` é no-op.
+ *
+ * Os instrumentos são criados no primeiro `record`, não no import: `metrics.getMeter()` devolve um
+ * meter no-op definitivo se o MeterProvider ainda não estiver registrado. Registre o SDK (ex.:
+ * `instrumentation.ts`) antes da primeira chamada de tool.
  */
 export class OtelUsageMeter implements IUsageMeter {
-  private readonly calls: Counter
-  private readonly outputTokens: Histogram
-  private readonly duration: Histogram
+  private instruments?: { calls: Counter; outputTokens: Histogram; duration: Histogram }
 
-  constructor(meter: Meter = metrics.getMeter('mcp')) {
-    this.calls = meter.createCounter('mcp_tool_calls_total', { description: 'Chamadas de tool MCP' })
-    this.outputTokens = meter.createHistogram('mcp_tool_output_tokens_est', {
-      description: 'Tokens estimados (caracteres ÷ 4) da resposta da tool',
-    })
-    this.duration = meter.createHistogram('mcp_tool_duration_ms', { unit: 'ms' })
+  constructor(private readonly getMeter: () => Meter = () => metrics.getMeter('mcp')) {}
+
+  private init() {
+    const meter = this.getMeter()
+    this.instruments ??= {
+      calls: meter.createCounter('mcp_tool_calls_total', { description: 'Chamadas de tool MCP' }),
+      outputTokens: meter.createHistogram('mcp_tool_output_tokens_est', {
+        description: 'Tokens estimados (caracteres ÷ 4) da resposta da tool',
+      }),
+      duration: meter.createHistogram('mcp_tool_duration_ms', { unit: 'ms' }),
+    }
+    return this.instruments
   }
 
   async record(entry: UsageEntry): Promise<void> {
-    this.calls.add(1, { tool: entry.tool, resultado: resultLabel(entry) })
-    this.outputTokens.record(entry.outputTokensEst, { tool: entry.tool })
-    this.duration.record(entry.latencyMs, { tool: entry.tool })
+    const { calls, outputTokens, duration } = this.instruments ?? this.init()
+    calls.add(1, { tool: entry.tool, resultado: resultLabel(entry) })
+    outputTokens.record(entry.outputTokensEst, { tool: entry.tool })
+    duration.record(entry.latencyMs, { tool: entry.tool })
   }
 }

@@ -152,6 +152,13 @@ describe('callTool — medição de uso', () => {
     expect(usage.entries[0]?.outputTokensEst).toBe(estimateTokens('x'.repeat(400_002)))
   })
 
+  it('relógio que anda para trás não gera latência negativa', async () => {
+    const times = [new Date('2026-01-01T00:00:10Z'), new Date('2026-01-01T00:00:05Z')]
+    const backwards = { now: () => times.shift() ?? new Date('2026-01-01T00:00:05Z') }
+    await callTool(tools, ana, 'list_things', {}, deps({ clock: backwards }))
+    expect(usage.entries[0]?.latencyMs).toBe(0)
+  })
+
   it('ator de sistema registra o tenantId dele', async () => {
     const sistema = makeActor({ id: 'cron', tenantId: 'sys', via: 'system', scopes: ['things:read'] })
     await callTool(tools, sistema, 'list_things', {}, deps())
